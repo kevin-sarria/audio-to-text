@@ -1,0 +1,55 @@
+appId: com.audio2text.app
+productName: Audio2Text
+electronVersion: 45.2.1
+npmRebuild: false
+asar: true
+asarUnpack:
+  - "**/pdfkit/js/data/**"
+
+files:
+  - "dist/**"
+  - "package.json"
+
+extraResources:
+  - from: "resources/bin/${platform}"
+    to: "bin"
+    filter:
+      - "**/*"
+  - from: "../frontend/dist"
+    to: "frontend-dist"
+    filter:
+      - "**/*"
+  - from: "../backend/src/desktop/infrastructure/settings/recommendations.json"
+    to: "recommendations.json"
+
+directories:
+  output: "release"
+  buildResources: "build"
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: "build/icon.ico"
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  deleteAppDataOnUninstall: false
+  shortcutName: Audio2Text
+
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+  category: AudioVideo
+  maintainer: "Audio-to-Text Team <team@audio2text.local>"
+  synopsis: "Transcripción y diarización local de audio con Whisper y aceleración por API"
+  icon: "build"

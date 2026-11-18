@@ -1,0 +1,6 @@
+export enum SessionStatus {
+  PENDING = "PENDING",
+  PROCESSING = "PROCESSING",
+  COMPLETED = "COMPLETED",
+  FAILED = "FAILED"
+}

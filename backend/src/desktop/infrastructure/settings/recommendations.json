@@ -1,0 +1,182 @@
+{
+  "updatedAt": "2026-11-03T00:00:00.000Z",
+  "disclaimer": "Los precios y límites son aproximados y cambian seguido: verifícalos en el sitio de cada proveedor antes de contratar. Los tiempos locales se midieron en un AMD Ryzen 5 5500 (8 hilos) y una AMD Radeon RX 5700 XT (Vulkan) con audio de una reunión real; en tu equipo variarán. Los de las APIs son cifras publicadas por el proveedor o estimaciones, e incluyen el tiempo de subida solo de forma aproximada.",
+  "providers": [
+    {
+      "id": "whisper-local-small",
+      "name": "Whisper local · small (recomendado sin tarjeta de video)",
+      "kind": "local",
+      "pricing": "free",
+      "approxCostPerHourUsd": 0,
+      "supported": true,
+      "quality": "Muy buena (~5 % de diferencia frente al modelo más grande)",
+      "speedBasis": "medido",
+      "speedByCase": {
+        "fiveMin": "~42 s (CPU) · ~27 s (GPU)",
+        "oneHour": "~8 min (CPU) · ~5 min (GPU)",
+        "tenHours": "~1 h 23 min (CPU) · ~54 min (GPU)"
+      },
+      "diarization": false,
+      "privacy": "Máxima: el audio nunca sale de tu equipo y funciona sin internet.",
+      "notes": "Mejor equilibrio entre calidad y velocidad en un equipo solo con procesador. Existe una versión cuantizada (small-q5_1) que ocupa 1/3 del espacio con casi la misma calidad, pero en CPU no es más rápida.",
+      "signupUrl": ""
+    },
+    {
+      "id": "whisper-local-base",
+      "name": "Whisper local · base",
+      "kind": "local",
+      "pricing": "free",
+      "approxCostPerHourUsd": 0,
+      "supported": true,
+      "quality": "Básica (~11 % de diferencia; comete más errores con acentos y ruido)",
+      "speedBasis": "medido",
+      "speedByCase": {
+        "fiveMin": "~16 s (CPU)",
+        "oneHour": "~3 min (CPU)",
+        "tenHours": "~32 min (CPU)"
+      },
+      "diarization": false,
+      "privacy": "Máxima: el audio nunca sale de tu equipo y funciona sin internet.",
+      "notes": "Para borradores rápidos o equipos modestos. Es tan pequeño que usar la GPU no lo acelera (incluso empeora). También hay versión cuantizada (base-q5_1, ~57 MB).",
+      "signupUrl": ""
+    },
+    {
+      "id": "whisper-local-turbo",
+      "name": "Whisper local · large-v3-turbo (recomendado con tarjeta de video)",
+      "kind": "local",
+      "pricing": "free",
+      "approxCostPerHourUsd": 0,
+      "supported": true,
+      "quality": "Excelente (el más preciso de los locales; ~1 % de diferencia entre CPU y GPU)",
+      "speedBasis": "medido",
+      "speedByCase": {
+        "fiveMin": "~38 s (GPU) · ~2 min 15 s (CPU)",
+        "oneHour": "~7 min 40 s (GPU) · ~27 min (CPU)",
+        "tenHours": "~1 h 16 min (GPU) · ~4 h 30 min (CPU)"
+      },
+      "diarization": false,
+      "privacy": "Máxima: el audio nunca sale de tu equipo y funciona sin internet.",
+      "notes": "Con una tarjeta de video compatible con Vulkan (medido en una AMD RX 5700 XT) es 3,5 veces más rápido que en CPU y deja de ser lento: tan veloz como small en procesador pero con mucha mejor calidad. Sin tarjeta compatible usa el procesador.",
+      "signupUrl": ""
+    },
+    {
+      "id": "groq",
+      "name": "Groq · whisper-large-v3-turbo",
+      "kind": "api",
+      "pricing": "freemium",
+      "approxCostPerHourUsd": 0.04,
+      "freeTier": "Hay capa gratuita con límites (según fuentes de terceros: ~20 solicitudes por minuto y ~2 h de audio por hora, unas 8 h al día). Con esos límites un archivo de 10 h tardaría varias horas en la capa gratuita.",
+      "supported": true,
+      "quality": "Excelente (Whisper large-v3-turbo)",
+      "speedBasis": "publicado",
+      "speedByCase": {
+        "fiveMin": "~2 s",
+        "oneHour": "~20 s",
+        "tenHours": "~3 min"
+      },
+      "diarization": false,
+      "privacy": "El audio se envía a los servidores de Groq.",
+      "notes": "La opción más barata y rápida. Groq publica una velocidad de 216 veces el tiempo real. No separa hablantes.",
+      "signupUrl": "https://console.groq.com/keys"
+    },
+    {
+      "id": "gemini",
+      "name": "Google Gemini · 2.5 Flash",
+      "kind": "api",
+      "pricing": "freemium",
+      "approxCostPerHourUsd": 0.12,
+      "freeTier": "Hay capa gratuita con límites bajos en los modelos Flash. En la capa gratuita Google puede usar lo que envías para mejorar sus productos: verifícalo antes de subir audio sensible.",
+      "supported": true,
+      "quality": "Muy buena. Separa hablantes por contexto; los tiempos de cada frase son aproximados.",
+      "speedBasis": "estimado",
+      "speedByCase": {
+        "fiveMin": "~15-30 s",
+        "oneHour": "~2-5 min",
+        "tenHours": "~20-50 min"
+      },
+      "diarization": true,
+      "privacy": "El audio se envía a Google.",
+      "notes": "Lo más práctico si necesitas saber quién habla qué sin instalar nada más. El costo es aproximado (el audio se cobra por tokens; el modelo Flash-Lite sale más barato).",
+      "signupUrl": "https://aistudio.google.com/app/apikey"
+    },
+    {
+      "id": "openai",
+      "name": "OpenAI · whisper-1 / gpt-4o-mini-transcribe",
+      "kind": "api",
+      "pricing": "paid",
+      "approxCostPerHourUsd": 0.36,
+      "supported": false,
+      "quality": "Muy buena. gpt-4o-mini-transcribe cuesta la mitad (~$0.18 por hora) pero no entrega tiempos por frase.",
+      "speedBasis": "estimado",
+      "speedByCase": {
+        "fiveMin": "~20-40 s",
+        "oneHour": "~3-6 min",
+        "tenHours": "~30-60 min"
+      },
+      "diarization": false,
+      "privacy": "El audio se envía a OpenAI.",
+      "notes": "El más conocido, pero más caro que Groq con calidad similar. Requiere tarjeta; no tiene capa gratuita.",
+      "signupUrl": "https://platform.openai.com/api-keys"
+    },
+    {
+      "id": "elevenlabs",
+      "name": "ElevenLabs · Scribe v2",
+      "kind": "api",
+      "pricing": "paid",
+      "approxCostPerHourUsd": 0.22,
+      "freeTier": "Consulta en su sitio si su plan gratuito incluye minutos de transcripción.",
+      "supported": false,
+      "quality": "Muy buena, con separación de hablantes integrada.",
+      "speedBasis": "estimado",
+      "speedByCase": {
+        "fiveMin": "~10-30 s",
+        "oneHour": "~1-3 min",
+        "tenHours": "~10-30 min"
+      },
+      "diarization": true,
+      "privacy": "El audio se envía a ElevenLabs.",
+      "notes": "Buena opción de pago si quieres hablantes precisos y tiempos por frase fiables.",
+      "signupUrl": "https://elevenlabs.io"
+    },
+    {
+      "id": "assemblyai",
+      "name": "AssemblyAI",
+      "kind": "api",
+      "pricing": "freemium",
+      "approxCostPerHourUsd": 0.15,
+      "freeTier": "Ofrece una capa gratuita o créditos de prueba: verifica el monto vigente en su sitio.",
+      "supported": false,
+      "quality": "Muy buena, con separación de hablantes integrada.",
+      "speedBasis": "estimado",
+      "speedByCase": {
+        "fiveMin": "~10-30 s",
+        "oneHour": "~1-3 min",
+        "tenHours": "~10-30 min"
+      },
+      "diarization": true,
+      "privacy": "El audio se envía a AssemblyAI.",
+      "notes": "El precio sube según las funciones extra que actives (rango aproximado $0.15-0.37 por hora).",
+      "signupUrl": "https://www.assemblyai.com"
+    },
+    {
+      "id": "deepgram",
+      "name": "Deepgram · Nova-3",
+      "kind": "api",
+      "pricing": "paid",
+      "approxCostPerHourUsd": 0.46,
+      "freeTier": "Suele dar créditos de prueba al registrarse: verifica el monto vigente en su sitio.",
+      "supported": false,
+      "quality": "Muy buena, con separación de hablantes integrada.",
+      "speedBasis": "estimado",
+      "speedByCase": {
+        "fiveMin": "~5-15 s",
+        "oneHour": "~30-90 s",
+        "tenHours": "~5-15 min"
+      },
+      "diarization": true,
+      "privacy": "El audio se envía a Deepgram.",
+      "notes": "Pensado para volumen alto y tiempo real. Es la más cara de la lista para uso ocasional.",
+      "signupUrl": "https://deepgram.com"
+    }
+  ]
+}

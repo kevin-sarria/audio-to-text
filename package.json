@@ -1,0 +1,39 @@
+{
+  "name": "audio-to-text",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sistema de transcripción y diarización de audio con arquitectura limpia y monorepo",
+  "workspaces": [
+    "packages/*",
+    "backend",
+    "frontend",
+    "desktop"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces --if-present",
+    "dev:api": "npm run dev --workspace=@audio-to-text/api",
+    "dev:web": "npm run dev --workspace=@audio-to-text/web",
+    "dev:worker": "npm run dev:worker --workspace=@audio-to-text/api",
+    "dev:desktop": "npm run dev --workspace=@audio-to-text/desktop",
+    "build": "npm run build --workspaces --if-present",
+    "build:shared": "npm run build --workspace=@audio-to-text/shared",
+    "build:api": "npm run build --workspace=@audio-to-text/api",
+    "build:web": "npm run build --workspace=@audio-to-text/web",
+    "dist:desktop": "npm run dist --workspace=@audio-to-text/desktop",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "prisma:generate": "npm run prisma:generate --workspace=@audio-to-text/api",
+    "prisma:validate": "npm run prisma:validate --workspace=@audio-to-text/api",
+    "prisma:format": "npm run prisma:format --workspace=@audio-to-text/api"
+  },
+  "keywords": [
+    "audio",
+    "transcription",
+    "diarization",
+    "whisper",
+    "react",
+    "express"
+  ],
+  "author": "Audio-to-Text Team",
+  "license": "UNLICENSED"
+}

@@ -1,0 +1,68 @@
+name: Desktop Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build shared and frontend
+        run: |
+          npm run build:shared
+          npm run build:web
+
+      - name: Fetch binaries for target platform
+        run: npm run fetch:binaries --workspace=@audio-to-text/desktop
+
+      - name: Build and package desktop app (Windows)
+        if: matrix.os == 'windows-latest'
+        run: npm run dist:win --workspace=@audio-to-text/desktop
+
+      - name: Build and package desktop app (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: npm run dist:linux --workspace=@audio-to-text/desktop
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: audio2text-${{ matrix.os }}
+          path: desktop/release/*.*
+
+      - name: Publish GitHub Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: desktop/release/*.*
+          body: |
+            ## Audio2Text Desktop Release
+            
+            Instaladores automáticos generados para Windows (NSIS .exe) y Linux (AppImage y .deb).
+            
+            > **Aviso de Seguridad / SmartScreen**:
+            > Los binarios no cuentan con firma digital comercial (certificado EV/OV). Windows Defender SmartScreen puede mostrar una advertencia de "Editor desconocido". Para continuar, pulsa "Más información" -> "Ejecutar de todas formas".
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

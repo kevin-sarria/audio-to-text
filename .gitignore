@@ -1,0 +1,60 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+
+# Storage and uploads
+storage/
+uploads/
+*.wav
+*.mp3
+*.m4a
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Prisma generated
+prisma/generated/
+backend/prisma/generated/
+**/prisma/generated/
+
+# OS and Editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+
+# Coverage
+coverage/
+
+# Binarios y modelos locales de transcripción
+backend/tools/
+backend/models/
+
+# SQLite local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Desktop build, release and binaries
+desktop/dist/
+desktop/release/
+desktop/resources/bin/*
+!desktop/resources/bin/.gitkeep
