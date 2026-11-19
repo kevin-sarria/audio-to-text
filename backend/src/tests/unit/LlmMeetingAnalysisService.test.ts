@@ -382,5 +382,95 @@ Espero que esta información te sea de gran utilidad para el sprint.`;
       const parsed = (service as any).parseAndValidateResponse(rawWithPreamble);
       expect(parsed.summary).toBe("Resumen válido");
     });
+
+    it("cleanJsonString no trunca el JSON cuando hay bloques de código markdown embebidos en descripciones de issues", () => {
+      const rawWithEmbeddedCodeBlocks = `\`\`\`json
+{
+  "summary": "Reunión técnica",
+  "alreadyResolved": [],
+  "inProgress": [],
+  "keyDecisions": [],
+  "topicsDiscussed": [],
+  "globalOpenQuestions": [],
+  "issues": [
+    {
+      "id": "BACKEND-1",
+      "repo": "backend",
+      "title": "[Backend] Ejecutar tests de dotnet",
+      "type": "feature",
+      "priority": "high",
+      "component": "API",
+      "description": "Debes ejecutar el comando:\\n\`\`\`bash\\ndotnet test --filter FullyQualifiedName\\n\`\`\`\\npara verificar la integración.",
+      "estimation": {
+        "backendHours": 4,
+        "panelHours": 0,
+        "appHours": 0,
+        "totalHours": 4,
+        "text": "Backend: 4h | Panel: 0h | App: 0h | Total: 4h"
+      },
+      "openQuestions": ["Ninguna"],
+      "dependencies": ["Ninguna"],
+      "prWorkflow": "Rama corta desde dev",
+      "expectedFiles": ["backend/test.cs"],
+      "acceptanceCriteria": ["Pasan los tests"],
+      "agentPrompt": "Ejecuta los tests"
+    }
+  ],
+  "backlog": [],
+  "repoHoursTotals": { "backend": 4, "panel": 0, "app": 0, "total": 4 }
+}
+\`\`\``;
+
+      const cleaned = (service as any).cleanJsonString(rawWithEmbeddedCodeBlocks);
+      expect(cleaned).toContain("dotnet test");
+      expect(cleaned).toContain('"repoHoursTotals"');
+      const parsed = (service as any).parseAndValidateResponse(rawWithEmbeddedCodeBlocks);
+      expect(parsed.issues).toHaveLength(1);
+      expect(parsed.issues[0]?.description).toContain("dotnet test");
+    });
+
+    it("normaliza sin fallar sinónimos y variaciones de enums como enhancement, bugfix, frontend o critical", () => {
+      const rawWithSynonyms = JSON.stringify({
+        summary: "Resumen con sinónimos de enums",
+        alreadyResolved: [],
+        inProgress: [],
+        keyDecisions: [],
+        topicsDiscussed: [],
+        globalOpenQuestions: [],
+        issues: [
+          {
+            id: "ISS-1",
+            repo: "frontend", // debe normalizarse a panel
+            title: "Mejora visual",
+            type: "enhancement", // debe normalizarse a feature
+            priority: "critical", // debe normalizarse a high
+            component: "UI",
+            description: "Mejora de interfaz",
+            agentPrompt: "Implementar..."
+          },
+          {
+            id: "ISS-2",
+            repo: "mobile-app", // debe normalizarse a app
+            title: "Corregir bug de sincronización",
+            type: "bugfix", // debe normalizarse a bug
+            priority: "urgente", // debe normalizarse a high
+            component: "Sync",
+            description: "Fix de sincronización",
+            agentPrompt: "Corregir..."
+          }
+        ],
+        backlog: [],
+        repoHoursTotals: { backend: 0, panel: 2, app: 3, total: 5 }
+      });
+
+      const parsed = (service as any).parseAndValidateResponse(rawWithSynonyms);
+      expect(parsed.issues).toHaveLength(2);
+      expect(parsed.issues[0]?.repo).toBe("panel");
+      expect(parsed.issues[0]?.type).toBe("feature");
+      expect(parsed.issues[0]?.priority).toBe("high");
+      expect(parsed.issues[1]?.repo).toBe("app");
+      expect(parsed.issues[1]?.type).toBe("bug");
+      expect(parsed.issues[1]?.priority).toBe("high");
+    });
   });
 });

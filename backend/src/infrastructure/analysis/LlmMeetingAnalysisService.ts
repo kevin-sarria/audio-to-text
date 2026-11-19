@@ -13,48 +13,106 @@ import { SettingsStore } from "../../desktop/infrastructure/settings/SettingsSto
 
 const DevIssueSchema = z.object({
   id: z.string().default(() => `ISSUE-${Math.floor(Math.random() * 900 + 100)}`),
-  repo: z.enum(["backend", "panel", "app", "otro"]).default("backend"),
-  title: z.string(),
-  type: z.enum(["feature", "bug", "refactor", "chore", "spike"]).default("feature"),
-  priority: z.enum(["high", "medium", "low"]).default("medium"),
+  repo: z.preprocess((val) => {
+    if (typeof val !== "string") return "backend";
+    const v = val.toLowerCase().trim();
+    if (v.includes("back") || v.includes("api") || v.includes("server")) return "backend";
+    if (v.includes("panel") || v.includes("front") || v.includes("web")) return "panel";
+    if (v.includes("app") || v.includes("mobile") || v.includes("movil")) return "app";
+    return "otro";
+  }, z.enum(["backend", "panel", "app", "otro"]).default("backend")),
+  title: z.string().default("Tarea técnica"),
+  type: z.preprocess((val) => {
+    if (typeof val !== "string") return "feature";
+    const v = val.toLowerCase().trim();
+    if (v.includes("bug") || v.includes("fix") || v.includes("error") || v.includes("defecto")) return "bug";
+    if (v.includes("refactor") || v.includes("clean") || v.includes("mejora")) return "refactor";
+    if (v.includes("chore") || v.includes("tarea") || v.includes("config")) return "chore";
+    if (v.includes("spike") || v.includes("investig")) return "spike";
+    return "feature";
+  }, z.enum(["feature", "bug", "refactor", "chore", "spike"]).default("feature")),
+  priority: z.preprocess((val) => {
+    if (typeof val !== "string") return "medium";
+    const v = val.toLowerCase().trim();
+    if (v.includes("high") || v.includes("alta") || v.includes("crit") || v.includes("urg")) return "high";
+    if (v.includes("low") || v.includes("baja")) return "low";
+    return "medium";
+  }, z.enum(["high", "medium", "low"]).default("medium")),
   component: z.string().default("General"),
-  description: z.string(),
+  description: z.string().default(""),
   estimation: z
-    .object({
+    .preprocess((val) => {
+      if (!val || typeof val !== "object") {
+        return { backendHours: 0, panelHours: 0, appHours: 0, totalHours: 0, text: "" };
+      }
+      const obj = val as Record<string, any>;
+      const b = Number(obj.backendHours) || 0;
+      const p = Number(obj.panelHours) || 0;
+      const a = Number(obj.appHours) || 0;
+      const t = Number(obj.totalHours) || (b + p + a);
+      const text = typeof obj.text === "string" ? obj.text : `Backend: ${b}h | Panel: ${p}h | App: ${a}h | Total: ${t}h`;
+      return { backendHours: b, panelHours: p, appHours: a, totalHours: t, text };
+    }, z.object({
       backendHours: z.number().default(0),
       panelHours: z.number().default(0),
       appHours: z.number().default(0),
       totalHours: z.number().default(0),
       text: z.string().default("")
-    })
+    }))
     .default({ backendHours: 0, panelHours: 0, appHours: 0, totalHours: 0, text: "" }),
-  openQuestions: z.array(z.string()).default(["Ninguna"]),
-  dependencies: z.array(z.string()).default(["Ninguna"]),
+  openQuestions: z.preprocess((val) => {
+    if (Array.isArray(val)) return val.map(String);
+    if (typeof val === "string") return [val];
+    return ["Ninguna"];
+  }, z.array(z.string())).default(["Ninguna"]),
+  dependencies: z.preprocess((val) => {
+    if (Array.isArray(val)) return val.map(String);
+    if (typeof val === "string") return [val];
+    return ["Ninguna"];
+  }, z.array(z.string())).default(["Ninguna"]),
   prWorkflow: z
     .string()
     .default("Rama corta desde dev, PR a dev, skill /revisar-entrega, captura de la prueba en pantalla y revisión de Juan."),
-  expectedFiles: z.array(z.string()).default([]),
-  acceptanceCriteria: z.array(z.string()).default([]),
-  agentPrompt: z.string()
+  expectedFiles: z.preprocess((val) => {
+    if (Array.isArray(val)) return val.map(String);
+    if (typeof val === "string") return [val];
+    return [];
+  }, z.array(z.string())).default([]),
+  acceptanceCriteria: z.preprocess((val) => {
+    if (Array.isArray(val)) return val.map(String);
+    if (typeof val === "string") return [val];
+    return [];
+  }, z.array(z.string())).default([]),
+  agentPrompt: z.string().default("")
 });
 
-const RepoHoursTotalsSchema = z.object({
+const RepoHoursTotalsSchema = z.preprocess((val) => {
+  if (!val || typeof val !== "object") {
+    return { backend: 0, panel: 0, app: 0, total: 0 };
+  }
+  const obj = val as Record<string, any>;
+  const b = Number(obj.backend) || 0;
+  const p = Number(obj.panel) || 0;
+  const a = Number(obj.app) || 0;
+  const t = Number(obj.total) || (b + p + a);
+  return { backend: b, panel: p, app: a, total: t };
+}, z.object({
   backend: z.number().default(0),
   panel: z.number().default(0),
   app: z.number().default(0),
   total: z.number().default(0)
-});
+})).default({ backend: 0, panel: 0, app: 0, total: 0 });
 
 const MeetingAnalysisJsonSchema = z.object({
-  summary: z.string(),
-  alreadyResolved: z.array(z.string()).default([]),
-  inProgress: z.array(z.string()).default([]),
-  keyDecisions: z.array(z.string()).default([]),
-  topicsDiscussed: z.array(z.string()).default([]),
-  globalOpenQuestions: z.array(z.string()).default([]),
+  summary: z.string().default("Resumen de la reunión"),
+  alreadyResolved: z.preprocess((val) => (Array.isArray(val) ? val.map(String) : []), z.array(z.string())).default([]),
+  inProgress: z.preprocess((val) => (Array.isArray(val) ? val.map(String) : []), z.array(z.string())).default([]),
+  keyDecisions: z.preprocess((val) => (Array.isArray(val) ? val.map(String) : []), z.array(z.string())).default([]),
+  topicsDiscussed: z.preprocess((val) => (Array.isArray(val) ? val.map(String) : []), z.array(z.string())).default([]),
+  globalOpenQuestions: z.preprocess((val) => (Array.isArray(val) ? val.map(String) : []), z.array(z.string())).default([]),
   issues: z.array(DevIssueSchema).default([]),
-  backlog: z.array(z.string()).default([]),
-  repoHoursTotals: RepoHoursTotalsSchema.default({ backend: 0, panel: 0, app: 0, total: 0 })
+  backlog: z.preprocess((val) => (Array.isArray(val) ? val.map(String) : []), z.array(z.string())).default([]),
+  repoHoursTotals: RepoHoursTotalsSchema
 });
 
 export interface LlmMeetingAnalysisServiceDeps {
@@ -90,17 +148,26 @@ export class LlmMeetingAnalysisService implements IMeetingAnalysisService {
       const step2Clean = this.cleanJsonString(rawStep2);
       const step2Data = JSON.parse(step2Clean);
 
+      let step2Issues: any[] = [];
+      let step2Hours: any = null;
+      if (Array.isArray(step2Data)) {
+        step2Issues = step2Data;
+      } else if (step2Data && Array.isArray(step2Data.issues)) {
+        step2Issues = step2Data.issues;
+        step2Hours = step2Data.repoHoursTotals;
+      }
+
       // Ensamblar ambos pasos
       const merged = {
-        summary: step1Data.summary || "Resumen de la reunión",
-        alreadyResolved: Array.isArray(step1Data.alreadyResolved) ? step1Data.alreadyResolved : [],
-        inProgress: Array.isArray(step1Data.inProgress) ? step1Data.inProgress : [],
-        keyDecisions: Array.isArray(step1Data.keyDecisions) ? step1Data.keyDecisions : [],
-        topicsDiscussed: Array.isArray(step1Data.topicsDiscussed) ? step1Data.topicsDiscussed : [],
-        globalOpenQuestions: Array.isArray(step1Data.globalOpenQuestions) ? step1Data.globalOpenQuestions : [],
-        issues: Array.isArray(step2Data.issues) ? step2Data.issues : [],
-        backlog: Array.isArray(step1Data.backlog) ? step1Data.backlog : [],
-        repoHoursTotals: step2Data.repoHoursTotals || { backend: 0, panel: 0, app: 0, total: 0 }
+        summary: step1Data?.summary || "Resumen de la reunión",
+        alreadyResolved: Array.isArray(step1Data?.alreadyResolved) ? step1Data.alreadyResolved : [],
+        inProgress: Array.isArray(step1Data?.inProgress) ? step1Data.inProgress : [],
+        keyDecisions: Array.isArray(step1Data?.keyDecisions) ? step1Data.keyDecisions : [],
+        topicsDiscussed: Array.isArray(step1Data?.topicsDiscussed) ? step1Data.topicsDiscussed : [],
+        globalOpenQuestions: Array.isArray(step1Data?.globalOpenQuestions) ? step1Data.globalOpenQuestions : [],
+        issues: step2Issues,
+        backlog: Array.isArray(step1Data?.backlog) ? step1Data.backlog : [],
+        repoHoursTotals: step2Hours || step2Data?.repoHoursTotals || { backend: 0, panel: 0, app: 0, total: 0 }
       };
 
       return this.parseAndValidateResponse(JSON.stringify(merged));
@@ -533,12 +600,12 @@ Este contexto servirá como arnés de contexto técnico para que agentes de IA d
 
   private cleanJsonString(raw: string): string {
     let clean = raw.trim();
-    // 1. Si viene con bloques de código markdown ```json ... ``` extraer su interior
-    const fenceMatch = clean.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-    if (fenceMatch && fenceMatch[1]) {
-      clean = fenceMatch[1].trim();
+    // 1. Si el texto completo viene envuelto en un bloque markdown ```json ... ``` retirarlo sin romper bloques internos
+    if (clean.startsWith("```")) {
+      clean = clean.replace(/^```(?:json)?\s*\n?/i, "");
+      clean = clean.replace(/\n?\s*```\s*$/i, "");
     }
-    // 2. Extraer desde la primera llave { hasta la última } para descartar texto conversacional previo o posterior
+    // 2. Extraer desde la primera llave { hasta la última llave } para descartar texto conversacional previo o posterior
     const firstBrace = clean.indexOf("{");
     const lastBrace = clean.lastIndexOf("}");
     if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
