@@ -46,6 +46,7 @@ import { api } from "../lib/api.js";
 import { ProjectFolderModal } from "../features/projectFolders/ProjectFolderModal.js";
 import { CustomProviderModal } from "../features/customAi/CustomProviderModal.js";
 import { useProjectFolders } from "../features/projectFolders/useProjectFolders.js";
+import { LlmModelSelector } from "../features/customAi/LlmModelSelector.js";
 
 interface DesktopSettings {
   engine: "whisper-local" | "groq" | "gemini";
@@ -920,13 +921,13 @@ export const SettingsPage: React.FC = () => {
           </Grid>
 
           <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              size="small"
+            <LlmModelSelector
+              provider={settings.issuesDefaultProvider || "google-account"}
+              value={settings.issuesDefaultModel || ""}
+              onChange={(newModel) => setSettings({ ...settings, issuesDefaultModel: newModel })}
+              baseUrl={settings.customProviders?.find((p) => p.id === settings.issuesDefaultProvider)?.baseUrl}
               label="Modelo de IA por Defecto"
-              value={settings.issuesDefaultModel || "gemini-2.5-pro"}
-              onChange={(e) => setSettings({ ...settings, issuesDefaultModel: e.target.value })}
-              helperText="ej. gemini-2.5-pro, gpt-4o, llama-3.3-70b-versatile, deepseek-chat"
+              placeholder="Selecciona o escribe el modelo"
             />
           </Grid>
         </Grid>

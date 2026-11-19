@@ -90,7 +90,7 @@ describe("Meeting Analysis DTO & Schemas Validation", () => {
       updatedAt: "2026-11-19T00:00:00Z"
     };
 
-    expect(fullAnalysis.issues[0].repo).toBe("backend");
+    expect(fullAnalysis.issues[0]?.repo).toBe("backend");
     expect(fullAnalysis.repoHoursTotals.backend).toBe(4);
     expect(fullAnalysis.alreadyResolved).toHaveLength(1);
     expect(fullAnalysis.inProgress).toHaveLength(1);

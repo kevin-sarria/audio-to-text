@@ -119,4 +119,60 @@ describe("SecretVault y rutas de claves", () => {
       server.close();
     }
   });
+
+  it("POST /settings/llm-models devuelve la lista de modelos para google-account y proveedores cloud", async () => {
+    const server = app.listen(0);
+    const port = (server.address() as any).port;
+
+    try {
+      // 1. google-account
+      const resAgy = await fetch(`http://127.0.0.1:${port}/api/desktop/settings/llm-models`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: `accessToken=${launchToken}`
+        },
+        body: JSON.stringify({ provider: "google-account" })
+      });
+      expect(resAgy.status).toBe(200);
+      const jsonAgy = (await resAgy.json()) as any;
+      expect(jsonAgy.success).toBe(true);
+      expect(jsonAgy.data.provider).toBe("google-account");
+      expect(jsonAgy.data.models.some((m: any) => m.id === "gemini-3.8-flash-high")).toBe(true);
+      expect(jsonAgy.data.defaultModel).toBe("gemini-3.8-flash-high");
+
+      // 2. gemini (sin clave previa devuelve fallback seguro)
+      const resGemini = await fetch(`http://127.0.0.1:${port}/api/desktop/settings/llm-models`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: `accessToken=${launchToken}`
+        },
+        body: JSON.stringify({ provider: "gemini" })
+      });
+      expect(resGemini.status).toBe(200);
+      const jsonGemini = (await resGemini.json()) as any;
+      expect(jsonGemini.data.models.some((m: any) => m.id === "gemini-2.5-flash")).toBe(true);
+      expect(jsonGemini.data.defaultModel).toBe("gemini-2.5-flash");
+
+      // 3. custom provider deepseek
+      const resCustom = await fetch(`http://127.0.0.1:${port}/api/desktop/settings/llm-models`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: `accessToken=${launchToken}`
+        },
+        body: JSON.stringify({
+          provider: "custom-deepseek",
+          baseUrl: "https://api.deepseek.com"
+        })
+      });
+      expect(resCustom.status).toBe(200);
+      const jsonCustom = (await resCustom.json()) as any;
+      expect(jsonCustom.data.models.some((m: any) => m.id === "deepseek-flash")).toBe(true);
+      expect(jsonCustom.data.defaultModel).toBe("deepseek-flash");
+    } finally {
+      server.close();
+    }
+  });
 });

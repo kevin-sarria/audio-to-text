@@ -75,3 +75,17 @@ export const GenerateMeetingAnalysisSchema = z.object({
   model: z.string().max(100).optional(),
   baseUrl: z.string().url("La URL base debe ser una URL válida").max(500).optional()
 });
+
+export interface AvailableModelItem {
+  id: string;
+  name: string;
+  description?: string;
+  contextWindow?: number;
+}
+
+export interface AvailableLlmModelsDto {
+  provider: string;
+  models: AvailableModelItem[];
+  defaultModel: string;
+  isLiveDiscovered?: boolean;
+}

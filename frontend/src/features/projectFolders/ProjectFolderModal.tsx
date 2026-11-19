@@ -22,8 +22,9 @@ import {
   AutoAwesome as AutoAwesomeIcon,
   FolderOpen as BrowseFolderIcon
 } from "@mui/icons-material";
-import { ProjectFolderDto } from "@audio-to-text/shared";
+import { ProjectFolderDto, CustomAiProviderDto } from "@audio-to-text/shared";
 import { api } from "../../lib/api.js";
+import { LlmModelSelector } from "../customAi/LlmModelSelector.js";
 
 interface ProjectFolderModalProps {
   open: boolean;
@@ -55,7 +56,7 @@ export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
   const [defaultModel, setDefaultModel] = useState("");
   const [customApiKey, setCustomApiKey] = useState("");
 
-  const [customProviders, setCustomProviders] = useState<{ id: string; name: string }[]>([]);
+  const [customProviders, setCustomProviders] = useState<CustomAiProviderDto[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -358,13 +359,17 @@ export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
               </Select>
             </FormControl>
 
-            <TextField
-              sx={{ flex: 1, minWidth: 200 }}
-              label="Modelo preferido (opcional)"
-              placeholder="ej. gemini-2.5-pro, gpt-4o, llama-3.3-70b"
-              value={defaultModel}
-              onChange={(e) => setDefaultModel(e.target.value)}
-            />
+            <Box sx={{ flex: 1, minWidth: 200 }}>
+              <LlmModelSelector
+                provider={defaultProvider}
+                value={defaultModel}
+                onChange={setDefaultModel}
+                apiKey={customApiKey}
+                baseUrl={customProviders.find((cp) => cp.id === defaultProvider)?.baseUrl}
+                label="Modelo preferido"
+                placeholder="Selecciona o escribe el modelo"
+              />
+            </Box>
           </Box>
 
           {defaultProvider !== "google-account" && (

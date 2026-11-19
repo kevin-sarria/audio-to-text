@@ -59,6 +59,7 @@ import { api } from "../../lib/api.js";
 import { useAppStore } from "../../store/index.js";
 import { useProjectFolders } from "../projectFolders/useProjectFolders.js";
 import { CustomProviderModal } from "../customAi/CustomProviderModal.js";
+import { LlmModelSelector } from "../customAi/LlmModelSelector.js";
 
 interface MeetingAnalysisPanelProps {
   sessionId: string;
@@ -763,14 +764,17 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
               />
             )}
 
-            <TextField
-              size="small"
-              label="Modelo (opcional)"
-              placeholder="ej. gemini-2.5-pro, gpt-4o, deepseek-chat"
-              value={customModel}
-              onChange={(e) => setCustomModel(e.target.value)}
-              sx={{ width: 200 }}
-            />
+            <Box sx={{ minWidth: 260, flex: 1 }}>
+              <LlmModelSelector
+                provider={provider}
+                value={customModel}
+                onChange={setCustomModel}
+                apiKey={customApiKey}
+                baseUrl={customProviders.find((cp) => cp.id === provider)?.baseUrl}
+                label="Modelo de IA"
+                placeholder="Selecciona o escribe el modelo"
+              />
+            </Box>
 
             <Button
               size="small"
