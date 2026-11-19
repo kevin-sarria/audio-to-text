@@ -79,6 +79,10 @@ export async function startDesktopServer(
 
   // 5. Iniciar servidor HTTP en 127.0.0.1
   const server = http.createServer(app);
+  // Permitir peticiones largas para análisis de reuniones extensas con modelos LLM
+  server.requestTimeout = 480000; // 8 minutos
+  server.headersTimeout = 60000;
+  server.timeout = 480000;
 
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);

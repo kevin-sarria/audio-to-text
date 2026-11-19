@@ -549,7 +549,8 @@ Debes responder ÚNICAMENTE con un objeto JSON válido con la siguiente estructu
     };
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 120000);
+    const timeoutMs = 360000; // 6 minutos para dar tiempo suficiente a transcripciones extensas
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
       const res = await fetch(url, {
@@ -573,6 +574,13 @@ Debes responder ÚNICAMENTE con un objeto JSON válido con la siguiente estructu
         throw new Error("Gemini API no devolvió contenido de texto en la respuesta.");
       }
       return text;
+    } catch (err: any) {
+      if (err.name === "AbortError" || err.message?.toLowerCase().includes("aborted")) {
+        throw new Error(
+          `La generación con Gemini excedió el tiempo límite (${timeoutMs / 60000} minutos). Para reuniones muy extensas, el modelo tardó más de lo esperado en procesar el audio completo.`
+        );
+      }
+      throw err;
     } finally {
       clearTimeout(timeout);
     }
@@ -597,7 +605,8 @@ Debes responder ÚNICAMENTE con un objeto JSON válido con la siguiente estructu
     };
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 120000);
+    const timeoutMs = 360000; // 6 minutos para permitir transcripciones largas
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
       const res = await fetch(url, {
@@ -621,6 +630,13 @@ Debes responder ÚNICAMENTE con un objeto JSON válido con la siguiente estructu
         throw new Error("Groq API no devolvió contenido en la respuesta.");
       }
       return text;
+    } catch (err: any) {
+      if (err.name === "AbortError" || err.message?.toLowerCase().includes("aborted")) {
+        throw new Error(
+          `La generación con Groq excedió el tiempo límite (${timeoutMs / 60000} minutos).`
+        );
+      }
+      throw err;
     } finally {
       clearTimeout(timeout);
     }
@@ -648,7 +664,8 @@ Debes responder ÚNICAMENTE con un objeto JSON válido con la siguiente estructu
     };
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 120000);
+    const timeoutMs = 360000; // 6 minutos para modelos de razonamiento (ej. DeepSeek Flash, R1) y reuniones extensas
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
       const res = await fetch(url, {
@@ -691,6 +708,13 @@ Debes responder ÚNICAMENTE con un objeto JSON válido con la siguiente estructu
         throw new Error("OpenAI API no devolvió contenido en la respuesta.");
       }
       return text;
+    } catch (err: any) {
+      if (err.name === "AbortError" || err.message?.toLowerCase().includes("aborted")) {
+        throw new Error(
+          `La llamada al proveedor de IA excedió el tiempo límite de espera (${timeoutMs / 60000} minutos). Para reuniones extensas o modelos de razonamiento profundo (como DeepSeek Flash / R1), el modelo tardó más de lo esperado en procesar los miles de tokens de audio y redactar las tareas.`
+        );
+      }
+      throw err;
     } finally {
       clearTimeout(timeout);
     }

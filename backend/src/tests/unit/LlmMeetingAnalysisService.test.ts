@@ -159,4 +159,41 @@ describe("LlmMeetingAnalysisService - Robustez de Proveedores y Escaneo", () => 
       expect(summary).not.toContain("BEGIN PRIVATE KEY");
     });
   });
+
+  describe("Manejo de Tiempos de Espera y Cancelaciones (AbortError)", () => {
+    it("captura AbortError y lanza un mensaje explicativo y amigable en lugar del críptico 'This operation was aborted'", async () => {
+      // Mock global fetch para simular un timeout/abort
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn().mockImplementation(() => {
+        const error = new Error("This operation was aborted");
+        error.name = "AbortError";
+        return Promise.reject(error);
+      });
+
+      try {
+        await expect(
+          (service as any).callOpenAi("system prompt", "user prompt", "dummy-api-key", "deepseek-flash", "https://api.deepseek.com")
+        ).rejects.toThrow(/excedió el tiempo límite de espera/);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it("captura AbortError en Gemini y lanza un mensaje amigable contextualizado", async () => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn().mockImplementation(() => {
+        const error = new Error("This operation was aborted");
+        error.name = "AbortError";
+        return Promise.reject(error);
+      });
+
+      try {
+        await expect(
+          (service as any).callGemini("system prompt", "user prompt", "dummy-api-key", "gemini-2.5-flash")
+        ).rejects.toThrow(/excedió el tiempo límite/);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+  });
 });

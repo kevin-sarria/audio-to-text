@@ -577,7 +577,7 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
                 Generando resumen técnico y extrayendo issues con IA...
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                Extrayendo decisiones clave, identificando tareas técnicas y redactando prompts optimizados para agentes de código.
+                Extrayendo decisiones clave, identificando tareas técnicas y redactando prompts optimizados para agentes de código. En reuniones largas o modelos de razonamiento (como DeepSeek Flash), el análisis profundo puede tomar entre 2 y 3 minutos.
               </Typography>
             </Box>
           </Box>
