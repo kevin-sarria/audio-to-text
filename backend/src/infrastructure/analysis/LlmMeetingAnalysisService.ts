@@ -1071,14 +1071,16 @@ ${contextSection}
   private parseAndValidateResponse(rawJson: string): GeneratedMeetingData {
     const clean = this.cleanJsonString(rawJson);
 
-    let parsed: unknown;
+    let parsed: any;
     try {
       parsed = JSON.parse(clean);
     } catch (e: any) {
       throw new Error(`Error al parsear el JSON generado por el modelo: ${e.message}\nContenido recibido: ${clean.slice(0, 200)}`);
     }
 
-    const validated = MeetingAnalysisJsonSchema.parse(parsed);
+    if (Array.isArray(parsed)) {
+      parsed = { issues: parsed };
+    }
 
     let sumBackend = 0;
     let sumPanel = 0;
@@ -1086,49 +1088,65 @@ ${contextSection}
 
     // Asegurar IDs únicos si vinieron repetidos o vacíos y sumar horas por repo
     const seenIds = new Set<string>();
-    const sanitizedIssues: DevIssueDto[] = validated.issues.map((issue, index) => {
-      let id = issue.id || `ISSUE-${index + 1}`;
-      if (seenIds.has(id)) {
-        id = `ISSUE-${index + 1}`;
+    const rawIssues: unknown[] = Array.isArray(parsed?.issues) ? parsed.issues : [];
+    const sanitizedIssues: DevIssueDto[] = [];
+
+    rawIssues.forEach((rawIssue, index) => {
+      if (!rawIssue || typeof rawIssue !== "object") return;
+      const parseResult = DevIssueSchema.safeParse(rawIssue);
+      if (parseResult.success) {
+        const issue = parseResult.data;
+        let id = issue.id || `ISSUE-${index + 1}`;
+        if (seenIds.has(id)) {
+          id = `ISSUE-${index + 1}`;
+        }
+        seenIds.add(id);
+
+        const bHours = Number(issue.estimation?.backendHours) || 0;
+        const pHours = Number(issue.estimation?.panelHours) || 0;
+        const aHours = Number(issue.estimation?.appHours) || 0;
+        const totHours = bHours + pHours + aHours;
+        sumBackend += bHours;
+        sumPanel += pHours;
+        sumApp += aHours;
+
+        const estimationText =
+          issue.estimation?.text || `Backend: ${bHours}h | Panel: ${pHours}h | App: ${aHours}h | Total: ${totHours}h`;
+
+        sanitizedIssues.push({
+          id,
+          repo: issue.repo,
+          title: issue.title,
+          type: issue.type,
+          priority: issue.priority,
+          component: issue.component,
+          description: issue.description,
+          estimation: {
+            backendHours: bHours,
+            panelHours: pHours,
+            appHours: aHours,
+            totalHours: totHours,
+            text: estimationText
+          },
+          openQuestions: issue.openQuestions && issue.openQuestions.length > 0 ? issue.openQuestions : ["Ninguna"],
+          dependencies: issue.dependencies && issue.dependencies.length > 0 ? issue.dependencies : ["Ninguna"],
+          prWorkflow:
+            issue.prWorkflow ||
+            "Rama corta desde dev, PR a dev, skill /revisar-entrega, captura de la prueba en pantalla y revisión de Juan.",
+          expectedFiles: issue.expectedFiles || [],
+          acceptanceCriteria: issue.acceptanceCriteria || [],
+          agentPrompt: issue.agentPrompt
+        });
+      } else {
+        console.warn(`[LlmMeetingAnalysisService] Issue #${index + 1} fue adaptado con valores por defecto:`, parseResult.error.message);
       }
-      seenIds.add(id);
-
-      const bHours = Number(issue.estimation?.backendHours) || 0;
-      const pHours = Number(issue.estimation?.panelHours) || 0;
-      const aHours = Number(issue.estimation?.appHours) || 0;
-      const totHours = bHours + pHours + aHours;
-      sumBackend += bHours;
-      sumPanel += pHours;
-      sumApp += aHours;
-
-      const estimationText =
-        issue.estimation?.text || `Backend: ${bHours}h | Panel: ${pHours}h | App: ${aHours}h | Total: ${totHours}h`;
-
-      return {
-        id,
-        repo: issue.repo,
-        title: issue.title,
-        type: issue.type,
-        priority: issue.priority,
-        component: issue.component,
-        description: issue.description,
-        estimation: {
-          backendHours: bHours,
-          panelHours: pHours,
-          appHours: aHours,
-          totalHours: totHours,
-          text: estimationText
-        },
-        openQuestions: issue.openQuestions && issue.openQuestions.length > 0 ? issue.openQuestions : ["Ninguna"],
-        dependencies: issue.dependencies && issue.dependencies.length > 0 ? issue.dependencies : ["Ninguna"],
-        prWorkflow:
-          issue.prWorkflow ||
-          "Rama corta desde dev, PR a dev, skill /revisar-entrega, captura de la prueba en pantalla y revisión de Juan.",
-        expectedFiles: issue.expectedFiles || [],
-        acceptanceCriteria: issue.acceptanceCriteria || [],
-        agentPrompt: issue.agentPrompt
-      };
     });
+
+    const toStringArray = (val: unknown): string[] => {
+      if (Array.isArray(val)) return val.map((item) => String(item).trim()).filter(Boolean);
+      if (typeof val === "string" && val.trim()) return [val.trim()];
+      return [];
+    };
 
     const verifiedTotals = {
       backend: sumBackend,
@@ -1137,15 +1155,19 @@ ${contextSection}
       total: sumBackend + sumPanel + sumApp
     };
 
+    const summary = typeof parsed?.summary === "string" && parsed.summary.trim()
+      ? parsed.summary.trim()
+      : "Resumen técnico de la reunión";
+
     return {
-      summary: validated.summary,
-      alreadyResolved: validated.alreadyResolved,
-      inProgress: validated.inProgress,
-      keyDecisions: validated.keyDecisions,
-      topicsDiscussed: validated.topicsDiscussed,
-      globalOpenQuestions: validated.globalOpenQuestions,
+      summary,
+      alreadyResolved: toStringArray(parsed?.alreadyResolved),
+      inProgress: toStringArray(parsed?.inProgress),
+      keyDecisions: toStringArray(parsed?.keyDecisions),
+      topicsDiscussed: toStringArray(parsed?.topicsDiscussed),
+      globalOpenQuestions: toStringArray(parsed?.globalOpenQuestions),
       issues: sanitizedIssues,
-      backlog: validated.backlog,
+      backlog: toStringArray(parsed?.backlog),
       repoHoursTotals: verifiedTotals
     };
   }

@@ -71,6 +71,78 @@ const DEFAULT_PROJECT_CONTEXT = `Monorepo TypeScript:
 - Base de datos: MySQL 8.0 (Web) / SQLite (Desktop).
 - Convenciones: Código en TypeScript estricto, separación en casos de uso, DTOs compartidos en packages/shared.`;
 
+function formatHumanFriendlyError(raw: string): { title: string; description: string; technical?: string } {
+  if (!raw) {
+    return {
+      title: "Error inesperado",
+      description: "Ocurrió un error al procesar el análisis de la reunión."
+    };
+  }
+
+  // Detectar error de validación Zod en formato JSON (como el mostrado en la captura)
+  if (
+    raw.includes("invalid_enum_value") ||
+    raw.includes("Expected 'feature'") ||
+    (raw.trim().startsWith("[") && raw.includes("code"))
+  ) {
+    return {
+      title: "Respuesta del modelo con formato adaptado",
+      description:
+        "El modelo devolvió clasificaciones de issues con términos no estándar (ej. 'enhancement'). El sistema ahora los normaliza automáticamente al generar las tareas.",
+      technical: raw
+    };
+  }
+
+  // Detectar 401
+  if (
+    raw.includes("401") ||
+    raw.toLowerCase().includes("authentication fails") ||
+    raw.toLowerCase().includes("invalid api key") ||
+    raw.toLowerCase().includes("rechazó la autenticación")
+  ) {
+    return {
+      title: "Error de autenticación (HTTP 401)",
+      description:
+        "La clave de API fue rechazada por el proveedor. Por favor verifica que tu API Key sea correcta y tenga saldo disponible en Configuración.",
+      technical: raw
+    };
+  }
+
+  // Detectar timeout o abort
+  if (
+    raw.toLowerCase().includes("aborted") ||
+    raw.toLowerCase().includes("timeout") ||
+    raw.toLowerCase().includes("timed out")
+  ) {
+    return {
+      title: "Tiempo de espera agotado",
+      description:
+        "La llamada tomó más tiempo del límite esperado. Te sugerimos usar el modelo ultrarrápido (Cuenta de Google Pro con flash-low) o verificar la conexión del modelo personalizado.",
+      technical: raw
+    };
+  }
+
+  // Detectar error de conexión / red
+  if (
+    raw.toLowerCase().includes("failed to fetch") ||
+    raw.toLowerCase().includes("econnrefused") ||
+    raw.toLowerCase().includes("networkerror")
+  ) {
+    return {
+      title: "Error de conexión de red",
+      description:
+        "No se pudo conectar con el servidor local o el servicio de IA externo. Verifica tu conexión a internet o la URL base configurada.",
+      technical: raw
+    };
+  }
+
+  return {
+    title: "Aviso al procesar con IA",
+    description: raw,
+    technical: undefined
+  };
+}
+
 export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sessionId }) => {
   const { guestToken, currentSession, updateSessionProjectFolder } = useAppStore();
   const { folders, refreshFolders } = useProjectFolders();
@@ -623,39 +695,94 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
         </Box>
       </Paper>
 
-      {/* Alerta si falla la llamada o si no hay configuración */}
-      {errorMsg && (
-        <Alert
-          severity="warning"
-          icon={<WarningIcon fontSize="inherit" />}
-          sx={{ mb: 3, borderRadius: 2 }}
-          action={
-            <Box sx={{ display: "flex", gap: 1 }}>
-              <Button
-                color="inherit"
-                size="small"
-                variant="outlined"
-                onClick={() => {
-                  setProvider("google-account");
-                  setErrorMsg(null);
-                  handleGenerate();
-                }}
-              >
-                Usar Cuenta de Google Pro (Sin API Key)
-              </Button>
-              <Button
-                color="inherit"
-                size="small"
-                onClick={() => setIsConfigExpanded(true)}
-              >
-                Ajustar Contexto
-              </Button>
+      {/* Alerta amigable si falla la llamada o si no hay configuración */}
+      {errorMsg && (() => {
+        const friendly = formatHumanFriendlyError(errorMsg);
+        return (
+          <Alert
+            severity="warning"
+            icon={<WarningIcon fontSize="medium" />}
+            sx={{
+              mb: 3,
+              borderRadius: 2,
+              p: 2,
+              "& .MuiAlert-message": { width: "100%", overflow: "hidden" }
+            }}
+          >
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1, width: "100%" }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                {friendly.title}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {friendly.description}
+              </Typography>
+
+              {friendly.technical && (
+                <Accordion
+                  disableGutters
+                  elevation={0}
+                  sx={{
+                    bgcolor: "rgba(0, 0, 0, 0.04)",
+                    borderRadius: 1,
+                    mt: 0.5,
+                    "&:before": { display: "none" }
+                  }}
+                >
+                  <AccordionSummary expandIcon={<ExpandMoreIcon fontSize="small" />} sx={{ minHeight: 36, px: 1.5 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 600, color: "text.secondary" }}>
+                      Ver detalles técnicos del error
+                    </Typography>
+                  </AccordionSummary>
+                  <AccordionDetails sx={{ pt: 0, px: 1.5, pb: 1.5 }}>
+                    <Box
+                      component="pre"
+                      sx={{
+                        m: 0,
+                        p: 1,
+                        fontSize: "0.75rem",
+                        fontFamily: "monospace",
+                        bgcolor: "background.paper",
+                        borderRadius: 1,
+                        overflowX: "auto",
+                        whiteSpace: "pre-wrap",
+                        wordBreak: "break-all",
+                        maxHeight: 160
+                      }}
+                    >
+                      {friendly.technical}
+                    </Box>
+                  </AccordionDetails>
+                </Accordion>
+              )}
+
+              <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1.5, pt: 1 }}>
+                <Button
+                  color="warning"
+                  size="small"
+                  variant="contained"
+                  sx={{ textTransform: "none", whiteSpace: "nowrap" }}
+                  onClick={() => {
+                    setProvider("google-account");
+                    setErrorMsg(null);
+                    handleGenerate();
+                  }}
+                >
+                  Reintentar con Google Pro (Rápido y Gratis)
+                </Button>
+                <Button
+                  color="inherit"
+                  size="small"
+                  variant="outlined"
+                  sx={{ textTransform: "none", whiteSpace: "nowrap" }}
+                  onClick={() => setIsConfigExpanded(true)}
+                >
+                  Ajustar Contexto y Proveedor
+                </Button>
+              </Box>
             </Box>
-          }
-        >
-          {errorMsg}
-        </Alert>
-      )}
+          </Alert>
+        );
+      })()}
 
       {isGenerating && (
         <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "action.hover" }}>

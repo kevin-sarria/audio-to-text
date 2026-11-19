@@ -22,6 +22,19 @@ export function errorHandler(
     return;
   }
 
+  // Manejar errores de esquemas Zod con mensaje comprensible
+  if ((err as any)?.name === "ZodError" || Array.isArray((err as any)?.issues)) {
+    const issues = (err as any).issues || [];
+    const issueSummary = issues
+      .map((i: any) => `${i.path ? i.path.join(".") : "campo"}: ${i.message}`)
+      .join("; ");
+    res.status(400).json({
+      success: false,
+      error: `Error de validación en la estructura generada: ${issueSummary || err.message}`
+    });
+    return;
+  }
+
   // Errores internos no controlados
   console.error("Unhandled Server Error:", err);
   res.status(500).json({
