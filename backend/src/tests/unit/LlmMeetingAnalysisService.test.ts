@@ -472,5 +472,82 @@ Espero que esta información te sea de gran utilidad para el sprint.`;
       expect(parsed.issues[1]?.type).toBe("bug");
       expect(parsed.issues[1]?.priority).toBe("high");
     });
+
+    it("los prompts del pipeline (Paso 1, Paso 2 y Fallback) incorporan explícitamente las 14 reglas verificables", () => {
+      const step1Prompt = (service as any).buildStep1Prompt("Contexto DIAMANTE...");
+      const step2Prompt = (service as any).buildStep2Prompt("Contexto DIAMANTE...");
+      const singleStepPrompt = (service as any).buildSingleStepPrompt("Contexto DIAMANTE...");
+
+      // Regla 1: Fidelidad a la transcripción
+      expect(step1Prompt).toContain("FIDELIDAD A LA TRANSCRIPCIÓN");
+      expect(step1Prompt).toContain("PROPUESTO (por confirmar)");
+      expect(step1Prompt).toContain("[Supuesto]");
+      expect(step1Prompt).toContain("[mm:ss]");
+
+      // Regla 2: Ruido de transcripción e interpretaciones
+      expect(step1Prompt).toContain("RUIDO DE TRANSCRIPCIÓN Y HABLANTES");
+      expect(step1Prompt).toContain("[Interpretación: X → Y]");
+      expect(step1Prompt).toContain("aislamientos");
+
+      // Regla 3: Preguntas abiertas (máximo 8 y BLOQUEANTE / NO BLOQUEANTE)
+      expect(step1Prompt).toContain("BLOQUEANTE o NO BLOQUEANTE");
+      expect(step1Prompt).toContain("No pongas más de 8 preguntas globales");
+
+      // Regla 4: No construir sobre lo ambiguo (Paso 2 y fallback)
+      expect(step2Prompt).toContain("NO CONSTRUYAS SOBRE LO AMBIGUO");
+      expect(step2Prompt).toContain("BLOQUEADO");
+
+      // Regla 5: Estructura de carpetas y stack cerrado
+      expect(step2Prompt).toContain("Controllers/");
+      expect(step2Prompt).toContain("Logic/");
+      expect(step2Prompt).toContain("db_changes/");
+      expect(step2Prompt).toContain("expo-router");
+      expect(step2Prompt).toContain("Diamante.API");
+      expect(step2Prompt).toContain("xUnit");
+      expect(step2Prompt).toContain("Playwright");
+
+      // Regla 6: Clasificación antes de crear issues
+      expect(step1Prompt).toContain("CERRADO");
+      expect(step1Prompt).toContain("EN CURSO");
+      expect(step1Prompt).toContain("NUEVO");
+      expect(step1Prompt).toContain("BACKLOG");
+
+      // Regla 7: Endpoints faltantes y dependencias (Paso 2 y fallback)
+      expect(step2Prompt).toContain("ENDPOINTS FALTANTES Y DEPENDENCIAS");
+      expect(step2Prompt).toContain("borrado masivo, exportación, reprogramación");
+      expect(step2Prompt).toContain("/api/mobile/...");
+
+      // Regla 8: Sin alcance extra
+      expect(step2Prompt).toContain("SIN ALCANCE EXTRA");
+      expect(step2Prompt).toContain("[Derivado de ISSUE-N]");
+
+      // Regla 9: Estado real
+      expect(step1Prompt).toContain("ESTADO REAL");
+      expect(step1Prompt).toContain("pendiente de cerrar");
+
+      // Regla 10: Contradicción con el contexto
+      expect(step1Prompt).toContain("CONTRADICCIÓN CON EL CONTEXTO");
+      expect(step2Prompt).toContain("CONTRADICCIÓN CON EL CONTEXTO");
+
+      // Regla 11: Estimación y verificación aritmética
+      expect(step2Prompt).toContain("ESTIMACIÓN Y VERIFICACIÓN ARITMÉTICA");
+      expect(step2Prompt).toContain("Backend: Xh | Panel: Yh | App: Zh | Total: Th");
+
+      // Regla 12: Flujo de PR
+      expect(step2Prompt).toContain("FLUJO DE PR");
+      expect(step2Prompt).toContain("/revisar-entrega");
+      expect(step2Prompt).toContain("revisión de Juan");
+
+      // Regla 13: Prompt de cada issue con secciones obligatorias
+      expect(step2Prompt).toContain("PROMPT DE CADA ISSUE");
+      expect(step2Prompt).toContain("Rol y Objetivo");
+      expect(step2Prompt).toContain("docs/REGLAS_DE_NEGOCIO.md");
+      expect(step2Prompt).toContain("Si el punto marcado como PENDIENTE no está resuelto");
+
+      // Regla 14: Formato de salida y totales
+      expect(step1Prompt).toContain("FORMATO DE SALIDA");
+      expect(step2Prompt).toContain("FORMATO DE SALIDA");
+      expect(singleStepPrompt).toContain("REGLAS DE GENERACIÓN DE ISSUES (obligatorias)");
+    });
   });
 });
