@@ -417,14 +417,13 @@ export function createDesktopRoutes(deps: DesktopRoutesDeps): Router {
           data: {
             provider: "google-account",
             models: [
-              { id: "gemini-3.8-flash-high", name: "Gemini 3.8 Flash (Alta velocidad - Recomendado)" },
+              { id: "gemini-3.8-flash-low", name: "Gemini 3.8 Flash (Respuesta ultrarrápida - Recomendado)" },
               { id: "gemini-3.8-flash-medium", name: "Gemini 3.8 Flash (Equilibrado)" },
-              { id: "gemini-3.8-flash-low", name: "Gemini 3.8 Flash (Económico)" },
               { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6 (Capacidad analítica)" },
               { id: "claude-opus-4-6-thinking", name: "Claude Opus 4.6 (Razonamiento profundo)" },
               { id: "gpt-oss-120b-medium", name: "GPT-OSS 120B (Open-Weights)" }
             ],
-            defaultModel: "gemini-3.8-flash-high",
+            defaultModel: "gemini-3.8-flash-low",
             isLiveDiscovered: false
           }
         });

@@ -411,11 +411,11 @@ Este contexto servirá como arnés de contexto técnico para que agentes de IA d
         "claude-opus-4-6-thinking",
         "gpt-oss-120b-medium"
       ];
-      if (model && knownAgyModels.includes(model.trim())) {
+      if (model && knownAgyModels.includes(model.trim()) && model.trim() !== "gemini-3.8-flash-high") {
         args.push("--model", model.trim());
       } else {
-        // Por defecto usar gemini-3.8-flash-high para velocidad máxima de respuesta
-        args.push("--model", "gemini-3.8-flash-high");
+        // Por defecto usar gemini-3.8-flash-low: respuesta en segundos evitando que el modelo consuma todo el presupuesto en bucles de thinking
+        args.push("--model", "gemini-3.8-flash-low");
       }
       args.push("-p=");
 

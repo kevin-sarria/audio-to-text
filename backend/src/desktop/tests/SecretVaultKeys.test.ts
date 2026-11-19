@@ -138,8 +138,8 @@ describe("SecretVault y rutas de claves", () => {
       const jsonAgy = (await resAgy.json()) as any;
       expect(jsonAgy.success).toBe(true);
       expect(jsonAgy.data.provider).toBe("google-account");
-      expect(jsonAgy.data.models.some((m: any) => m.id === "gemini-3.8-flash-high")).toBe(true);
-      expect(jsonAgy.data.defaultModel).toBe("gemini-3.8-flash-high");
+      expect(jsonAgy.data.models.some((m: any) => m.id === "gemini-3.8-flash-low")).toBe(true);
+      expect(jsonAgy.data.defaultModel).toBe("gemini-3.8-flash-low");
 
       // 2. gemini (sin clave previa devuelve fallback seguro)
       const resGemini = await fetch(`http://127.0.0.1:${port}/api/desktop/settings/llm-models`, {
