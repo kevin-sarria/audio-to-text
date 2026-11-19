@@ -46,20 +46,21 @@ export const CustomProviderModal: React.FC<CustomProviderModalProps> = ({
     setErrorMsg(null);
 
     try {
-      const url = baseUrl.trim().replace(/\/+$/, "") + "/models";
-      const headers: Record<string, string> = {};
-      if (apiKey.trim()) {
-        headers["Authorization"] = `Bearer ${apiKey.trim()}`;
-      }
-
-      const res = await fetch(url, { method: "GET", headers });
-      if (res.ok) {
-        setTestResult({ ok: true, msg: "¡Conexión exitosa con el servidor del LLM!" });
+      const res = await api.post<{ success: boolean; ok: boolean; message: string }>(
+        "/desktop/settings/custom-providers/test",
+        {
+          baseUrl: baseUrl.trim(),
+          apiKey: apiKey.trim(),
+          defaultModel: defaultModel.trim()
+        }
+      );
+      if (res && res.success) {
+        setTestResult({ ok: res.ok, msg: res.message });
       } else {
-        setTestResult({ ok: false, msg: `El servidor devolvió HTTP ${res.status}.` });
+        setTestResult({ ok: false, msg: "No se recibió respuesta válida del servidor local." });
       }
     } catch (err: any) {
-      setTestResult({ ok: false, msg: `Error al conectar: ${err.message}` });
+      setTestResult({ ok: false, msg: `Error al probar conexión: ${err.message}` });
     } finally {
       setIsTesting(false);
     }

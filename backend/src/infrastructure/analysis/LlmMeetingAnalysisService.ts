@@ -513,7 +513,26 @@ Debes responder ÚNICAMENTE con un objeto JSON válido con la siguiente estructu
 
       if (!res.ok) {
         const errorText = await res.text().catch(() => "");
-        throw new Error(`OpenAI API respondió con error ${res.status}: ${errorText.slice(0, 300)}`);
+        // Si el proveedor personalizado no soporta response_format: { type: "json_object" }, reintentar sin ese parámetro
+        if (res.status === 400 && errorText.toLowerCase().includes("response_format")) {
+          const fallbackBody = { ...requestBody };
+          delete (fallbackBody as any).response_format;
+          const retryRes = await fetch(url, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`
+            },
+            body: JSON.stringify(fallbackBody),
+            signal: controller.signal
+          });
+          if (retryRes.ok) {
+            const data = (await retryRes.json()) as any;
+            const text = data?.choices?.[0]?.message?.content;
+            if (text) return text;
+          }
+        }
+        throw new Error(`El proveedor de IA respondió con error ${res.status}: ${errorText.slice(0, 300)}`);
       }
 
       const data = (await res.json()) as any;
