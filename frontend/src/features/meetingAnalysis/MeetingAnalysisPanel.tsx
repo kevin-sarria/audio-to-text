@@ -189,7 +189,7 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
       const effectiveBaseUrl = matchedCustom ? matchedCustom.baseUrl : customBaseUrl.trim() || undefined;
       const effectiveModel = customModel.trim() || matchedCustom?.defaultModel || undefined;
       const effectiveApiKey = customApiKey.trim() || undefined;
-      const effectiveProvider = (matchedCustom ? "custom" : provider) as MeetingAnalysisProvider;
+      const effectiveProvider = (matchedCustom ? matchedCustom.id : provider) as MeetingAnalysisProvider;
 
       const body = {
         title: editableTitle.trim() || undefined,
@@ -629,6 +629,10 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
                     setIsCustomModalOpen(true);
                   } else {
                     setProvider(val);
+                    const matched = customProviders.find((cp) => cp.id === val);
+                    if (matched) {
+                      setCustomModel(matched.defaultModel);
+                    }
                   }
                 }}
               >

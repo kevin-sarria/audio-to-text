@@ -214,17 +214,38 @@ Este contexto servirá como arnés de contexto técnico para que agentes de IA d
 
     // 1. Si es un proveedor personalizado guardado en Settings
     const customConfig = userSettings?.customProviders?.find(
-      (p) => p.id === targetProvider || p.name === targetProvider
+      (p) =>
+        p.id === targetProvider ||
+        p.name.toLowerCase() === targetProvider.toLowerCase() ||
+        (options?.baseUrl && p.baseUrl.replace(/\/+$/, "") === options.baseUrl.replace(/\/+$/, "")) ||
+        (targetProvider === "custom" && userSettings.customProviders && userSettings.customProviders.length === 1)
     );
     if (customConfig) {
-      const savedKey = this.deps?.secretVault
-        ? await this.deps.secretVault.get(customConfig.id)
-        : null;
-      const apiKey = options?.apiKey || savedKey || customConfig.apiKey || "dummy-key";
+      let savedKey: string | null = null;
+      if (this.deps?.secretVault) {
+        savedKey = await this.deps.secretVault.get(customConfig.id);
+      }
+      const apiKey = options?.apiKey || savedKey || customConfig.apiKey || "";
+      const isLocalHost = (customConfig.baseUrl || "").includes("localhost") || (customConfig.baseUrl || "").includes("127.0.0.1");
+      if (!apiKey && !isLocalHost) {
+        throw new Error(
+          `No se encontró clave de API para el proveedor '${customConfig.name}'. Por favor configúrala en Ajustes o ingresa una clave temporal.`
+        );
+      }
+
+      let chosenModel = customConfig.defaultModel || "default";
+      if (options?.model && options.model.trim()) {
+        const m = options.model.trim();
+        // Evitar cruces accidentales de modelos (ej. pasar gemini-2.5-pro a deepseek)
+        if (!m.startsWith("gemini-") || customConfig.name.toLowerCase().includes("gemini")) {
+          chosenModel = m;
+        }
+      }
+
       return {
         provider: "custom",
         apiKey,
-        model: options?.model || customConfig.defaultModel || "default",
+        model: chosenModel,
         baseUrl: options?.baseUrl || customConfig.baseUrl
       };
     }
@@ -238,7 +259,7 @@ Este contexto servirá como arnés de contexto técnico para que agentes de IA d
           ? "custom"
           : "gemini";
       const model = options.model || this.getDefaultModel(provider);
-      return { provider, apiKey: options.apiKey || "dummy-key", model, baseUrl: options.baseUrl };
+      return { provider, apiKey: options.apiKey || "", model, baseUrl: options.baseUrl };
     }
 
     // 3. Si el usuario solicita un provider predeterminado (gemini, groq, openai)
@@ -434,6 +455,8 @@ Este contexto servirá como arnés de contexto técnico para que agentes de IA d
         return "gpt-4o-mini";
       case "custom":
         return "deepseek-chat";
+      default:
+        return "default";
     }
   }
 

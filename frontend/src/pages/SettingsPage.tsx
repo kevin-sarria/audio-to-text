@@ -887,9 +887,24 @@ export const SettingsPage: React.FC = () => {
                 labelId="default-issues-provider-label"
                 value={settings.issuesDefaultProvider || "google-account"}
                 label="Proveedor por Defecto para Issues"
-                onChange={(e) =>
-                  setSettings({ ...settings, issuesDefaultProvider: e.target.value })
-                }
+                onChange={(e) => {
+                  const newProvider = e.target.value;
+                  const matched = settings.customProviders?.find((cp) => cp.id === newProvider);
+                  const suggestedModel = matched
+                    ? matched.defaultModel
+                    : newProvider === "google-account"
+                    ? ""
+                    : newProvider === "openai"
+                    ? "gpt-4o-mini"
+                    : newProvider === "groq"
+                    ? "llama-3.3-70b-versatile"
+                    : "gemini-2.5-flash";
+                  setSettings({
+                    ...settings,
+                    issuesDefaultProvider: newProvider,
+                    issuesDefaultModel: suggestedModel
+                  });
+                }}
               >
                 <MenuItem value="google-account">Cuenta de Google (Gemini Pro - Sin API Key)</MenuItem>
                 <MenuItem value="gemini">Google Gemini API</MenuItem>

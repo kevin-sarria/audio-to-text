@@ -32,7 +32,7 @@ export const UpdateMeetingAnalysisTitleSchema = z.object({
   title: z.string().trim().min(1, "El título no puede estar vacío").max(150)
 });
 
-export type MeetingAnalysisProvider = "google-account" | "gemini" | "groq" | "openai" | "custom";
+export type MeetingAnalysisProvider = "google-account" | "gemini" | "groq" | "openai" | "custom" | (string & {});
 
 export interface GenerateMeetingAnalysisRequestDto {
   projectContext?: string;
@@ -44,7 +44,7 @@ export interface GenerateMeetingAnalysisRequestDto {
 
 export const GenerateMeetingAnalysisSchema = z.object({
   projectContext: z.string().max(10000, "El contexto del proyecto no puede superar 10000 caracteres").optional(),
-  provider: z.enum(["google-account", "gemini", "groq", "openai", "custom"]).optional(),
+  provider: z.string().max(100).optional(),
   apiKey: z.string().max(256).optional(),
   model: z.string().max(100).optional(),
   baseUrl: z.string().url("La URL base debe ser una URL válida").max(500).optional()
