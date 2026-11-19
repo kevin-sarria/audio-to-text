@@ -358,5 +358,29 @@ describe("LlmMeetingAnalysisService - Robustez de Proveedores y Escaneo", () => 
       expect(result.repoHoursTotals?.backend).toBe(3);
       expect(result.repoHoursTotals?.total).toBe(3);
     });
+
+    it("cleanJsonString extrae el JSON válidamente incluso si el modelo incluye texto conversacional antes y después del bloque", () => {
+      const rawWithPreamble = `Claro que sí, a continuación presento el análisis estructurado solicitado:
+\`\`\`json
+{
+  "summary": "Resumen válido",
+  "alreadyResolved": [],
+  "inProgress": [],
+  "keyDecisions": [],
+  "topicsDiscussed": [],
+  "globalOpenQuestions": [],
+  "issues": [],
+  "backlog": [],
+  "repoHoursTotals": { "backend": 0, "panel": 0, "app": 0, "total": 0 }
+}
+\`\`\`
+Espero que esta información te sea de gran utilidad para el sprint.`;
+
+      const cleaned = (service as any).cleanJsonString(rawWithPreamble);
+      expect(cleaned.startsWith("{")).toBe(true);
+      expect(cleaned.endsWith("}")).toBe(true);
+      const parsed = (service as any).parseAndValidateResponse(rawWithPreamble);
+      expect(parsed.summary).toBe("Resumen válido");
+    });
   });
 });

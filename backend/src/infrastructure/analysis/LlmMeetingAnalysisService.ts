@@ -413,6 +413,9 @@ Este contexto servirá como arnés de contexto técnico para que agentes de IA d
       ];
       if (model && knownAgyModels.includes(model.trim())) {
         args.push("--model", model.trim());
+      } else {
+        // Por defecto usar gemini-3.8-flash-high para velocidad máxima de respuesta
+        args.push("--model", "gemini-3.8-flash-high");
       }
       args.push("-p=");
 
@@ -530,10 +533,16 @@ Este contexto servirá como arnés de contexto técnico para que agentes de IA d
 
   private cleanJsonString(raw: string): string {
     let clean = raw.trim();
-    if (clean.startsWith("```json")) {
-      clean = clean.replace(/^```json\s*/, "").replace(/\s*```$/, "");
-    } else if (clean.startsWith("```")) {
-      clean = clean.replace(/^```\s*/, "").replace(/\s*```$/, "");
+    // 1. Si viene con bloques de código markdown ```json ... ``` extraer su interior
+    const fenceMatch = clean.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (fenceMatch && fenceMatch[1]) {
+      clean = fenceMatch[1].trim();
+    }
+    // 2. Extraer desde la primera llave { hasta la última } para descartar texto conversacional previo o posterior
+    const firstBrace = clean.indexOf("{");
+    const lastBrace = clean.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      clean = clean.slice(firstBrace, lastBrace + 1);
     }
     return clean;
   }
@@ -993,12 +1002,7 @@ ${contextSection}
   }
 
   private parseAndValidateResponse(rawJson: string): GeneratedMeetingData {
-    let clean = rawJson.trim();
-    if (clean.startsWith("```json")) {
-      clean = clean.replace(/^```json\s*/, "").replace(/\s*```$/, "");
-    } else if (clean.startsWith("```")) {
-      clean = clean.replace(/^```\s*/, "").replace(/\s*```$/, "");
-    }
+    const clean = this.cleanJsonString(rawJson);
 
     let parsed: unknown;
     try {
