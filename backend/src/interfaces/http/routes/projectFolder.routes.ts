@@ -15,6 +15,7 @@ export function createProjectFolderRoutes(
   router.use(optionalAuth);
 
   router.post("/", validateBody(CreateProjectFolderSchema), controller.create);
+  router.post("/scan-context", controller.scanContext);
   router.get("/", controller.list);
   router.get("/:id", controller.getById);
   router.put("/:id", validateBody(UpdateProjectFolderSchema), controller.update);

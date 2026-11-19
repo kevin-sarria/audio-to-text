@@ -1,4 +1,6 @@
 import { spawn, execSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 import { z } from "zod";
 import {
   IMeetingAnalysisService,
@@ -59,6 +61,131 @@ export class LlmMeetingAnalysisService implements IMeetingAnalysisService {
     }
 
     return this.parseAndValidateResponse(rawResponse);
+  }
+
+  public async generateContextFromRepo(
+    repoPath: string,
+    options?: GenerateAnalysisOptions
+  ): Promise<string> {
+    if (!fs.existsSync(repoPath)) {
+      throw new Error(`La ruta de la carpeta no existe: ${repoPath}`);
+    }
+    const stat = fs.statSync(repoPath);
+    if (!stat.isDirectory()) {
+      throw new Error(`La ruta especificada no es una carpeta válida: ${repoPath}`);
+    }
+
+    const scanSummary = this.scanRepositoryStructure(repoPath);
+
+    const systemPrompt = `Eres un arquitecto de software de élite y experto en IA. Tu tarea es analizar los archivos, documentación y estructura de un repositorio de código para redactar un "Contexto Técnico del Proyecto" completo, conciso y profesional.
+Este contexto servirá como arnés de contexto técnico para que agentes de IA de desarrollo (Cursor, Claude Code, Antigravity, GitHub Copilot) entiendan perfectamente las tecnologías, arquitectura y reglas del proyecto al convertir reuniones de equipo en issues y tareas de desarrollo.`;
+
+    const userPrompt = `A continuación se presenta la estructura de directorios y los archivos clave (README, manifiestos de paquetes, configuraciones y documentación) del repositorio:\n\nRuta del repositorio: ${repoPath}\n\n${scanSummary}\n\nPor favor, genera el Contexto Técnico del Proyecto estructurado en formato Markdown con las siguientes 4 secciones:\n1. 📌 PROYECTO & OBJETIVO (Nombre, qué hace y qué problema soluciona)\n2. 💻 STACK TECNOLÓGICO Y VERSIONES (Lenguajes, frameworks backend/frontend, bases de datos, ORMs y herramientas clave)\n3. 🏗️ ARQUITECTURA Y MÓDULOS (Patrones arquitectónicos como Clean Architecture, Monorepo o Microservicios, directorios clave y responsabilidades)\n4. 📋 CONVENCIONES Y REGLAS DE NEGOCIO (Estándares de codificación, nombrado, testing, flujo de datos y reglas de dominio deducidas)\n\nDevuelve exclusivamente el texto en Markdown listo para ser usado como contexto.`;
+
+    const { provider, apiKey, model, baseUrl } = await this.resolveProviderAndKey(options);
+
+    let rawResponse = "";
+    if (provider === "google-account") {
+      rawResponse = await this.callGoogleAccount(systemPrompt, userPrompt, model);
+    } else if (provider === "gemini") {
+      rawResponse = await this.callGemini(systemPrompt, userPrompt, apiKey, model);
+    } else if (provider === "groq") {
+      rawResponse = await this.callGroq(systemPrompt, userPrompt, apiKey, model);
+    } else {
+      rawResponse = await this.callOpenAi(systemPrompt, userPrompt, apiKey, model, baseUrl);
+    }
+
+    let clean = rawResponse.trim();
+    if (clean.startsWith("```markdown")) {
+      clean = clean.replace(/^```markdown\s*/, "").replace(/\s*```$/, "");
+    } else if (clean.startsWith("```md")) {
+      clean = clean.replace(/^```md\s*/, "").replace(/\s*```$/, "");
+    }
+    return clean;
+  }
+
+  private scanRepositoryStructure(repoPath: string): string {
+    const ignoredDirs = new Set([
+      "node_modules", ".git", "dist", "build", "release", "bin", "obj",
+      ".idea", ".vscode", "vendor", "target", "__pycache__", "coverage",
+      ".next", ".nuxt", "out", ".turbo", "temp", "tmp"
+    ]);
+
+    const ignoredFilePatterns = [
+      /\.env(\..+)?$/i,
+      /\.(key|pem|pfx|p12|bin|exe|dll|so|wasm|iso|db|sqlite|sqlite3|wav|mp3|m4a|png|jpg|jpeg|gif|ico|svg|zip|tar|gz)$/i,
+      /secret/i,
+      /password/i
+    ];
+
+    const treeLines: string[] = [];
+    const keyFileContents: { path: string; content: string }[] = [];
+    let totalCharsCollected = 0;
+    const MAX_TOTAL_CHARS = 35000;
+    const MAX_FILE_CHARS = 5000;
+
+    const keyFileNames = new Set([
+      "readme.md", "readme", "readme.txt",
+      "package.json", "tsconfig.json", "tsconfig.base.json",
+      "docker-compose.yml", "docker-compose.yaml", "dockerfile",
+      "pom.xml", "build.gradle", "settings.gradle",
+      "requirements.txt", "pyproject.toml", "cargo.toml", "go.mod",
+      "architecture.md", "contributing.md", "claude.md", "agents.md",
+      ".cursorrules", ".windsurfrules"
+    ]);
+
+    const walk = (currentDir: string, currentDepth: number) => {
+      if (currentDepth > 4) return;
+      let entries: fs.Dirent[] = [];
+      try {
+        entries = fs.readdirSync(currentDir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          if (ignoredDirs.has(entry.name.toLowerCase())) continue;
+          const fullPath = path.join(currentDir, entry.name);
+          const relPath = path.relative(repoPath, fullPath);
+          if (treeLines.length < 80) {
+            treeLines.push(`[DIR]  ${relPath}`);
+          }
+          walk(fullPath, currentDepth + 1);
+        } else if (entry.isFile()) {
+          const lowerName = entry.name.toLowerCase();
+          if (ignoredFilePatterns.some((pattern) => pattern.test(lowerName))) continue;
+
+          const fullPath = path.join(currentDir, entry.name);
+          const relPath = path.relative(repoPath, fullPath);
+          if (treeLines.length < 80) {
+            treeLines.push(`[FILE] ${relPath}`);
+          }
+
+          const isKeyManifest = keyFileNames.has(lowerName) || lowerName.endsWith(".csproj") || lowerName.endsWith(".sln");
+          const isDocFile = (relPath.toLowerCase().startsWith("docs" + path.sep) || relPath.toLowerCase().startsWith("doc" + path.sep)) && lowerName.endsWith(".md");
+
+          if ((isKeyManifest || isDocFile) && totalCharsCollected < MAX_TOTAL_CHARS) {
+            try {
+              const content = fs.readFileSync(fullPath, "utf-8");
+              const truncated = content.slice(0, MAX_FILE_CHARS);
+              keyFileContents.push({ path: relPath, content: truncated });
+              totalCharsCollected += truncated.length;
+            } catch {}
+          }
+        }
+      }
+    };
+
+    walk(repoPath, 0);
+
+    let output = "=== ÁRBOL DE DIRECTORIOS Y ARCHIVOS ===\n" + treeLines.join("\n") + "\n\n";
+    output += "=== CONTENIDO DE ARCHIVOS CLAVE DE CONFIGURACIÓN Y DOCUMENTACIÓN ===\n";
+    for (const file of keyFileContents) {
+      output += `--- ARCHIVO: ${file.path} ---\n${file.content}\n\n`;
+    }
+
+    return output;
   }
 
   private async resolveProviderAndKey(options?: GenerateAnalysisOptions): Promise<{

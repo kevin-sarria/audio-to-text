@@ -3,6 +3,7 @@ export interface DesktopBridge {
   platform: string;
   appVersion: string;
   openDataFolder: () => Promise<void>;
+  selectProjectFolder?: () => Promise<string | null>;
 }
 
 declare global {

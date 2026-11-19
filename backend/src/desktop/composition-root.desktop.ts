@@ -160,7 +160,8 @@ export function createDesktopContainer(options: CreateDesktopContainerOptions) {
     listProjectFolders,
     getProjectFolder,
     updateProjectFolder,
-    deleteProjectFolder
+    deleteProjectFolder,
+    meetingAnalysisService
   );
 
   // 7. Pipeline en proceso y handlers

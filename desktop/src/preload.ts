@@ -6,5 +6,6 @@ contextBridge.exposeInMainWorld("desktop", {
   isDesktop: true,
   platform: process.platform,
   appVersion,
-  openDataFolder: () => ipcRenderer.invoke("open-data-folder")
+  openDataFolder: () => ipcRenderer.invoke("open-data-folder"),
+  selectProjectFolder: () => ipcRenderer.invoke("select-project-folder")
 });

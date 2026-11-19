@@ -4,6 +4,7 @@ import { ListProjectFolders } from "../../../application/use-cases/projectFolder
 import { GetProjectFolder } from "../../../application/use-cases/projectFolder/GetProjectFolder.js";
 import { UpdateProjectFolder } from "../../../application/use-cases/projectFolder/UpdateProjectFolder.js";
 import { DeleteProjectFolder } from "../../../application/use-cases/projectFolder/DeleteProjectFolder.js";
+import { IMeetingAnalysisService } from "../../../domain/services/IMeetingAnalysisService.js";
 
 export class ProjectFolderController {
   constructor(
@@ -11,8 +12,44 @@ export class ProjectFolderController {
     private listProjectFolders: ListProjectFolders,
     private getProjectFolder: GetProjectFolder,
     private updateProjectFolderUseCase: UpdateProjectFolder,
-    private deleteProjectFolderUseCase: DeleteProjectFolder
+    private deleteProjectFolderUseCase: DeleteProjectFolder,
+    private analysisService?: IMeetingAnalysisService
   ) {}
+
+  public scanContext = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { folderPath, provider, model, apiKey, baseUrl } = req.body || {};
+      if (!folderPath || typeof folderPath !== "string" || !folderPath.trim()) {
+        res.status(400).json({ success: false, error: "La ruta de la carpeta del proyecto es obligatoria." });
+        return;
+      }
+
+      if (!this.analysisService || !this.analysisService.generateContextFromRepo) {
+        res.status(501).json({
+          success: false,
+          error: "El servicio de escaneo de contexto con IA no está disponible."
+        });
+        return;
+      }
+
+      const technicalContext = await this.analysisService.generateContextFromRepo(folderPath.trim(), {
+        provider,
+        model,
+        apiKey,
+        baseUrl
+      });
+
+      res.json({
+        success: true,
+        data: {
+          folderPath: folderPath.trim(),
+          technicalContext
+        }
+      });
+    } catch (err) {
+      next(err);
+    }
+  };
 
   public create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {

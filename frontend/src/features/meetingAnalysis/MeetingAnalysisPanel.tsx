@@ -100,9 +100,6 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
   const [filterPriority, setFilterPriority] = useState<string>("all");
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Bandera para evitar disparos automáticos múltiples
-  const autoTriggeredRef = useRef(false);
-
   // Carpeta asociada a la sesión
   const linkedFolder = useMemo(() => {
     if (!currentSession?.projectFolderId) return null;
@@ -152,6 +149,7 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
         }
       } else {
         setEditableTitle(`Análisis: ${currentSession?.originalFileName || "Reunión"}`);
+        setIsConfigExpanded(true);
       }
     } catch (err: any) {
       setErrorMsg(err.message || "Error al cargar el análisis de la reunión.");
@@ -177,14 +175,6 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
       }
     }
   }, [linkedFolder]);
-
-  // Auto-generación cuando la sesión esté completada y no haya análisis
-  useEffect(() => {
-    if (!isLoading && !analysis && !isGenerating && !autoTriggeredRef.current) {
-      autoTriggeredRef.current = true;
-      handleGenerate();
-    }
-  }, [isLoading, analysis, isGenerating]);
 
   const handleGenerate = async () => {
     setIsGenerating(true);

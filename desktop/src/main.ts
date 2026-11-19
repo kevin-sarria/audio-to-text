@@ -2,7 +2,7 @@
 import "../../backend/src/desktop/bootstrapEnv.js";
 import crypto from "node:crypto";
 import path from "node:path";
-import { app, BrowserWindow, Menu, ipcMain, shell, session } from "electron";
+import { app, BrowserWindow, Menu, ipcMain, shell, session, dialog } from "electron";
 import { resolveDesktopPaths } from "./paths.js";
 import { ElectronSecretVault } from "./secretVault.js";
 import { configureWindowSecurity } from "./windowSecurity.js";
@@ -122,6 +122,22 @@ async function bootstrap() {
       throw new Error("Remitente no autorizado");
     }
     return shell.openPath(paths.userDataDir);
+  });
+
+  // 10b. Handler seguro de IPC para seleccionar carpeta del proyecto
+  ipcMain.handle("select-project-folder", async (event) => {
+    if (event.sender.id !== mainWindow?.webContents.id) {
+      throw new Error("Remitente no autorizado");
+    }
+    if (!mainWindow) return null;
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: "Seleccionar Carpeta del Repositorio / Proyecto",
+      properties: ["openDirectory"]
+    });
+    if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+      return null;
+    }
+    return result.filePaths[0];
   });
 
   // 11. Cargar la aplicación

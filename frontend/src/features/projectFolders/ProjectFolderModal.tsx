@@ -13,9 +13,15 @@ import {
   Alert,
   Box,
   Typography,
-  CircularProgress
+  CircularProgress,
+  Paper
 } from "@mui/material";
-import { Folder as FolderIcon, AutoFixHigh as AutoFixIcon } from "@mui/icons-material";
+import {
+  Folder as FolderIcon,
+  AutoFixHigh as AutoFixIcon,
+  AutoAwesome as AutoAwesomeIcon,
+  FolderOpen as BrowseFolderIcon
+} from "@mui/icons-material";
 import { ProjectFolderDto } from "@audio-to-text/shared";
 import { api } from "../../lib/api.js";
 
@@ -52,6 +58,71 @@ export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
   const [customProviders, setCustomProviders] = useState<{ id: string; name: string }[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Estados para escaneo de repositorio con IA
+  const [repoPath, setRepoPath] = useState("");
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanStatusMsg, setScanStatusMsg] = useState<{ type: "success" | "warning" | "error"; text: string } | null>(null);
+
+  const handleBrowseFolder = async () => {
+    if (window.desktop?.selectProjectFolder) {
+      try {
+        const selected = await window.desktop.selectProjectFolder();
+        if (selected) {
+          setRepoPath(selected);
+          if (!name.trim()) {
+            const baseName = selected.split(/[\\/]/).filter(Boolean).pop();
+            if (baseName) setName(`Proyecto ${baseName}`);
+          }
+        }
+      } catch (err: any) {
+        setErrorMsg(`Error al abrir explorador de carpetas: ${err.message}`);
+      }
+    }
+  };
+
+  const handleScanRepository = async () => {
+    if (!repoPath.trim()) {
+      setScanStatusMsg({
+        type: "warning",
+        text: "Por favor indica o selecciona la ruta de la carpeta del proyecto a escanear."
+      });
+      return;
+    }
+
+    setIsScanning(true);
+    setScanStatusMsg(null);
+    setErrorMsg(null);
+
+    try {
+      const res = await api.post<{ success: boolean; data?: { technicalContext: string }; error?: string }>(
+        "/project-folders/scan-context",
+        {
+          folderPath: repoPath.trim(),
+          provider: defaultProvider,
+          model: defaultModel.trim() || undefined,
+          apiKey: customApiKey.trim() || undefined
+        }
+      );
+
+      if (res && res.success && res.data?.technicalContext) {
+        setTechnicalContext(res.data.technicalContext);
+        setScanStatusMsg({
+          type: "success",
+          text: "¡Contexto técnico generado e inyectado con éxito a partir de los archivos del repositorio!"
+        });
+      } else {
+        throw new Error(res.error || "No se pudo extraer el contexto del repositorio.");
+      }
+    } catch (err: any) {
+      setScanStatusMsg({
+        type: "error",
+        text: `Error al escanear proyecto: ${err.message}`
+      });
+    } finally {
+      setIsScanning(false);
+    }
+  };
 
   useEffect(() => {
     // Cargar proveedores personalizados desde settings si existen
@@ -165,8 +236,78 @@ export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
             placeholder="ej. Sistema de gestión de servicios y facturación"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            sx={{ mb: 2 }}
+            sx={{ mb: 2.5 }}
           />
+
+          {/* Sección de auto-escaneo del repositorio con IA */}
+          <Paper
+            variant="outlined"
+            sx={{
+              p: 2,
+              mb: 2.5,
+              borderRadius: 2,
+              bgcolor: (theme) => (theme.palette.mode === "dark" ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)")
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+              <AutoAwesomeIcon color="primary" fontSize="small" />
+              <Typography variant="subtitle2" fontWeight={700}>
+                Escanear Repositorio con IA (Auto-generar Contexto Técnico)
+              </Typography>
+            </Box>
+
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+              Selecciona la carpeta local de tu proyecto. La IA leerá la estructura de directorios, manifiestos (<code>package.json</code>, <code>csproj</code>...), markdowns y archivos de arquitectura para redactar automáticamente el contexto técnico.
+            </Typography>
+
+            <Alert severity="warning" sx={{ mb: 2, fontSize: "0.85rem", py: 0.5 }}>
+              <strong>Aviso de facturación y consumo de tokens:</strong> Este análisis automático inspecciona la estructura y contenidos clave de tu código. Si utilizas un proveedor con API Key de pago (OpenAI, DeepSeek, etc.), esta operación <strong>consumirá tokens adicionales en tu facturación</strong>. Con <em>Cuenta de Google (Gemini Pro - Sin API Key)</em> no genera costos adicionales.
+            </Alert>
+
+            <Box sx={{ display: "flex", gap: 1, mb: 1.5, alignItems: "center" }}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Ruta de la carpeta del proyecto / repositorio"
+                placeholder="ej. C:\Users\TuUsuario\proyectos\mi-app"
+                value={repoPath}
+                onChange={(e) => setRepoPath(e.target.value)}
+              />
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<BrowseFolderIcon />}
+                onClick={handleBrowseFolder}
+                sx={{ whiteSpace: "nowrap", height: 40 }}
+              >
+                Examinar...
+              </Button>
+            </Box>
+
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <Button
+                variant="contained"
+                color="secondary"
+                size="small"
+                startIcon={isScanning ? <CircularProgress size={16} color="inherit" /> : <AutoFixIcon />}
+                onClick={handleScanRepository}
+                disabled={isScanning || !repoPath.trim()}
+              >
+                {isScanning ? "Analizando repositorio con IA..." : "Escanear y Auto-generar Contexto"}
+              </Button>
+              {isScanning && (
+                <Typography variant="caption" color="text.secondary">
+                  Inspeccionando arquitectura, dependencias y reglas de negocio...
+                </Typography>
+              )}
+            </Box>
+
+            {scanStatusMsg && (
+              <Alert severity={scanStatusMsg.type} sx={{ mt: 1.5, fontSize: "0.85rem", py: 0.5 }}>
+                {scanStatusMsg.text}
+              </Alert>
+            )}
+          </Paper>
 
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
             <Typography variant="subtitle2" fontWeight={600}>

@@ -20,4 +20,9 @@ export interface IMeetingAnalysisService {
     projectContext?: string,
     options?: GenerateAnalysisOptions
   ): Promise<GeneratedMeetingData>;
+
+  generateContextFromRepo?(
+    repoPath: string,
+    options?: GenerateAnalysisOptions
+  ): Promise<string>;
 }
