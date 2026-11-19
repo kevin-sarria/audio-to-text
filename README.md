@@ -76,3 +76,32 @@ Monorepo para procesamiento, transcripción y diarización de audio con arquitec
    ```bash
    npm run test
    ```
+
+## Novedades: Resúmenes Técnicos e Issues con IA
+
+- **Resúmenes Estructurados para Agentes de Código**: Análisis profundo de reuniones de audio generando arquitectura, decisiones y tareas en formato issue optimizadas para herramientas como Cursor, Antigravity o Claude Code.
+- **Carpetas de Proyecto (Project Harnesses)**: Guarda el stack tecnológico, módulos y convenciones de cada proyecto. Incluye un **Escáner Automático de Repositorio** que analiza la estructura, dependencias y documentación para generar el contexto técnico en un clic.
+- **Soporte Multimodelo y Extensible**:
+  - **Google Gemini Pro Local (Sin API Key)**: Conexión directa a través de la CLI `agy` y tu cuenta Pro de Google local.
+  - **DeepSeek, Ollama, OpenRouter, LM Studio**: Integración sin limitaciones mediante endpoints compatibles con OpenAI.
+  - **Proveedores Cloud Estándar**: Groq Cloud, Google Gemini (AI Studio), OpenAI GPT-4o.
+- **Seguridad**: Almacén nativo cifrado (`ISecretVault`) para las credenciales y proxy backend seguro para evitar bloqueos por CORS.
+
+## Reglas Obligatorias para Desarrolladores y Agentes de IA
+
+Consulta el archivo [AI_GUIDELINES.md](file:///c:/Users/Estaduardo/Documents/proyectos/audio-to-text/AI_GUIDELINES.md) para conocer las políticas arquitectónicas y de calidad:
+- **Pruebas Obligatorias**: Ningún cambio puede ser subido a GitHub sin que pasen el 100% de las pruebas unitarias y de integración de backend y frontend.
+- **Resolución de SecretVault y Modelos**: Reglas estrictas para el manejo de IDs de proveedores y prevención de cruce de modelos incompatibles.
+- **Experiencia de Usuario**: Prohibición de llamadas silenciosas o automáticas a APIs de pago sin confirmación explícita del usuario.
+
+## Aplicación de Escritorio (Desktop)
+
+Compilar el ejecutable e instalador para Windows:
+```bash
+npm --prefix desktop run build
+npm --prefix desktop run dist:win
+```
+Los artefactos generados se ubican en `desktop/release/`:
+- Instalador NSIS: `desktop/release/Audio2Text Setup 1.0.0.exe`
+- Ejecutable portátil: `desktop/release/win-unpacked/Audio2Text.exe`
+
