@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { GeneratedMeetingData } from "../../domain/services/IMeetingAnalysisService.js";
 import { DevIssueDto } from "@audio-to-text/shared";
+import { MeetingAnalysisValidators } from "./MeetingAnalysisValidators.js";
 
 export const DevIssueSchema = z.object({
   id: z.string().default(() => `ISSUE-${Math.floor(Math.random() * 900 + 100)}`),
@@ -158,7 +159,7 @@ export class MeetingAnalysisResponseParser {
     };
   }
 
-  public static parseAndValidate(raw: string): GeneratedMeetingData {
+  public static parseAndValidate(raw: string, transcript?: string): GeneratedMeetingData {
     const clean = this.cleanJsonString(raw);
     let parsed: any;
     try {
@@ -188,7 +189,7 @@ export class MeetingAnalysisResponseParser {
     const validated = MeetingAnalysisJsonSchema.parse(sanitizedPayload);
     const verifiedTotals = this.recalculateHoursTotals(validated.issues as DevIssueDto[]);
 
-    return {
+    const initialResult: GeneratedMeetingData = {
       summary: validated.summary,
       alreadyResolved: validated.alreadyResolved,
       inProgress: validated.inProgress,
@@ -199,5 +200,23 @@ export class MeetingAnalysisResponseParser {
       backlog: validated.backlog,
       repoHoursTotals: verifiedTotals
     };
+
+    // Aplicar saneamiento y autocorrección determinista (typos de docs, etapas internas, horas)
+    const sanitizedResult = MeetingAnalysisValidators.sanitizeAndAutocorrect(initialResult);
+
+    // Ejecutar validaciones deterministas
+    const validation = MeetingAnalysisValidators.validate(sanitizedResult, transcript);
+    if (!validation.isValid) {
+      console.warn(
+        `[MeetingAnalysisResponseParser] Validaciones deterministas con avisos/errores: ${validation.errors.join("; ")}`
+      );
+    }
+    if (validation.warnings.length > 0) {
+      console.info(
+        `[MeetingAnalysisResponseParser] Avisos de calidad de generación: ${validation.warnings.join("; ")}`
+      );
+    }
+
+    return sanitizedResult;
   }
 }

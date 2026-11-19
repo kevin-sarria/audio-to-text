@@ -29,17 +29,26 @@ export class LlmMeetingAnalysisService implements IMeetingAnalysisService {
     const { provider, apiKey, model, baseUrl } = await this.resolveProviderAndKey(options);
 
     const step1SystemPrompt = this.buildStep1Prompt(projectContext);
-    const step1UserPrompt = `A continuación se presenta la transcripción completa de la reunión de desarrollo:\n\n${transcript}\n\nPor favor, extrae el resumen ejecutivo, identifica las decisiones clave, formula las preguntas abiertas globales (máximo 8, clasificadas en BLOQUEANTE o NO BLOQUEANTE, sin incluir ruido evidente) y clasifica rigurosamente cada punto tratado en: CERRADO / YA HECHO (alreadyResolved), EN CURSO (inProgress), NUEVO (newItems con marca [mm:ss]) y PARA BACKLOG (backlog), siguiendo estrictamente las REGLAS DE GENERACIÓN DE ISSUES y el formato JSON especificado.`;
+    const step1UserPrompt = `A continuación se presenta la transcripción completa de la reunión de desarrollo:\n\n${transcript}\n\nPor favor, extrae el resumen ejecutivo, identifica las decisiones clave, formula las preguntas abiertas globales (máximo 8, clasificadas en BLOQUEANTE o NO BLOQUEANTE, sin incluir ruido evidente) y clasifica rigurosamente cada punto tratado en la estructura de puntos JSON (clase: cerrado, en_curso, nuevo, backlog) con su marca [mm:ss], siguiendo estrictamente las REGLAS DE GENERACIÓN DE ISSUES.`;
 
     try {
-      // PASO 1: Extracción, clasificación y detección de ambigüedades
+      // ETAPA 1: Extracción, clasificación y detección de ambigüedades
       const rawStep1 = await this.executeLlmCall(step1SystemPrompt, step1UserPrompt, provider, apiKey, model, baseUrl);
       const step1Clean = this.cleanJsonString(rawStep1);
       const step1Data = JSON.parse(step1Clean);
 
-      // PASO 2: Generación de issues técnicas por repo a partir de los puntos del Paso 1
+      // ETAPA 2: Redacción estructurada de issues únicamente a partir de la extracción previa
       const step2SystemPrompt = this.buildStep2Prompt(projectContext);
-      const step2UserPrompt = `A continuación se presentan los resultados de la extracción y clasificación previa (Paso 1) de la reunión:\n\n${JSON.stringify(step1Data, null, 2)}\n\nGenera los issues de programación organizados por repositorio afectado para los requerimientos NUEVOS y tareas de integración ÚNICAMENTE a partir de esta lista (sin inventar tecnologías ni detalles no presentes en el Paso 1 ni en el contexto). Aplica estrictamente las REGLAS DE GENERACIÓN DE ISSUES (crear un issue por repo, si falta endpoint de backend para panel o app créalo como PROPUESTO, si hay pregunta BLOQUEANTE marca el issue como BLOQUEADO, calcula estimaciones en horas exactas y redacta agentPrompt con las 6 secciones obligatorias) en formato JSON estricto.`;
+      const step2UserPrompt = `A continuación se presentan los puntos extraídos y clasificados en la Etapa 1 de la reunión:\n\n${JSON.stringify(
+        {
+          puntos: step1Data?.puntos || step1Data?.newItems || [],
+          alreadyResolved: step1Data?.alreadyResolved || [],
+          inProgress: step1Data?.inProgress || [],
+          globalOpenQuestions: step1Data?.globalOpenQuestions || []
+        },
+        null,
+        2
+      )}\n\nGenera los issues de programación organizados por repositorio afectado para los requerimientos NUEVOS ÚNICAMENTE a partir de estos puntos extraídos (sin inventar tecnologías ni detalles no presentes en la lista). Aplica estrictamente las REGLAS DE GENERACIÓN DE ISSUES (un issue por repo, sin filtrar 'Paso 1' o mecánicas internas, calculando horas exactas conforme a la tabla de referencia y redactando agentPrompt con las 6 secciones requeridas).`;
 
       const rawStep2 = await this.executeLlmCall(step2SystemPrompt, step2UserPrompt, provider, apiKey, model, baseUrl);
       const step2Clean = this.cleanJsonString(rawStep2);
@@ -54,7 +63,7 @@ export class LlmMeetingAnalysisService implements IMeetingAnalysisService {
         step2Hours = step2Data.repoHoursTotals;
       }
 
-      // Ensamblar ambos pasos
+      // Ensamblar ambas etapas
       const merged = {
         summary: step1Data?.summary || "Resumen de la reunión",
         alreadyResolved: Array.isArray(step1Data?.alreadyResolved) ? step1Data.alreadyResolved : [],
@@ -67,12 +76,12 @@ export class LlmMeetingAnalysisService implements IMeetingAnalysisService {
         repoHoursTotals: step2Hours || step2Data?.repoHoursTotals || { backend: 0, panel: 0, app: 0, total: 0 }
       };
 
-      return this.parseAndValidateResponse(JSON.stringify(merged));
+      return this.parseAndValidateResponse(JSON.stringify(merged), transcript);
     } catch (stepErr: any) {
       console.warn("[LlmMeetingAnalysisService] Fallback a análisis de paso único debido a:", stepErr.message);
       const fallbackPrompt = this.buildSingleStepPrompt(projectContext);
       const rawFallback = await this.executeLlmCall(fallbackPrompt, step1UserPrompt, provider, apiKey, model, baseUrl);
-      return this.parseAndValidateResponse(rawFallback);
+      return this.parseAndValidateResponse(rawFallback, transcript);
     }
   }
 
@@ -148,6 +157,7 @@ Este contexto servirá como arnés de contexto técnico para que agentes de IA d
         savedKey = await this.deps.secretVault.get(customConfig.id);
       }
       const apiKey = options?.apiKey || savedKey || customConfig.apiKey || "";
+
       const isLocalHost = (customConfig.baseUrl || "").includes("localhost") || (customConfig.baseUrl || "").includes("127.0.0.1");
       if (!apiKey && !isLocalHost) {
         throw new Error(
@@ -244,7 +254,8 @@ Este contexto servirá como arnés de contexto técnico para que agentes de IA d
       const isWin = process.platform === "win32";
       const out = execSync(isWin ? "where.exe agy.exe" : "which agy", {
         encoding: "utf-8",
-        stdio: ["pipe", "pipe", "ignore"]
+        stdio: ["pipe", "pipe", "ignore"],
+        windowsHide: true
       }).trim();
       const firstLine = out.split(/\r?\n/)[0]?.trim();
       return firstLine || null;
@@ -314,28 +325,7 @@ Este contexto servirá como arnés de contexto técnico para que agentes de IA d
     return MeetingAnalysisResponseParser.cleanJsonString(raw);
   }
 
-  private parseAndValidateResponse(rawJson: string): GeneratedMeetingData {
-    return MeetingAnalysisResponseParser.parseAndValidate(rawJson);
-  }
-
-  private recalculateHoursTotals(issues: DevIssueDto[]) {
-    return MeetingAnalysisResponseParser.recalculateHoursTotals(issues);
-  }
-
-  private callGemini(s: string, u: string, k: string, m: string) {
-    return LlmProviderClients.callGemini(s, u, k, m);
-  }
-
-  private callGroq(s: string, u: string, k: string, m: string) {
-    return LlmProviderClients.callGroq(s, u, k, m);
-  }
-
-  private callOpenAi(s: string, u: string, k: string, m: string, b?: string) {
-    return LlmProviderClients.callOpenAi(s, u, k, m, b);
-  }
-
-  private callGoogleAccount(s: string, u: string, m?: string) {
-    const agyPath = this.resolveAgyPath() || (process.platform === "win32" ? "agy.exe" : "agy");
-    return LlmProviderClients.callGoogleAccount(agyPath, s, u, m);
+  private parseAndValidateResponse(rawJson: string, transcript?: string): GeneratedMeetingData {
+    return MeetingAnalysisResponseParser.parseAndValidate(rawJson, transcript);
   }
 }
