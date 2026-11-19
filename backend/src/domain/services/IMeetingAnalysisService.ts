@@ -1,4 +1,4 @@
-import { DevIssueDto, MeetingAnalysisProvider } from "@audio-to-text/shared";
+import { DevIssueDto, MeetingAnalysisProvider, RepoHoursTotals } from "@audio-to-text/shared";
 
 export interface GenerateAnalysisOptions {
   provider?: MeetingAnalysisProvider;
@@ -9,9 +9,14 @@ export interface GenerateAnalysisOptions {
 
 export interface GeneratedMeetingData {
   summary: string;
+  alreadyResolved?: string[];
+  inProgress?: string[];
   keyDecisions: string[];
   topicsDiscussed: string[];
+  globalOpenQuestions?: string[];
   issues: DevIssueDto[];
+  backlog?: string[];
+  repoHoursTotals?: RepoHoursTotals;
 }
 
 export interface IMeetingAnalysisService {

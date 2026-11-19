@@ -118,7 +118,12 @@ export class GenerateMeetingAnalysis {
         summary: analysisData.summary,
         keyDecisions: analysisData.keyDecisions,
         topicsDiscussed: analysisData.topicsDiscussed,
-        issues: analysisData.issues
+        issues: analysisData.issues,
+        alreadyResolved: analysisData.alreadyResolved ?? existing.alreadyResolved,
+        inProgress: analysisData.inProgress ?? existing.inProgress,
+        globalOpenQuestions: analysisData.globalOpenQuestions ?? existing.globalOpenQuestions,
+        backlog: analysisData.backlog ?? existing.backlog,
+        repoHoursTotals: analysisData.repoHoursTotals ?? existing.repoHoursTotals
       });
       resultAnalysis = await this.analysisRepository.save(existing);
     } else {
@@ -131,6 +136,11 @@ export class GenerateMeetingAnalysis {
         keyDecisions: analysisData.keyDecisions,
         topicsDiscussed: analysisData.topicsDiscussed,
         issues: analysisData.issues,
+        alreadyResolved: analysisData.alreadyResolved || [],
+        inProgress: analysisData.inProgress || [],
+        globalOpenQuestions: analysisData.globalOpenQuestions || [],
+        backlog: analysisData.backlog || [],
+        repoHoursTotals: analysisData.repoHoursTotals || null,
         createdAt: new Date(),
         updatedAt: new Date()
       });

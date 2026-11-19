@@ -1,4 +1,4 @@
-import { DevIssueDto } from "@audio-to-text/shared";
+import { DevIssueDto, RepoHoursTotals } from "@audio-to-text/shared";
 
 export interface MeetingAnalysisProps {
   id: string;
@@ -9,6 +9,11 @@ export interface MeetingAnalysisProps {
   keyDecisions: string[];
   topicsDiscussed: string[];
   issues: DevIssueDto[];
+  alreadyResolved?: string[] | null;
+  inProgress?: string[] | null;
+  globalOpenQuestions?: string[] | null;
+  backlog?: string[] | null;
+  repoHoursTotals?: RepoHoursTotals | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -48,6 +53,26 @@ export class MeetingAnalysis {
     return this.props.issues;
   }
 
+  public get alreadyResolved(): string[] {
+    return this.props.alreadyResolved || [];
+  }
+
+  public get inProgress(): string[] {
+    return this.props.inProgress || [];
+  }
+
+  public get globalOpenQuestions(): string[] {
+    return this.props.globalOpenQuestions || [];
+  }
+
+  public get backlog(): string[] {
+    return this.props.backlog || [];
+  }
+
+  public get repoHoursTotals(): RepoHoursTotals | null | undefined {
+    return this.props.repoHoursTotals;
+  }
+
   public get createdAt(): Date {
     return this.props.createdAt;
   }
@@ -63,6 +88,11 @@ export class MeetingAnalysis {
     if (props.keyDecisions !== undefined) this.props.keyDecisions = props.keyDecisions;
     if (props.topicsDiscussed !== undefined) this.props.topicsDiscussed = props.topicsDiscussed;
     if (props.issues !== undefined) this.props.issues = props.issues;
+    if (props.alreadyResolved !== undefined) this.props.alreadyResolved = props.alreadyResolved;
+    if (props.inProgress !== undefined) this.props.inProgress = props.inProgress;
+    if (props.globalOpenQuestions !== undefined) this.props.globalOpenQuestions = props.globalOpenQuestions;
+    if (props.backlog !== undefined) this.props.backlog = props.backlog;
+    if (props.repoHoursTotals !== undefined) this.props.repoHoursTotals = props.repoHoursTotals;
     this.props.updatedAt = new Date();
   }
 }

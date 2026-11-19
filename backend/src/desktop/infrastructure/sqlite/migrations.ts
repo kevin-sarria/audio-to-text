@@ -122,6 +122,14 @@ const MIGRATIONS: string[] = [
   CREATE INDEX IF NOT EXISTS idx_sessions_project_folder ON transcription_sessions (project_folder_id);
 
   ALTER TABLE meeting_analyses ADD COLUMN title TEXT;
+  `,
+  // Migración 4: Soporte enriquecido para fidelidad, ya resuelto, en curso, preguntas abiertas, backlog y totales
+  `
+  ALTER TABLE meeting_analyses ADD COLUMN already_resolved TEXT;
+  ALTER TABLE meeting_analyses ADD COLUMN in_progress TEXT;
+  ALTER TABLE meeting_analyses ADD COLUMN global_open_questions TEXT;
+  ALTER TABLE meeting_analyses ADD COLUMN backlog TEXT;
+  ALTER TABLE meeting_analyses ADD COLUMN repo_hours_totals TEXT;
   `
 ];
 

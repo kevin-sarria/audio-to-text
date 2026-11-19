@@ -39,7 +39,12 @@ import {
   Save as SaveIcon,
   Folder as FolderIcon,
   AddCircleOutline as AddIcon,
-  WarningAmber as WarningIcon
+  WarningAmber as WarningIcon,
+  AccessTime as TimeIcon,
+  HelpOutline as QuestionIcon,
+  CheckCircle as ResolvedIcon,
+  PendingActions as InProgressIcon,
+  BookmarkBorder as BacklogIcon
 } from "@mui/icons-material";
 import {
   MeetingAnalysisDto,
@@ -98,6 +103,7 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
   // Filtros de issues
   const [filterType, setFilterType] = useState<string>("all");
   const [filterPriority, setFilterPriority] = useState<string>("all");
+  const [filterRepo, setFilterRepo] = useState<string>("all");
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Carpeta asociada a la sesión
@@ -277,71 +283,126 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
     }
   };
 
-  const handleCopyAllIssues = () => {
-    if (!analysis || !analysis.issues.length) return;
+  const buildStructuredMarkdown = (analysisData: MeetingAnalysisDto, title: string): string => {
+    let md = `# ${title || "Resumen de Reunión e Issues Técnicas"}\n\n`;
+    md += `**Fecha**: ${new Date(analysisData.createdAt).toLocaleString()}\n\n`;
 
-    let md = `# ${editableTitle || "Issues de Desarrollo"}\n\n`;
-    md += `**Fecha**: ${new Date(analysis.createdAt).toLocaleDateString()}\n\n`;
-    md += `## Resumen Ejecutivo de la Reunión\n${analysis.summary}\n\n`;
+    // 1. Resumen Ejecutivo
+    md += `## 1. Resumen Ejecutivo\n${analysisData.summary}\n\n`;
 
-    if (analysis.keyDecisions.length > 0) {
-      md += `### Decisiones Clave\n`;
-      analysis.keyDecisions.forEach((d) => {
+    // 2. Ya Resuelto
+    if (analysisData.alreadyResolved && analysisData.alreadyResolved.length > 0) {
+      md += `## 2. Ya Resuelto / Cerrado\n`;
+      analysisData.alreadyResolved.forEach((r) => {
+        md += `- [x] ${r}\n`;
+      });
+      md += `\n`;
+    }
+
+    // 3. En Curso
+    if (analysisData.inProgress && analysisData.inProgress.length > 0) {
+      md += `## 3. En Curso\n`;
+      analysisData.inProgress.forEach((p) => {
+        md += `- ⏳ ${p}\n`;
+      });
+      md += `\n`;
+    }
+
+    // 4. Decisiones Clave
+    if (analysisData.keyDecisions && analysisData.keyDecisions.length > 0) {
+      md += `## 4. Decisiones Clave\n`;
+      analysisData.keyDecisions.forEach((d) => {
         md += `- ${d}\n`;
       });
       md += `\n`;
     }
 
-    md += `## Lista de Issues (${analysis.issues.length})\n\n`;
-
-    analysis.issues.forEach((issue) => {
-      md += `### [${issue.id}] ${issue.title}\n`;
-      md += `- **Tipo**: \`${issue.type}\` | **Prioridad**: \`${issue.priority}\` | **Componente**: \`${issue.component}\`\n`;
-      md += `- **Descripción**: ${issue.description}\n`;
-      if (issue.expectedFiles && issue.expectedFiles.length > 0) {
-        md += `- **Archivos esperados**: ${issue.expectedFiles.map((f) => `\`${f}\``).join(", ")}\n`;
-      }
-      md += `- **Criterios de Aceptación**:\n`;
-      issue.acceptanceCriteria.forEach((crit) => {
-        md += `  - [ ] ${crit}\n`;
+    // 5. Preguntas Abiertas Globales
+    if (analysisData.globalOpenQuestions && analysisData.globalOpenQuestions.length > 0) {
+      md += `## 5. Preguntas Abiertas Globales\n`;
+      analysisData.globalOpenQuestions.forEach((q) => {
+        md += `- ❓ ${q}\n`;
       });
-      md += `\n<details><summary>Prompt para Agente de IA</summary>\n\n\`\`\`markdown\n${issue.agentPrompt}\n\`\`\`\n</details>\n\n---\n\n`;
+      md += `\n`;
+    }
+
+    // 6. Issues Agrupados por Repositorio
+    md += `## 6. Issues para Programación con IA (Agrupados por Repositorio)\n\n`;
+    const repos = ["backend", "panel", "app", "otro"] as const;
+    const repoLabels: Record<string, string> = {
+      backend: "Repositorio Backend",
+      panel: "Repositorio Panel Administrativo",
+      app: "Repositorio App Móvil",
+      otro: "Otros Módulos"
+    };
+
+    repos.forEach((repoKey) => {
+      const repoIssues = analysisData.issues.filter((i) => (i.repo || "backend") === repoKey);
+      if (repoIssues.length > 0) {
+        md += `### ${repoLabels[repoKey]} (${repoIssues.length} issues)\n\n`;
+        repoIssues.forEach((issue) => {
+          md += `#### [${issue.id}] ${issue.title}\n`;
+          md += `- **Repo**: \`${issue.repo || repoKey}\` | **Tipo**: \`${issue.type}\` | **Prioridad**: \`${issue.priority}\` | **Componente**: \`${issue.component}\`\n`;
+          if (issue.estimation) {
+            md += `- **Estimación**: \`${issue.estimation.text || `Total: ${issue.estimation.totalHours}h`}\`\n`;
+          }
+          if (issue.dependencies && issue.dependencies.length > 0) {
+            md += `- **Dependencias**: ${issue.dependencies.join(", ")}\n`;
+          }
+          if (issue.prWorkflow) {
+            md += `- **Flujo de PR**: ${issue.prWorkflow}\n`;
+          }
+          md += `- **Descripción**: ${issue.description}\n`;
+          if (issue.openQuestions && issue.openQuestions.length > 0 && issue.openQuestions[0] !== "Ninguna") {
+            md += `- **Preguntas abiertas**:\n`;
+            issue.openQuestions.forEach((q) => {
+              md += `  - ⚠️ ${q}\n`;
+            });
+          }
+          if (issue.expectedFiles && issue.expectedFiles.length > 0) {
+            md += `- **Archivos sugeridos (verificar en el repo)**: ${issue.expectedFiles.map((f) => `\`${f}\``).join(", ")}\n`;
+          }
+          if (issue.acceptanceCriteria && issue.acceptanceCriteria.length > 0) {
+            md += `- **Criterios de Aceptación**:\n`;
+            issue.acceptanceCriteria.forEach((crit) => {
+              md += `  - [ ] ${crit}\n`;
+            });
+          }
+          md += `\n<details><summary>Prompt para Agente de IA</summary>\n\n\`\`\`markdown\n${issue.agentPrompt}\n\`\`\`\n</details>\n\n---\n\n`;
+        });
+      }
     });
 
-    copyToClipboard(md, "all-issues", "¡Todas las issues copiadas en formato Markdown!");
+    // 7. Backlog
+    if (analysisData.backlog && analysisData.backlog.length > 0) {
+      md += `## 7. Backlog (No bloqueante / Próximas etapas)\n`;
+      analysisData.backlog.forEach((b) => {
+        md += `- 📌 ${b}\n`;
+      });
+      md += `\n`;
+    }
+
+    // 8. Totales de Horas por Repositorio
+    if (analysisData.repoHoursTotals) {
+      md += `## 8. Totales de Horas por Repositorio (Verificación Aritmética)\n`;
+      md += `- **Backend**: ${analysisData.repoHoursTotals.backend}h\n`;
+      md += `- **Panel Administrativo**: ${analysisData.repoHoursTotals.panel}h\n`;
+      md += `- **App Móvil**: ${analysisData.repoHoursTotals.app}h\n`;
+      md += `- **TOTAL GENERAL**: ${analysisData.repoHoursTotals.total}h\n\n`;
+    }
+
+    return md;
+  };
+
+  const handleCopyAllIssues = () => {
+    if (!analysis || !analysis.issues.length) return;
+    const md = buildStructuredMarkdown(analysis, editableTitle || "Documento Completo de Issues");
+    copyToClipboard(md, "all-issues", "¡Documento estructurado completo copiado en formato Markdown!");
   };
 
   const handleDownloadMarkdown = () => {
     if (!analysis) return;
-    let md = `# ${editableTitle || "Resumen de Reunión e Issues Técnicas"}\n`;
-    md += `**Fecha**: ${new Date(analysis.createdAt).toLocaleString()}\n\n`;
-    md += `## Resumen Ejecutivo\n${analysis.summary}\n\n`;
-
-    if (analysis.keyDecisions.length > 0) {
-      md += `## Decisiones Clave\n`;
-      analysis.keyDecisions.forEach((d) => (md += `- ${d}\n`));
-      md += `\n`;
-    }
-
-    if (analysis.topicsDiscussed.length > 0) {
-      md += `## Temas Discutidos\n`;
-      analysis.topicsDiscussed.forEach((t) => (md += `- ${t}\n`));
-      md += `\n`;
-    }
-
-    md += `## Issues de Programación para Agentes de IA\n\n`;
-    analysis.issues.forEach((issue) => {
-      md += `### ${issue.id}: ${issue.title}\n`;
-      md += `- **Tipo**: ${issue.type} | **Prioridad**: ${issue.priority} | **Componente**: ${issue.component}\n`;
-      md += `- **Descripción**: ${issue.description}\n`;
-      if (issue.expectedFiles?.length) {
-        md += `- **Archivos sugeridos**: ${issue.expectedFiles.join(", ")}\n`;
-      }
-      md += `\n**Criterios de Aceptación:**\n`;
-      issue.acceptanceCriteria.forEach((crit) => (md += `- [ ] ${crit}\n`));
-      md += `\n**Prompt para Agente de IA:**\n\n\`\`\`markdown\n${issue.agentPrompt}\n\`\`\`\n\n---\n\n`;
-    });
-
+    const md = buildStructuredMarkdown(analysis, editableTitle || "Resumen de Reunión e Issues Técnicas");
     const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -369,9 +430,36 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
     return analysis.issues.filter((issue) => {
       const matchType = filterType === "all" || issue.type === filterType;
       const matchPriority = filterPriority === "all" || issue.priority === filterPriority;
-      return matchType && matchPriority;
+      const matchRepo = filterRepo === "all" || (issue.repo || "backend") === filterRepo;
+      return matchType && matchPriority && matchRepo;
     });
-  }, [analysis, filterType, filterPriority]);
+  }, [analysis, filterType, filterPriority, filterRepo]);
+
+  const getRepoChipColor = (repo?: string): "primary" | "secondary" | "info" | "default" => {
+    switch (repo) {
+      case "backend":
+        return "primary";
+      case "panel":
+        return "secondary";
+      case "app":
+        return "info";
+      default:
+        return "default";
+    }
+  };
+
+  const getRepoLabel = (repo?: string): string => {
+    switch (repo) {
+      case "backend":
+        return "Backend";
+      case "panel":
+        return "Panel Admin";
+      case "app":
+        return "App Móvil";
+      default:
+        return "General";
+    }
+  };
 
   const getTypeChipColor = (type: DevIssueType): "primary" | "error" | "secondary" | "default" | "warning" => {
     switch (type) {
@@ -737,9 +825,179 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
             )}
           </Paper>
 
+          {/* 2. Ya Resuelto / Cerrado */}
+          {analysis.alreadyResolved && analysis.alreadyResolved.length > 0 && (
+            <Paper
+              sx={{
+                p: 3,
+                mb: 3,
+                borderRadius: 3,
+                bgcolor: "success.50",
+                border: "1px solid",
+                borderColor: "success.200"
+              }}
+            >
+              <Typography
+                variant="h6"
+                fontWeight={700}
+                gutterBottom
+                sx={{ display: "flex", alignItems: "center", gap: 1, color: "success.900" }}
+              >
+                <ResolvedIcon color="success" /> Ya Resuelto / Cerrado en la Reunión
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Puntos tratados que se cerraron o ya están completados según la transcripción. No requieren crear nuevas issues.
+              </Typography>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                {analysis.alreadyResolved.map((item, idx) => (
+                  <Box key={idx} sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+                    <CheckCircleOutlineIcon color="success" fontSize="small" sx={{ mt: "3px" }} />
+                    <Typography variant="body2" fontWeight={500}>
+                      {item}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+            </Paper>
+          )}
+
+          {/* 3. En Curso (Asignado / Sin Duplicar) */}
+          {analysis.inProgress && analysis.inProgress.length > 0 && (
+            <Paper
+              sx={{
+                p: 3,
+                mb: 3,
+                borderRadius: 3,
+                bgcolor: "info.50",
+                border: "1px solid",
+                borderColor: "info.200"
+              }}
+            >
+              <Typography
+                variant="h6"
+                fontWeight={700}
+                gutterBottom
+                sx={{ display: "flex", alignItems: "center", gap: 1, color: "info.900" }}
+              >
+                <InProgressIcon color="info" /> En Curso (Asignado a un Miembro del Equipo)
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Requerimientos que alguien ya está trabajando. Solo se crearon tareas de integración o partes faltantes.
+              </Typography>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                {analysis.inProgress.map((item, idx) => (
+                  <Box key={idx} sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+                    <Chip
+                      label="En Progreso"
+                      size="small"
+                      color="info"
+                      variant="outlined"
+                      sx={{ fontSize: "0.7rem", height: 22 }}
+                    />
+                    <Typography variant="body2">{item}</Typography>
+                  </Box>
+                ))}
+              </Box>
+            </Paper>
+          )}
+
+          {/* 5. Preguntas Abiertas Globales y Ambigüedades */}
+          {analysis.globalOpenQuestions && analysis.globalOpenQuestions.length > 0 && (
+            <Paper
+              sx={{
+                p: 3,
+                mb: 3,
+                borderRadius: 3,
+                bgcolor: "warning.50",
+                border: "1px solid",
+                borderColor: "warning.200"
+              }}
+            >
+              <Typography
+                variant="h6"
+                fontWeight={700}
+                gutterBottom
+                sx={{ display: "flex", alignItems: "center", gap: 1, color: "warning.900" }}
+              >
+                <QuestionIcon color="warning" /> Preguntas Abiertas y Términos por Confirmar
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Ambigüedades, fragmentos de audio dudosos o decisiones de negocio pendientes de confirmar antes de implementar.
+              </Typography>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                {analysis.globalOpenQuestions.map((q, idx) => (
+                  <Box key={idx} sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+                    <WarningIcon color="warning" fontSize="small" sx={{ mt: "3px" }} />
+                    <Typography variant="body2">{q}</Typography>
+                  </Box>
+                ))}
+              </Box>
+            </Paper>
+          )}
+
+          {/* 6. Totales de Horas por Repositorio */}
+          {analysis.repoHoursTotals && (
+            <Paper sx={{ p: 2.5, mb: 3, borderRadius: 3, border: "1px solid", borderColor: "divider" }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+                <TimeIcon color="primary" />
+                <Typography variant="subtitle1" fontWeight={700}>
+                  Totales de Horas por Repositorio (Verificación Aritmética)
+                </Typography>
+              </Box>
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: { xs: "1fr 1fr", sm: "repeat(4, 1fr)" },
+                  gap: 2
+                }}
+              >
+                <Box sx={{ p: 2, borderRadius: 2, bgcolor: "primary.50", textAlign: "center" }}>
+                  <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                    BACKEND
+                  </Typography>
+                  <Typography variant="h5" fontWeight={800} color="primary.main">
+                    {analysis.repoHoursTotals.backend}h
+                  </Typography>
+                </Box>
+                <Box sx={{ p: 2, borderRadius: 2, bgcolor: "secondary.50", textAlign: "center" }}>
+                  <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                    PANEL ADMIN
+                  </Typography>
+                  <Typography variant="h5" fontWeight={800} color="secondary.main">
+                    {analysis.repoHoursTotals.panel}h
+                  </Typography>
+                </Box>
+                <Box sx={{ p: 2, borderRadius: 2, bgcolor: "info.50", textAlign: "center" }}>
+                  <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                    APP MÓVIL
+                  </Typography>
+                  <Typography variant="h5" fontWeight={800} color="info.main">
+                    {analysis.repoHoursTotals.app}h
+                  </Typography>
+                </Box>
+                <Box sx={{ p: 2, borderRadius: 2, bgcolor: "action.hover", textAlign: "center" }}>
+                  <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                    TOTAL GENERAL
+                  </Typography>
+                  <Typography variant="h5" fontWeight={800} color="text.primary">
+                    {analysis.repoHoursTotals.total}h
+                  </Typography>
+                </Box>
+              </Box>
+            </Paper>
+          )}
+
           {/* Barra de Herramientas de Issues */}
           <Paper sx={{ p: 2, mb: 3, borderRadius: 3 }}>
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 2 }}>
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: 2
+              }}
+            >
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                 <CodeIcon color="primary" />
                 <Typography variant="h6" fontWeight={700}>
@@ -748,6 +1006,22 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
               </Box>
 
               <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
+                {/* Filtro por Repositorio */}
+                <FormControl size="small" sx={{ minWidth: 140 }}>
+                  <InputLabel id="filter-repo-label">Repositorio</InputLabel>
+                  <Select
+                    labelId="filter-repo-label"
+                    label="Repositorio"
+                    value={filterRepo}
+                    onChange={(e) => setFilterRepo(e.target.value)}
+                  >
+                    <MenuItem value="all">Todos los repos</MenuItem>
+                    <MenuItem value="backend">Backend</MenuItem>
+                    <MenuItem value="panel">Panel Admin</MenuItem>
+                    <MenuItem value="app">App Móvil</MenuItem>
+                  </Select>
+                </FormControl>
+
                 {/* Filtro por Tipo */}
                 <FormControl size="small" sx={{ minWidth: 120 }}>
                   <InputLabel id="filter-type-label">Tipo</InputLabel>
@@ -782,7 +1056,7 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
                   </Select>
                 </FormControl>
 
-                {/* Botón Copiar Todas */}
+                {/* Botón Copiar Documento Completo */}
                 <Button
                   variant="outlined"
                   size="small"
@@ -790,11 +1064,11 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
                   onClick={handleCopyAllIssues}
                   color={copiedId === "all-issues" ? "success" : "primary"}
                 >
-                  Copiar Todas (Markdown)
+                  Copiar Todo (Markdown)
                 </Button>
 
                 {/* Botón Descargar */}
-                <Tooltip title="Descargar como archivo Markdown">
+                <Tooltip title="Descargar documento completo estructurado en Markdown">
                   <IconButton size="small" onClick={handleDownloadMarkdown}>
                     <DownloadIcon fontSize="small" />
                   </IconButton>
@@ -837,6 +1111,12 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
                           {issue.id}
                         </Typography>
                         <Chip
+                          label={getRepoLabel(issue.repo)}
+                          size="small"
+                          color={getRepoChipColor(issue.repo)}
+                          sx={{ fontWeight: 700, fontSize: "0.75rem" }}
+                        />
+                        <Chip
                           label={issue.type.toUpperCase()}
                           size="small"
                           color={getTypeChipColor(issue.type)}
@@ -855,6 +1135,15 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
                           variant="outlined"
                           sx={{ fontSize: "0.7rem" }}
                         />
+                        {issue.estimation && (
+                          <Chip
+                            icon={<TimeIcon sx={{ fontSize: "14px !important" }} />}
+                            label={issue.estimation.text || `Total: ${issue.estimation.totalHours}h`}
+                            size="small"
+                            variant="outlined"
+                            sx={{ fontSize: "0.72rem", fontWeight: 600 }}
+                          />
+                        )}
                       </Box>
                     </Box>
 
@@ -866,10 +1155,50 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
                       {issue.description}
                     </Typography>
 
+                    {/* Preguntas Abiertas del Issue */}
+                    {issue.openQuestions &&
+                      issue.openQuestions.length > 0 &&
+                      issue.openQuestions[0] !== "Ninguna" && (
+                        <Alert severity="warning" sx={{ mb: 2, py: 0.5, px: 2, borderRadius: 2 }}>
+                          <Typography variant="caption" fontWeight={700} display="block">
+                            Preguntas abiertas para este issue:
+                          </Typography>
+                          {issue.openQuestions.map((q, qIdx) => (
+                            <Typography key={qIdx} variant="caption" display="block">
+                              • {q}
+                            </Typography>
+                          ))}
+                        </Alert>
+                      )}
+
+                    {/* Dependencias entre PRs / Funcionales */}
+                    {issue.dependencies &&
+                      issue.dependencies.length > 0 &&
+                      issue.dependencies[0] !== "Ninguna" && (
+                        <Box sx={{ mb: 1.5, display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                          <Typography variant="caption" fontWeight={600} color="text.secondary">
+                            Dependencias:
+                          </Typography>
+                          {issue.dependencies.map((dep, dIdx) => (
+                            <Chip key={dIdx} label={dep} size="small" variant="outlined" color="primary" sx={{ fontSize: "0.7rem" }} />
+                          ))}
+                        </Box>
+                      )}
+
+                    {/* Flujo de PR */}
+                    {issue.prWorkflow && (
+                      <Box sx={{ mb: 1.5 }}>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          <strong>Flujo de PR:</strong> {issue.prWorkflow}
+                        </Typography>
+                      </Box>
+                    )}
+
+                    {/* Archivos sugeridos (verificar en repo) */}
                     {issue.expectedFiles && issue.expectedFiles.length > 0 && (
                       <Box sx={{ mb: 2 }}>
                         <Typography variant="caption" fontWeight={600} color="text.secondary" display="block">
-                          Archivos / Módulos esperados:
+                          Archivos sugeridos (verificar en el repo):
                         </Typography>
                         <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
                           {issue.expectedFiles.map((file, fIdx) => (
@@ -893,7 +1222,16 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
                           {issue.acceptanceCriteria.map((crit, cIdx) => (
                             <Box key={cIdx} sx={{ display: "flex", alignItems: "center", gap: 0.8, my: 0.3 }}>
                               <CheckCircleOutlineIcon color="action" sx={{ fontSize: 16 }} />
-                              <Typography variant="body2">{crit}</Typography>
+                              <Typography variant="body2">
+                                {crit.includes("[Supuesto]") ? (
+                                  <>
+                                    <Chip label="Supuesto" size="small" color="warning" variant="outlined" sx={{ mr: 0.8, height: 18, fontSize: "0.65rem" }} />
+                                    {crit.replace("[Supuesto]", "").trim()}
+                                  </>
+                                ) : (
+                                  crit
+                                )}
+                              </Typography>
                             </Box>
                           ))}
                         </Box>
@@ -914,7 +1252,7 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                           <SmartToyIcon color="primary" sx={{ fontSize: 20 }} />
                           <Typography variant="subtitle2" fontWeight={600}>
-                            Prompt Optimizado para Agente de IA (Cursor / Claude Code / Antigravity)
+                            Prompt Optimizado para Agente de IA ({issue.repo ? `Repo: ${getRepoLabel(issue.repo)}` : "Cursor / Claude Code / Antigravity"})
                           </Typography>
                         </Box>
                       </AccordionSummary>
@@ -964,6 +1302,45 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
                 </Card>
               ))}
             </Box>
+          )}
+
+          {/* 7. Backlog */}
+          {analysis.backlog && analysis.backlog.length > 0 && (
+            <Paper
+              sx={{
+                p: 3,
+                mt: 3,
+                borderRadius: 3,
+                bgcolor: "grey.50",
+                border: "1px solid",
+                borderColor: "divider"
+              }}
+            >
+              <Typography
+                variant="h6"
+                fontWeight={700}
+                gutterBottom
+                sx={{ display: "flex", alignItems: "center", gap: 1 }}
+              >
+                <BacklogIcon color="action" /> Backlog de la Reunión (No Bloqueante / Próximas Etapas)
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Puntos acordados como mejoras a futuro o requerimientos diferidos sin prompt de implementación.
+              </Typography>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                {analysis.backlog.map((item, idx) => (
+                  <Box key={idx} sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+                    <Chip
+                      label="Backlog"
+                      size="small"
+                      variant="outlined"
+                      sx={{ fontSize: "0.7rem", height: 22 }}
+                    />
+                    <Typography variant="body2">{item}</Typography>
+                  </Box>
+                ))}
+              </Box>
+            </Paper>
           )}
         </>
       )}

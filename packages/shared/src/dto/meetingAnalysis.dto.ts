@@ -2,6 +2,15 @@ import { z } from "zod";
 
 export type DevIssueType = "feature" | "bug" | "refactor" | "chore" | "spike";
 export type DevIssuePriority = "high" | "medium" | "low";
+export type DevIssueRepo = "backend" | "panel" | "app" | "otro";
+
+export interface DevIssueEstimation {
+  backendHours: number;
+  panelHours: number;
+  appHours: number;
+  totalHours: number;
+  text: string;
+}
 
 export interface DevIssueDto {
   id: string;
@@ -13,6 +22,18 @@ export interface DevIssueDto {
   expectedFiles?: string[];
   acceptanceCriteria: string[];
   agentPrompt: string;
+  repo?: DevIssueRepo;
+  estimation?: DevIssueEstimation;
+  openQuestions?: string[];
+  dependencies?: string[];
+  prWorkflow?: string;
+}
+
+export interface RepoHoursTotals {
+  backend: number;
+  panel: number;
+  app: number;
+  total: number;
 }
 
 export interface MeetingAnalysisDto {
@@ -24,6 +45,11 @@ export interface MeetingAnalysisDto {
   keyDecisions: string[];
   topicsDiscussed: string[];
   issues: DevIssueDto[];
+  alreadyResolved?: string[];
+  inProgress?: string[];
+  globalOpenQuestions?: string[];
+  backlog?: string[];
+  repoHoursTotals?: RepoHoursTotals;
   createdAt: string;
   updatedAt: string;
 }

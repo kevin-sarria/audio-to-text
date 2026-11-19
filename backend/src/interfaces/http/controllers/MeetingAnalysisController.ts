@@ -42,9 +42,14 @@ export class MeetingAnalysisController {
           title: result.title,
           projectContext: result.projectContext,
           summary: result.summary,
+          alreadyResolved: result.alreadyResolved,
+          inProgress: result.inProgress,
           keyDecisions: result.keyDecisions,
           topicsDiscussed: result.topicsDiscussed,
+          globalOpenQuestions: result.globalOpenQuestions,
           issues: result.issues,
+          backlog: result.backlog,
+          repoHoursTotals: result.repoHoursTotals,
           createdAt: result.createdAt.toISOString(),
           updatedAt: result.updatedAt.toISOString()
         }
@@ -85,9 +90,14 @@ export class MeetingAnalysisController {
           title: result.title,
           projectContext: result.projectContext,
           summary: result.summary,
+          alreadyResolved: result.alreadyResolved,
+          inProgress: result.inProgress,
           keyDecisions: result.keyDecisions,
           topicsDiscussed: result.topicsDiscussed,
+          globalOpenQuestions: result.globalOpenQuestions,
           issues: result.issues,
+          backlog: result.backlog,
+          repoHoursTotals: result.repoHoursTotals,
           createdAt: result.createdAt.toISOString(),
           updatedAt: result.updatedAt.toISOString()
         }

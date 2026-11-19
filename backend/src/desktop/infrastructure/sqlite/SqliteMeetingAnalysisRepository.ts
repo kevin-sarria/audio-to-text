@@ -20,7 +20,9 @@ export class SqliteMeetingAnalysisRepository implements IMeetingAnalysisReposito
     if (existing) {
       const stmt = this.db.prepare(`
         UPDATE meeting_analyses
-        SET title = ?, project_context = ?, summary = ?, key_decisions = ?, topics_discussed = ?, issues = ?, updated_at = ?
+        SET title = ?, project_context = ?, summary = ?, key_decisions = ?, topics_discussed = ?, issues = ?,
+            already_resolved = ?, in_progress = ?, global_open_questions = ?, backlog = ?, repo_hours_totals = ?,
+            updated_at = ?
         WHERE session_id = ?
       `);
 
@@ -31,13 +33,22 @@ export class SqliteMeetingAnalysisRepository implements IMeetingAnalysisReposito
         JSON.stringify(analysis.keyDecisions),
         JSON.stringify(analysis.topicsDiscussed),
         JSON.stringify(analysis.issues),
+        JSON.stringify(analysis.alreadyResolved),
+        JSON.stringify(analysis.inProgress),
+        JSON.stringify(analysis.globalOpenQuestions),
+        JSON.stringify(analysis.backlog),
+        analysis.repoHoursTotals ? JSON.stringify(analysis.repoHoursTotals) : null,
         analysis.updatedAt.toISOString(),
         analysis.sessionId
       );
     } else {
       const stmt = this.db.prepare(`
-        INSERT INTO meeting_analyses (id, session_id, title, project_context, summary, key_decisions, topics_discussed, issues, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO meeting_analyses (
+          id, session_id, title, project_context, summary, key_decisions, topics_discussed, issues,
+          already_resolved, in_progress, global_open_questions, backlog, repo_hours_totals,
+          created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       stmt.run(
@@ -49,6 +60,11 @@ export class SqliteMeetingAnalysisRepository implements IMeetingAnalysisReposito
         JSON.stringify(analysis.keyDecisions),
         JSON.stringify(analysis.topicsDiscussed),
         JSON.stringify(analysis.issues),
+        JSON.stringify(analysis.alreadyResolved),
+        JSON.stringify(analysis.inProgress),
+        JSON.stringify(analysis.globalOpenQuestions),
+        JSON.stringify(analysis.backlog),
+        analysis.repoHoursTotals ? JSON.stringify(analysis.repoHoursTotals) : null,
         analysis.createdAt.toISOString(),
         analysis.updatedAt.toISOString()
       );
@@ -66,6 +82,11 @@ export class SqliteMeetingAnalysisRepository implements IMeetingAnalysisReposito
     let keyDecisions: string[] = [];
     let topicsDiscussed: string[] = [];
     let issues: any[] = [];
+    let alreadyResolved: string[] = [];
+    let inProgress: string[] = [];
+    let globalOpenQuestions: string[] = [];
+    let backlog: string[] = [];
+    let repoHoursTotals = null;
 
     try {
       keyDecisions = typeof raw.key_decisions === "string" ? JSON.parse(raw.key_decisions) : raw.key_decisions || [];
@@ -79,6 +100,36 @@ export class SqliteMeetingAnalysisRepository implements IMeetingAnalysisReposito
       issues = typeof raw.issues === "string" ? JSON.parse(raw.issues) : raw.issues || [];
     } catch {}
 
+    try {
+      if (raw.already_resolved) {
+        alreadyResolved = typeof raw.already_resolved === "string" ? JSON.parse(raw.already_resolved) : raw.already_resolved;
+      }
+    } catch {}
+
+    try {
+      if (raw.in_progress) {
+        inProgress = typeof raw.in_progress === "string" ? JSON.parse(raw.in_progress) : raw.in_progress;
+      }
+    } catch {}
+
+    try {
+      if (raw.global_open_questions) {
+        globalOpenQuestions = typeof raw.global_open_questions === "string" ? JSON.parse(raw.global_open_questions) : raw.global_open_questions;
+      }
+    } catch {}
+
+    try {
+      if (raw.backlog) {
+        backlog = typeof raw.backlog === "string" ? JSON.parse(raw.backlog) : raw.backlog;
+      }
+    } catch {}
+
+    try {
+      if (raw.repo_hours_totals) {
+        repoHoursTotals = typeof raw.repo_hours_totals === "string" ? JSON.parse(raw.repo_hours_totals) : raw.repo_hours_totals;
+      }
+    } catch {}
+
     return new MeetingAnalysis({
       id: raw.id,
       sessionId: raw.session_id,
@@ -88,6 +139,11 @@ export class SqliteMeetingAnalysisRepository implements IMeetingAnalysisReposito
       keyDecisions,
       topicsDiscussed,
       issues,
+      alreadyResolved,
+      inProgress,
+      globalOpenQuestions,
+      backlog,
+      repoHoursTotals,
       createdAt: new Date(raw.created_at),
       updatedAt: new Date(raw.updated_at)
     });

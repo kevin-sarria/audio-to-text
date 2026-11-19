@@ -13,21 +13,48 @@ import { SettingsStore } from "../../desktop/infrastructure/settings/SettingsSto
 
 const DevIssueSchema = z.object({
   id: z.string().default(() => `ISSUE-${Math.floor(Math.random() * 900 + 100)}`),
+  repo: z.enum(["backend", "panel", "app", "otro"]).default("backend"),
   title: z.string(),
   type: z.enum(["feature", "bug", "refactor", "chore", "spike"]).default("feature"),
   priority: z.enum(["high", "medium", "low"]).default("medium"),
   component: z.string().default("General"),
   description: z.string(),
+  estimation: z
+    .object({
+      backendHours: z.number().default(0),
+      panelHours: z.number().default(0),
+      appHours: z.number().default(0),
+      totalHours: z.number().default(0),
+      text: z.string().default("")
+    })
+    .default({ backendHours: 0, panelHours: 0, appHours: 0, totalHours: 0, text: "" }),
+  openQuestions: z.array(z.string()).default(["Ninguna"]),
+  dependencies: z.array(z.string()).default(["Ninguna"]),
+  prWorkflow: z
+    .string()
+    .default("Rama corta desde dev, PR a dev, skill /revisar-entrega, captura de la prueba en pantalla y revisión de Juan."),
   expectedFiles: z.array(z.string()).default([]),
   acceptanceCriteria: z.array(z.string()).default([]),
   agentPrompt: z.string()
 });
 
+const RepoHoursTotalsSchema = z.object({
+  backend: z.number().default(0),
+  panel: z.number().default(0),
+  app: z.number().default(0),
+  total: z.number().default(0)
+});
+
 const MeetingAnalysisJsonSchema = z.object({
   summary: z.string(),
+  alreadyResolved: z.array(z.string()).default([]),
+  inProgress: z.array(z.string()).default([]),
   keyDecisions: z.array(z.string()).default([]),
   topicsDiscussed: z.array(z.string()).default([]),
-  issues: z.array(DevIssueSchema).default([])
+  globalOpenQuestions: z.array(z.string()).default([]),
+  issues: z.array(DevIssueSchema).default([]),
+  backlog: z.array(z.string()).default([]),
+  repoHoursTotals: RepoHoursTotalsSchema.default({ backend: 0, panel: 0, app: 0, total: 0 })
 });
 
 export interface LlmMeetingAnalysisServiceDeps {
@@ -45,22 +72,44 @@ export class LlmMeetingAnalysisService implements IMeetingAnalysisService {
   ): Promise<GeneratedMeetingData> {
     const { provider, apiKey, model, baseUrl } = await this.resolveProviderAndKey(options);
 
-    const systemPrompt = this.buildSystemPrompt(projectContext);
-    const userPrompt = `A continuación se presenta la transcripción completa de la reunión de desarrollo:\n\n${transcript}\n\nPor favor, genera el resumen estructurado y las issues para programación optimizadas para agentes de IA siguiendo el formato JSON especificado.`;
+    // Ejecutar pipeline en 2 pasos para máxima fidelidad anti-invención
+    const step1SystemPrompt = this.buildStep1Prompt(projectContext);
+    const step1UserPrompt = `A continuación se presenta la transcripción completa de la reunión de desarrollo:\n\n${transcript}\n\nPor favor, extrae el resumen ejecutivo, identifica las decisiones clave, formula las preguntas abiertas globales y clasifica rigurosamente cada punto tratado en: CERRADO / YA HECHO (alreadyResolved), EN CURSO (inProgress), NUEVO (newItems) y PARA BACKLOG (backlog), siguiendo estrictamente el formato JSON especificado.`;
 
-    let rawResponse = "";
+    try {
+      // PASO 1: Extracción, clasificación y detección de ambigüedades
+      const rawStep1 = await this.executeLlmCall(step1SystemPrompt, step1UserPrompt, provider, apiKey, model, baseUrl);
+      const step1Clean = this.cleanJsonString(rawStep1);
+      const step1Data = JSON.parse(step1Clean);
 
-    if (provider === "google-account") {
-      rawResponse = await this.callGoogleAccount(systemPrompt, userPrompt, model);
-    } else if (provider === "gemini") {
-      rawResponse = await this.callGemini(systemPrompt, userPrompt, apiKey, model);
-    } else if (provider === "groq") {
-      rawResponse = await this.callGroq(systemPrompt, userPrompt, apiKey, model);
-    } else {
-      rawResponse = await this.callOpenAi(systemPrompt, userPrompt, apiKey, model, baseUrl);
+      // PASO 2: Generación de issues técnicas por repo a partir de los puntos del Paso 1
+      const step2SystemPrompt = this.buildStep2Prompt(projectContext);
+      const step2UserPrompt = `A continuación se presentan los resultados de la extracción y clasificación previa (Paso 1) de la reunión:\n\n${JSON.stringify(step1Data, null, 2)}\n\nGenera los issues de programación organizados por repositorio afectado para los requerimientos NUEVOS y tareas de integración, asegurando que cada issue corresponda a un único repo y calculando la estimación en horas por repo y la suma aritmética final en formato JSON estricto.`;
+
+      const rawStep2 = await this.executeLlmCall(step2SystemPrompt, step2UserPrompt, provider, apiKey, model, baseUrl);
+      const step2Clean = this.cleanJsonString(rawStep2);
+      const step2Data = JSON.parse(step2Clean);
+
+      // Ensamblar ambos pasos
+      const merged = {
+        summary: step1Data.summary || "Resumen de la reunión",
+        alreadyResolved: Array.isArray(step1Data.alreadyResolved) ? step1Data.alreadyResolved : [],
+        inProgress: Array.isArray(step1Data.inProgress) ? step1Data.inProgress : [],
+        keyDecisions: Array.isArray(step1Data.keyDecisions) ? step1Data.keyDecisions : [],
+        topicsDiscussed: Array.isArray(step1Data.topicsDiscussed) ? step1Data.topicsDiscussed : [],
+        globalOpenQuestions: Array.isArray(step1Data.globalOpenQuestions) ? step1Data.globalOpenQuestions : [],
+        issues: Array.isArray(step2Data.issues) ? step2Data.issues : [],
+        backlog: Array.isArray(step1Data.backlog) ? step1Data.backlog : [],
+        repoHoursTotals: step2Data.repoHoursTotals || { backend: 0, panel: 0, app: 0, total: 0 }
+      };
+
+      return this.parseAndValidateResponse(JSON.stringify(merged));
+    } catch (stepErr: any) {
+      console.warn("[LlmMeetingAnalysisService] Fallback a análisis de paso único debido a:", stepErr.message);
+      const fallbackPrompt = this.buildSingleStepPrompt(projectContext);
+      const rawFallback = await this.executeLlmCall(fallbackPrompt, step1UserPrompt, provider, apiKey, model, baseUrl);
+      return this.parseAndValidateResponse(rawFallback);
     }
-
-    return this.parseAndValidateResponse(rawResponse);
   }
 
   public async generateContextFromRepo(
@@ -460,67 +509,290 @@ Este contexto servirá como arnés de contexto técnico para que agentes de IA d
     }
   }
 
-  private buildSystemPrompt(projectContext?: string): string {
+  private async executeLlmCall(
+    systemPrompt: string,
+    userPrompt: string,
+    provider: string,
+    apiKey: string,
+    model: string,
+    baseUrl?: string
+  ): Promise<string> {
+    if (provider === "google-account") {
+      return this.callGoogleAccount(systemPrompt, userPrompt, model);
+    } else if (provider === "gemini") {
+      return this.callGemini(systemPrompt, userPrompt, apiKey, model);
+    } else if (provider === "groq") {
+      return this.callGroq(systemPrompt, userPrompt, apiKey, model);
+    } else {
+      return this.callOpenAi(systemPrompt, userPrompt, apiKey, model, baseUrl);
+    }
+  }
+
+  private cleanJsonString(raw: string): string {
+    let clean = raw.trim();
+    if (clean.startsWith("```json")) {
+      clean = clean.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+    } else if (clean.startsWith("```")) {
+      clean = clean.replace(/^```\s*/, "").replace(/\s*```$/, "");
+    }
+    return clean;
+  }
+
+  private buildStep1Prompt(projectContext?: string): string {
+    const todayFormatted = new Date().toISOString().slice(0, 10).replace(/-/g, "");
     const contextSection = projectContext
       ? `\n### CONTEXTO DEL PROYECTO PROPORCIONADO POR EL EQUIPO:\n${projectContext}\n`
       : `\n### CONTEXTO GENERAL DEL PROYECTO:\nSi no se especificó contexto adicional, infiere la tecnología y arquitectura a partir de lo discutido en la reunión.\n`;
 
-    return `Eres un Principal Software Architect y Technical Lead de élite especializado en convertir reuniones técnicas en documentación accionable e issues de software listas para ser ejecutadas por Agentes de Inteligencia Artificial (ej. Cursor, Antigravity, Claude Code, GitHub Copilot).
+    return `Eres un Principal Software Architect de élite especializado en extraer información fiel y estructurada de reuniones de desarrollo de software.
 ${contextSection}
-### TUS OBJETIVOS:
-1. Proporcionar un **resumen ejecutivo** de la reunión, resaltando los objetivos, el estado del proyecto y los acuerdos principales.
-2. Identificar las **decisiones clave** (arquitectura, librerías, diseño, prioridades).
-3. Identificar los **temas principales tratados** en la reunión.
-4. Desglosar todo el trabajo acordado en **Issues de programación individuales y atómicas**, específicamente estructuradas para que un Agente de IA las implemente con máxima autonomía y sin ambigüedades.
+### REGLAS OBLIGATORIAS (LITERALES Y VERIFICABLES):
 
-### REQUISITOS CRÍTICOS PARA CADA ISSUE:
-- **id**: Identificador correlativo legible (ej. "ISSUE-1", "ISSUE-2").
-- **title**: Título conciso, técnico y en formato imperativo (ej. "[Backend] Implementar endpoint POST /api/webhooks con validación HMAC").
-- **type**: Uno de los siguientes valores exactos: "feature" | "bug" | "refactor" | "chore" | "spike".
-- **priority**: Uno de: "high" | "medium" | "low".
-- **component**: Módulo o capa técnica afectada (ej. "Frontend / UI", "Backend / API", "Database / Migrations", "DevOps / CI").
-- **description**: Explicación clara y detallada del requerimiento o problema detectado en la reunión.
-- **expectedFiles**: Lista de rutas de archivos o módulos que previsiblemente deben crearse o modificarse según el contexto del proyecto (ej. ["backend/src/routes/webhook.ts", "backend/src/services/webhookService.ts"]).
-- **acceptanceCriteria**: Lista de criterios de aceptación verificables (checklist en estilo Definition of Done). Cada criterio debe ser claro y testeable.
-- **agentPrompt**: UN PROMPT COMPLETO Y ROBUSTO EN FORMATO MARKDOWN, OPTIMIZADO PARA ENTREGAR DIRECTAMENTE A UN AGENTE DE IA (Cursor, Antigravity, Claude Code).
-  El agentPrompt debe contener:
-  * Rol del agente ("Actúa como un desarrollador senior especializado en...")
-  * Objetivo de la tarea
-  * Contexto relevante del proyecto y de la reunión
-  * Pasos guiados de implementación
-  * Archivos a tocar
-  * Restricciones técnicas y de estilo
-  * Criterios de aceptación (con checkboxes '- [ ]')
-  * Comandos de verificación / pruebas esperadas.
+1. FIDELIDAD A LA TRANSCRIPCIÓN (ANTI-INVENCIÓN):
+- Solo afirma como hecho lo que se dijo explícitamente en la transcripción.
+- NO inventes nombres de campos, tablas, rutas de endpoints, nombres de clientes, librerías, estados, transiciones ni reglas de validación. Si son necesarios pero no están en la transcripción ni en el contexto, márcalos como "PROPUESTO (por confirmar)".
+- No uses tecnologías que no estén en el stack del contexto (ej.: no TanStack Query si el stack dice Redux Toolkit).
 
-### FORMATO DE SALIDA REQUERIDO (JSON ESTRICTO):
-Debes responder ÚNICAMENTE con un objeto JSON válido con la siguiente estructura (sin texto antes ni después):
+2. RUIDO DE TRANSCRIPCIÓN Y HABLANTES:
+- La transcripción es automática y tiene errores de reconocimiento de voz y NO distingue hablantes (puede decir "Hablante 1").
+- Si un término suena raro o no encaja con el vocabulario del dominio (ej.: "aislamientos", "pitas ambicientes"), NO lo interpretes: regístralo como PREGUNTA ABIERTA citando el fragmento y la marca de tiempo aproximada.
+- No atribuyas una afirmación a una persona concreta a menos que el nombre se diga en esa misma frase.
+- Si una cifra o dato (ciudad, cantidad, centro de costo) puede referirse a cosas distintas, lista las interpretaciones posibles en vez de elegir una.
+
+3. CLASIFICACIÓN RIGUROSA DE CADA PUNTO DE LA REUNIÓN:
+Clasifica cada tema o requerimiento discutido en una de estas 4 categorías:
+- CERRADO / YA HECHO (alreadyResolved): La transcripción dice que se cerró o se hizo. NO generará issue.
+- EN CURSO (inProgress): Alguien ya lo está trabajando (ej.: "Cristian está ajustando..."). Indica quién lo lleva y si requiere solo validar/integrar.
+- NUEVO (newItems): Requerimiento nuevo acordado que requiere implementación. Especifica qué repositorios afecta: "backend", "panel", "app". Agrupa cambios de texto o UI menores del mismo módulo en un solo ítem.
+- PARA BACKLOG (backlog): Se dijo que no es bloqueante o va para una etapa de mejoras futuras.
+
+4. PREGUNTAS ABIERTAS GLOBALES (globalOpenQuestions):
+Es OBLIGATORIO incluir preguntas abiertas cuando:
+- La transcripción sea ambigua, dudosa o incompleta.
+- Lo pedido contradiga o duplique reglas de docs/REGLAS_DE_NEGOCIO.md o algo que el contexto dice que ya existe.
+- Falte una decisión de negocio (horarios, nomenclatura, fuente de datos).
+Cada pregunta debe indicar: qué falta, a quién preguntar (si se mencionó) y qué haría el equipo mientras tanto (lo mínimo, sin inventar).
+
+5. DECISIONES CLAVE (keyDecisions):
+Lista las decisiones firmes tomadas durante la reunión sobre arquitectura, librerías, diseño o prioridades.
+
+6. RESUMEN EJECUTIVO (summary):
+2 a 3 párrafos fieles exclusivamente a lo discutido en la transcripción, sin agregar datos externos.
+
+### FORMATO DE SALIDA (JSON ESTRICTO):
 {
-  "summary": "Resumen ejecutivo en 2-4 párrafos estructurados...",
+  "summary": "Resumen ejecutivo en 2-3 párrafos fieles exclusivamente a la transcripción...",
+  "alreadyResolved": [
+    "Descripción de ítem cerrado o ya hecho en la reunión..."
+  ],
+  "inProgress": [
+    "Descripción de ítem en curso, indicando responsable y qué falta o si solo es validar/integrar..."
+  ],
+  "newItems": [
+    {
+      "title": "Título técnico del requerimiento nuevo",
+      "description": "Detalle técnico acordado en la reunión",
+      "affectedRepos": ["backend", "panel", "app"]
+    }
+  ],
+  "backlog": [
+    "Ítem no bloqueante destinado a backlog o mejoras futuras..."
+  ],
   "keyDecisions": [
-    "Decisión 1...",
-    "Decisión 2..."
+    "Decisión clave 1...",
+    "Decisión clave 2..."
+  ],
+  "globalOpenQuestions": [
+    "Pregunta abierta citando fragmento y timestamp..."
   ],
   "topicsDiscussed": [
-    "Tema 1...",
-    "Tema 2..."
-  ],
+    "Tema principal 1...",
+    "Tema principal 2..."
+  ]
+}`;
+  }
+
+  private buildStep2Prompt(projectContext?: string): string {
+    const todayFormatted = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    const contextSection = projectContext
+      ? `\n### CONTEXTO DEL PROYECTO PROPORCIONADO POR EL EQUIPO:\n${projectContext}\n`
+      : `\n### CONTEXTO GENERAL DEL PROYECTO:\nInfiere la tecnología y arquitectura a partir del contexto provisto.\n`;
+
+    return `Eres un Principal Software Architect y Technical Lead de élite especializado en generar issues técnicas para Agentes de IA (Cursor, Antigravity, Claude Code).
+${contextSection}
+A partir de la lista de requerimientos NUEVOS, en curso y preguntas abiertas clasificados en la fase previa, debes generar los Issues de programación definitivos y verificar aritméticamente las estimaciones en horas.
+
+### REGLAS OBLIGATORIAS (LITERALES Y VERIFICABLES):
+
+1. ESTRUCTURA POR REPOSITORIO (UN ISSUE POR REPO):
+- Crea UN issue por repositorio afectado ("backend" / "panel" / "app"). NUNCA mezcles repositorios en un mismo issue, porque cada agente trabaja en un solo repo.
+- Si un cambio funcional toca varios repos, crea un issue por cada repo y enlázalos explícitamente en el campo dependencies con "Depende de ISSUE-N".
+- Si el panel o la app necesitan un endpoint que no existe, crea también el issue de backend correspondiente (en rutas /api/mobile/... si lo consume la app). No dejes dependencias sin issue.
+
+2. PREGUNTAS ABIERTAS POR ISSUE:
+- Cada issue DEBE tener su lista "openQuestions" (escribe ["Ninguna"] solo si de verdad no hay).
+- Es OBLIGATORIO registrar preguntas abiertas si la transcripción fue ambigua, si podría contradecir docs/REGLAS_DE_NEGOCIO.md o cosas existentes, o si falta una decisión de negocio.
+- Cada pregunta indica: qué falta, a quién preguntar (si se mencionó) y qué haría el agente mientras tanto (lo mínimo, sin inventar).
+
+3. ESTIMACIÓN Y VERIFICACIÓN ARITMÉTICA:
+- Cada issue debe tener su estimación en horas:
+  "Backend: Xh | Panel: Yh | App: Zh | Total: Th"
+  Como el issue pertenece a un único repo, las horas del repo asignado serán > 0 y las de los otros repos 0h.
+- Incluye SIEMPRE en el cálculo de horas:
+  * Script SQL en db_changes (si hay columnas nuevas, con fecha de hoy y formato AAAAMMDD_0NN, ej.: ${todayFormatted}_001.sql).
+  * Pruebas automatizadas (xUnit/Jest/Playwright).
+  * Actualización de docs/REGLAS_DE_NEGOCIO.md.
+  * Capturas para el PR y tiempo de revisión de Juan.
+- Si afecta a la app móvil: considera modo sin conexión (SQLite + cola de sincronización) y soporte para pantallas de mínimo 360x640.
+- Calcula los totales exactos sumando issue por issue ("backend", "panel", "app", y total general). Sin aproximaciones ("~").
+
+4. FLUJO DE PR Y DEPENDENCIAS:
+- En cada issue incluye:
+  * "prWorkflow": "Rama corta desde dev, PR a dev, skill /revisar-entrega, captura de la prueba en pantalla y revisión de Juan."
+  * "dependencies": Dependencias entre PRs: qué debe entrar antes en dev (o ["Ninguna"]). Si la app consume un endpoint nuevo, depende del PR de backend.
+  * "Frontera": La app móvil no modifica endpoints compartidos del panel; si hace falta, se copia a /api/mobile/...
+
+5. ANTI-INVENCIÓN:
+- Archivos sugeridos: Escríbelos como hipótesis: "Archivos sugeridos (verificar en el repo)" y no los presentes como existentes.
+- Criterios de aceptación: Si deduces un criterio que no se dijo en la reunión, márcalo con "[Supuesto]".
+- Si necesitas un nombre de campo, tabla o ruta que no se mencionó, márcalo como "PROPUESTO (por confirmar)".
+- No uses tecnologías fuera del stack del contexto.
+
+6. PROMPT PARA EL AGENTE (agentPrompt):
+Un prompt Markdown completo y exhaustivo listo para ser entregado directamente a Cursor, Antigravity o Claude Code:
+- Rol del agente ("Actúa como un desarrollador senior de...")
+- Objetivo y Contexto de la tarea
+- Pasos guiados de implementación
+- Archivos sugeridos (verificar en el repo)
+- Flujo de PR (rama desde dev, /revisar-entrega, revisión de Juan)
+- Criterios de aceptación (con checkboxes '- [ ]' y marcas '[Supuesto]')
+- Comandos de prueba y verificación.
+
+### FORMATO DE SALIDA (JSON ESTRICTO):
+{
   "issues": [
     {
-      "id": "ISSUE-1",
-      "title": "...",
+      "id": "BACKEND-1",
+      "repo": "backend",
+      "title": "[Backend] Título técnico imperativo",
       "type": "feature",
       "priority": "high",
-      "component": "...",
-      "description": "...",
-      "expectedFiles": ["..."],
+      "component": "API / Logic",
+      "description": "Descripción clara sin inventar campos...",
+      "estimation": {
+        "backendHours": 4,
+        "panelHours": 0,
+        "appHours": 0,
+        "totalHours": 4,
+        "text": "Backend: 4h | Panel: 0h | App: 0h | Total: 4h"
+      },
+      "openQuestions": ["Pregunta abierta..."],
+      "dependencies": ["Ninguna"],
+      "prWorkflow": "Rama corta desde dev, PR a dev, skill /revisar-entrega, captura de la prueba en pantalla y revisión de Juan.",
+      "expectedFiles": ["backend/..."],
       "acceptanceCriteria": [
-        "El endpoint responde 200 cuando el payload es válido",
-        "Retorna 400 con mensaje explicativo si falta el campo X"
+        "Criterio explícito",
+        "[Supuesto] Criterio deducido..."
       ],
-      "agentPrompt": "### Rol y Objetivo\\nActúa como...\\n\\n### Contexto\\n...\\n\\n### Tarea...\\n\\n### Criterios de Aceptación\\n- [ ] ...\\n\\n### Verificación\\n..."
+      "agentPrompt": "### Rol y Objetivo\\nActúa como...\\n\\n### Contexto\\n...\\n\\n### Tarea...\\n\\n### Flujo de PR\\n- Rama corta desde dev...\\n\\n### Criterios de Aceptación\\n- [ ] ...\\n\\n### Verificación\\n..."
     }
-  ]
+  ],
+  "repoHoursTotals": {
+    "backend": 4,
+    "panel": 0,
+    "app": 0,
+    "total": 4
+  }
+}`;
+  }
+
+  private buildSingleStepPrompt(projectContext?: string): string {
+    const todayFormatted = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    const contextSection = projectContext
+      ? `\n### CONTEXTO DEL PROYECTO PROPORCIONADO POR EL EQUIPO:\n${projectContext}\n`
+      : `\n### CONTEXTO GENERAL DEL PROYECTO:\nInfiere la tecnología y arquitectura a partir del contexto provisto.\n`;
+
+    return `Eres un Principal Software Architect y Technical Lead de élite especializado en convertir reuniones técnicas en documentación accionable e issues de software listas para ser ejecutadas por Agentes de Inteligencia Artificial (ej. Cursor, Antigravity, Claude Code).
+${contextSection}
+### REGLAS OBLIGATORIAS (LITERALES Y VERIFICABLES):
+
+1. FIDELIDAD A LA TRANSCRIPCIÓN (ANTI-INVENCIÓN):
+- Solo afirma como hecho lo que se dijo explícitamente en la transcripción.
+- NO inventes nombres de campos, tablas, rutas de endpoints, nombres de clientes, librerías, estados, transiciones ni reglas de validación. Si los necesitas y no están, escríbelos como "PROPUESTO (por confirmar)".
+- Los archivos sugeridos son hipótesis: escribe "Archivos sugeridos (verificar en el repo)".
+- Criterios deducidos márcalos con "[Supuesto]".
+- No uses tecnologías fuera del stack del contexto.
+
+2. RUIDO DE TRANSCRIPCIÓN Y HABLANTES:
+- Si un término suena raro o no encaja (ej.: "aislamientos", "pitas ambicientes"): NO lo interpretes, crea PREGUNTA ABIERTA citando fragmento y timestamp.
+- No atribuyas afirmaciones a una persona concreta salvo que el nombre se diga en esa misma frase.
+- Si una cifra o dato es ambiguo, lista las interpretaciones posibles.
+
+3. PREGUNTAS ABIERTAS OBLIGATORIAS:
+- Cada issue debe tener "openQuestions" ("Ninguna" solo si no hay).
+- Obligatorio marcar si hay ambigüedad, posible contradicción con docs/REGLAS_DE_NEGOCIO.md o falta de decisión de negocio. Indica: qué falta, a quién preguntar y qué hace el agente mientras tanto.
+
+4. DETECTAR LO YA HECHO O EN CURSO:
+- CERRADO / YA HECHO: NO crees issue, regístralo en "alreadyResolved".
+- EN CURSO: Alguien ya lo trabaja (ej: "Cristian está ajustando..."). Registra en "inProgress" con responsable; crea issue solo para partes faltantes o tareas de "validar/integrar".
+- NUEVO: crea el issue.
+- PARA BACKLOG: no bloqueante o mejoras futuras; registra en "backlog" sin prompt.
+
+5. ESTRUCTURA POR REPO:
+- Crea UN issue por repositorio afectado ("backend" / "panel" / "app"), nunca issues que mezclen repos.
+- Si toca varios repos, crea un issue por repo y enlázalos con "Depende de ISSUE-N".
+- Si el panel o app necesitan endpoint no existente, crea el issue de backend (/api/mobile/... si es para app).
+
+6. ESTIMACIÓN Y VERIFICACIÓN ARITMÉTICA:
+- Estimación en horas por repo: "Backend: Xh | Panel: Yh | App: Zh | Total: Th".
+- Incluye: script SQL en db_changes (si hay columnas nuevas, con fecha de hoy ${todayFormatted} y formato AAAAMMDD_0NN, ej. ${todayFormatted}_001.sql), pruebas (xUnit/Jest/Playwright), actualización de docs/REGLAS_DE_NEGOCIO.md, capturas y revisión de Juan.
+- Si afecta app: offline (SQLite + sync) y pantallas min 360x640.
+- Calcula totales por repo y total general sumando issue por issue.
+
+7. FLUJO DE PR Y DEPENDENCIAS:
+- Flujo: rama corta desde dev, PR a dev, skill /revisar-entrega, captura de prueba en pantalla y revisión de Juan.
+- Dependencias: qué entra antes en dev.
+- Frontera: la app móvil no modifica endpoints compartidos del panel; si hace falta, se copia a /api/mobile/...
+
+8. FORMATO DE SALIDA (JSON ESTRICTO):
+{
+  "summary": "Resumen ejecutivo fiel a la transcripción...",
+  "alreadyResolved": ["..."],
+  "inProgress": ["..."],
+  "keyDecisions": ["..."],
+  "topicsDiscussed": ["..."],
+  "globalOpenQuestions": ["..."],
+  "issues": [
+    {
+      "id": "BACKEND-1",
+      "repo": "backend",
+      "title": "[Backend] Título...",
+      "type": "feature",
+      "priority": "high",
+      "component": "API",
+      "description": "...",
+      "estimation": {
+        "backendHours": 4,
+        "panelHours": 0,
+        "appHours": 0,
+        "totalHours": 4,
+        "text": "Backend: 4h | Panel: 0h | App: 0h | Total: 4h"
+      },
+      "openQuestions": ["..."],
+      "dependencies": ["Ninguna"],
+      "prWorkflow": "Rama corta desde dev, PR a dev, skill /revisar-entrega, captura de la prueba en pantalla y revisión de Juan.",
+      "expectedFiles": ["..."],
+      "acceptanceCriteria": ["...", "[Supuesto] ..."],
+      "agentPrompt": "..."
+    }
+  ],
+  "backlog": ["..."],
+  "repoHoursTotals": {
+    "backend": 4,
+    "panel": 0,
+    "app": 0,
+    "total": 4
+  }
 }`;
   }
 
@@ -737,7 +1009,11 @@ Debes responder ÚNICAMENTE con un objeto JSON válido con la siguiente estructu
 
     const validated = MeetingAnalysisJsonSchema.parse(parsed);
 
-    // Asegurar IDs únicos si vinieron repetidos o vacíos
+    let sumBackend = 0;
+    let sumPanel = 0;
+    let sumApp = 0;
+
+    // Asegurar IDs únicos si vinieron repetidos o vacíos y sumar horas por repo
     const seenIds = new Set<string>();
     const sanitizedIssues: DevIssueDto[] = validated.issues.map((issue, index) => {
       let id = issue.id || `ISSUE-${index + 1}`;
@@ -746,24 +1022,60 @@ Debes responder ÚNICAMENTE con un objeto JSON válido con la siguiente estructu
       }
       seenIds.add(id);
 
+      const bHours = Number(issue.estimation?.backendHours) || 0;
+      const pHours = Number(issue.estimation?.panelHours) || 0;
+      const aHours = Number(issue.estimation?.appHours) || 0;
+      const totHours = bHours + pHours + aHours;
+      sumBackend += bHours;
+      sumPanel += pHours;
+      sumApp += aHours;
+
+      const estimationText =
+        issue.estimation?.text || `Backend: ${bHours}h | Panel: ${pHours}h | App: ${aHours}h | Total: ${totHours}h`;
+
       return {
         id,
+        repo: issue.repo,
         title: issue.title,
         type: issue.type,
         priority: issue.priority,
         component: issue.component,
         description: issue.description,
+        estimation: {
+          backendHours: bHours,
+          panelHours: pHours,
+          appHours: aHours,
+          totalHours: totHours,
+          text: estimationText
+        },
+        openQuestions: issue.openQuestions && issue.openQuestions.length > 0 ? issue.openQuestions : ["Ninguna"],
+        dependencies: issue.dependencies && issue.dependencies.length > 0 ? issue.dependencies : ["Ninguna"],
+        prWorkflow:
+          issue.prWorkflow ||
+          "Rama corta desde dev, PR a dev, skill /revisar-entrega, captura de la prueba en pantalla y revisión de Juan.",
         expectedFiles: issue.expectedFiles || [],
         acceptanceCriteria: issue.acceptanceCriteria || [],
         agentPrompt: issue.agentPrompt
       };
     });
 
+    const verifiedTotals = {
+      backend: sumBackend,
+      panel: sumPanel,
+      app: sumApp,
+      total: sumBackend + sumPanel + sumApp
+    };
+
     return {
       summary: validated.summary,
+      alreadyResolved: validated.alreadyResolved,
+      inProgress: validated.inProgress,
       keyDecisions: validated.keyDecisions,
       topicsDiscussed: validated.topicsDiscussed,
-      issues: sanitizedIssues
+      globalOpenQuestions: validated.globalOpenQuestions,
+      issues: sanitizedIssues,
+      backlog: validated.backlog,
+      repoHoursTotals: verifiedTotals
     };
   }
 }

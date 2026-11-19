@@ -71,7 +71,37 @@ El sistema soporta tanto proveedores integrados por defecto como proveedores din
 
 ---
 
-## 5. Resumen de Comandos de Verificación
+## 5. Módulo de IA para Issues Técnicas y Pipeline en 2 Pasos
+
+Para garantizar máxima precisión y erradicar cualquier invención o alucinación de los modelos, el análisis de reuniones técnicas se rige por un **pipeline en dos pasos** y **8 reglas de fidelidad obligatorias**:
+
+### 5.1 Pipeline en 2 Pasos
+1. **Paso 1 (Extracción, Clasificación y Detección de Ruido):** El LLM procesa la transcripción cruda y extrae:
+   - Resumen ejecutivo estricto.
+   - Puntos `alreadyResolved` (CERRADO / YA HECHO: no generan issue).
+   - Puntos `inProgress` (EN CURSO: con responsable asignado; no se duplican, solo tareas de integración).
+   - Requerimientos `newItems` (NUEVO: pasan al paso 2).
+   - Puntos `backlog` (PARA BACKLOG: no bloqueantes, sin prompt de desarrollo).
+   - Decisiones clave y `globalOpenQuestions` (términos dudosos o ruido de audio con citas textuales y timestamps).
+2. **Paso 2 (Generación de Issues por Repositorio):** Genera las tareas técnicas **únicamente a partir de la lista estructurada del Paso 1**, evitando inventar módulos fuera de lo conversado.
+3. **Fallback Resiliente:** Si el pipeline de dos pasos experimenta fallas de conectividad o formato, conmuta de forma segura a un análisis de paso único estructurado.
+
+### 5.2 Las 8 Reglas Obligatorias de Fidelidad y Salida
+1. **Fidelidad Estricta (Anti-invención):** Solo afirmar lo dicho explícitamente en la reunión. Si se requiere un campo o endpoint no mencionado, rotularlo como `"PROPUESTO (por confirmar)"`. Los archivos son hipótesis: rotular `"Archivos sugeridos (verificar en el repo)"`. Criterios de aceptación deducidos deben llevar el prefijo `[Supuesto]`.
+2. **Ruido de Transcripción y Hablantes:** No intentar adivinar palabras mal captadas por el audio; formular preguntas abiertas citando timestamp y fragmento.
+3. **Preguntas Abiertas Obligatorias:** Cada issue contiene `"openQuestions"` (`"Ninguna"` solo si no hay ambigüedades).
+4. **Clasificación Previa:** No duplicar lo que ya esté resuelto o en curso por miembros del equipo.
+5. **Aislamiento por Repositorio:** Exactamente un issue por repositorio (`backend` / `panel` / `app`). Si una funcionalidad abarca múltiples repos, se divide en issues separados vinculados mediante `"Depende de ISSUE-N"`.
+6. **Estimación y Verificación Aritmética:**
+   - Desglose por issue: `"Backend: Xh | Panel: Yh | App: Zh | Total: Th"`.
+   - Considerar scripts en `db_changes` con formato `AAAAMMDD_0NN.sql`, pruebas automatizadas y soporte offline/pantalla móvil en apps.
+   - Verificación de sumas: El backend recalcula y valida programáticamente las sumas de horas por repositorio (`repoHoursTotals`), impidiendo discrepancias aritméticas o símbolos aproximados (`~`).
+7. **Flujo de PR y Dependencias:** Cada issue define rama corta desde dev, revisión, captura de pantalla y dependencias entre ramas.
+8. **Orden Estricto del Documento:** Resumen ejecutivo → Ya resuelto → En curso → Decisiones clave → Preguntas abiertas globales → Issues (agrupados por repo) → Backlog → Totales de horas por repo.
+
+---
+
+## 6. Resumen de Comandos de Verificación
 
 ```bash
 # Ejecutar todas las pruebas unitarias y de integración

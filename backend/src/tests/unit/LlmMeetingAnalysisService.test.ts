@@ -196,4 +196,167 @@ describe("LlmMeetingAnalysisService - Robustez de Proveedores y Escaneo", () => 
       }
     });
   });
+
+  describe("Reglas de Generación de Issues (8 Bloques) y Verificación Aritmética", () => {
+    it("parseAndValidateResponse recalcula matemáticamente los totales de horas por repositorio garantizando exactitud aritmética", () => {
+      const mockRawJson = JSON.stringify({
+        summary: "Resumen de la reunión de sincronización",
+        alreadyResolved: ["Corrección del botón de login ya desplegada a staging."],
+        inProgress: ["Cristian está ajustando el endpoint de usuarios."],
+        keyDecisions: ["Usar .NET 8 y Clean Architecture en backend."],
+        topicsDiscussed: ["Autenticación", "Modo offline en app móvil"],
+        globalOpenQuestions: [
+          "¿A qué se refiere 'pitas ambicientes' en el min 04:12? (Preguntar a Carlos)"
+        ],
+        issues: [
+          {
+            id: "BACKEND-1",
+            repo: "backend",
+            title: "[Backend] Endpoint /api/v1/sync",
+            type: "feature",
+            priority: "high",
+            component: "API",
+            description: "Crear endpoint de sincronización.",
+            estimation: {
+              backendHours: 5,
+              panelHours: 0,
+              appHours: 0,
+              totalHours: 5,
+              text: "Backend: 5h | Panel: 0h | App: 0h | Total: 5h"
+            },
+            openQuestions: ["Ninguna"],
+            dependencies: ["Ninguna"],
+            prWorkflow: "Rama corta desde dev, PR a dev, skill /revisar-entrega, captura de la prueba en pantalla y revisión de Juan.",
+            expectedFiles: ["Archivos sugeridos (verificar en el repo): backend/Controllers/SyncController.cs"],
+            acceptanceCriteria: [
+              "Responde HTTP 200 con payload válido",
+              "[Supuesto] Soporta paginación por cursor"
+            ],
+            agentPrompt: "Rol y objetivo..."
+          },
+          {
+            id: "APP-1",
+            repo: "app",
+            title: "[App Móvil] Cola de sincronización SQLite",
+            type: "feature",
+            priority: "high",
+            component: "Sync Engine",
+            description: "Soporte modo offline y sincronización diferida.",
+            estimation: {
+              backendHours: 0,
+              panelHours: 0,
+              appHours: 8,
+              totalHours: 8,
+              text: "Backend: 0h | Panel: 0h | App: 8h | Total: 8h"
+            },
+            openQuestions: ["¿Qué hacer si hay conflicto de versiones? (Preguntar a Juan)"],
+            dependencies: ["Depende de BACKEND-1"],
+            prWorkflow: "Rama corta desde dev, PR a dev, skill /revisar-entrega, captura de la prueba en pantalla y revisión de Juan.",
+            expectedFiles: ["Archivos sugeridos (verificar en el repo): app/services/syncQueue.ts"],
+            acceptanceCriteria: [
+              "Persiste en SQLite local si no hay red",
+              "Soporta pantallas mínimas de 360x640",
+              "[Supuesto] Reintentos con backoff exponencial"
+            ],
+            agentPrompt: "Rol y objetivo..."
+          }
+        ],
+        backlog: ["Mejora de rendimiento en animaciones de la app para fase 2."],
+        // Intencionalmente pasamos valores erróneos de la IA para probar la verificación aritmética automática
+        repoHoursTotals: {
+          backend: 999,
+          panel: 999,
+          app: 999,
+          total: 9999
+        }
+      });
+
+      const result = (service as any).parseAndValidateResponse(mockRawJson);
+
+      // Verificación de campos obligatorios clasificados
+      expect(result.alreadyResolved).toHaveLength(1);
+      expect(result.alreadyResolved[0]).toContain("ya desplegada");
+      expect(result.inProgress).toHaveLength(1);
+      expect(result.inProgress[0]).toContain("Cristian está ajustando");
+      expect(result.globalOpenQuestions).toHaveLength(1);
+      expect(result.globalOpenQuestions[0]).toContain("pitas ambicientes");
+      expect(result.backlog).toHaveLength(1);
+
+      // Verificación de repositorio por issue (1 repo por issue)
+      expect(result.issues[0].repo).toBe("backend");
+      expect(result.issues[1].repo).toBe("app");
+      expect(result.issues[1].dependencies).toContain("Depende de BACKEND-1");
+
+      // Verificación aritmética estricta recalculada
+      expect(result.repoHoursTotals.backend).toBe(5);
+      expect(result.repoHoursTotals.panel).toBe(0);
+      expect(result.repoHoursTotals.app).toBe(8);
+      expect(result.repoHoursTotals.total).toBe(13); // 5 + 0 + 8
+    });
+
+    it("ejecuta el pipeline de 2 pasos encadenando Paso 1 (clasificación) y Paso 2 (issues)", async () => {
+      const mockStep1 = JSON.stringify({
+        summary: "Reunión de coordinación de arquitectura.",
+        alreadyResolved: ["Fix del bug de tokens"],
+        inProgress: ["Andrés con el diseño en Figma"],
+        keyDecisions: ["Usar SQLite en desktop"],
+        topicsDiscussed: ["Desktop", "Migraciones"],
+        globalOpenQuestions: ["¿Cuándo entra la v2?"],
+        newItems: [
+          {
+            id: "ITEM-1",
+            title: "Nuevo módulo de exportación",
+            repo: "backend",
+            description: "Exportar a PDF"
+          }
+        ],
+        backlog: ["Exportación a Excel en el futuro"]
+      });
+
+      const mockStep2 = JSON.stringify({
+        issues: [
+          {
+            id: "BACKEND-1",
+            repo: "backend",
+            title: "[Backend] Exportación a PDF",
+            type: "feature",
+            priority: "medium",
+            component: "Export",
+            description: "Servicio de exportación",
+            estimation: {
+              backendHours: 3,
+              panelHours: 0,
+              appHours: 0,
+              totalHours: 3,
+              text: "Backend: 3h | Panel: 0h | App: 0h | Total: 3h"
+            },
+            openQuestions: ["Ninguna"],
+            dependencies: ["Ninguna"],
+            prWorkflow: "Rama corta desde dev, PR a dev",
+            expectedFiles: ["Archivos sugeridos (verificar en el repo): backend/export.ts"],
+            acceptanceCriteria: ["Genera PDF"],
+            agentPrompt: "Prompt..."
+          }
+        ],
+        repoHoursTotals: { backend: 3, panel: 0, app: 0, total: 3 }
+      });
+
+      const executeSpy = vi
+        .spyOn(service as any, "executeLlmCall")
+        .mockResolvedValueOnce(mockStep1) // Paso 1
+        .mockResolvedValueOnce(mockStep2); // Paso 2
+
+      const result = await service.generateAnalysis("Transcripción de prueba...", "Contexto de prueba...", {
+        provider: "google-account"
+      });
+
+      expect(executeSpy).toHaveBeenCalledTimes(2);
+      expect(result.alreadyResolved).toEqual(["Fix del bug de tokens"]);
+      expect(result.inProgress).toEqual(["Andrés con el diseño en Figma"]);
+      expect(result.issues).toHaveLength(1);
+      expect(result.issues[0]?.id).toBe("BACKEND-1");
+      expect(result.repoHoursTotals?.backend).toBe(3);
+      expect(result.repoHoursTotals?.total).toBe(3);
+    });
+  });
 });
