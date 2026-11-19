@@ -9,9 +9,16 @@ import {
   Alert,
   Box,
   Typography,
-  CircularProgress
+  CircularProgress,
+  InputAdornment,
+  IconButton
 } from "@mui/material";
-import { Extension as ExtensionIcon, PlayArrow as TestIcon } from "@mui/icons-material";
+import {
+  Extension as ExtensionIcon,
+  PlayArrow as TestIcon,
+  Visibility,
+  VisibilityOff
+} from "@mui/icons-material";
 import { CustomAiProviderDto } from "@audio-to-text/shared";
 import { api } from "../../lib/api.js";
 
@@ -29,6 +36,7 @@ export const CustomProviderModal: React.FC<CustomProviderModalProps> = ({
   const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [defaultModel, setDefaultModel] = useState("");
 
   const [isTesting, setIsTesting] = useState(false);
@@ -180,11 +188,24 @@ export const CustomProviderModal: React.FC<CustomProviderModalProps> = ({
 
           <TextField
             fullWidth
-            type="password"
-            label="Clave de API / Bearer Token (opcional)"
-            placeholder="sk-... (opcional si es local como Ollama)"
+            type={showPassword ? "text" : "password"}
+            label="Clave de API / Bearer Token"
+            placeholder="sk-... (requerido para DeepSeek/OpenAI; opcional si es Ollama local)"
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    aria-label="mostrar u ocultar clave de API"
+                    onClick={() => setShowPassword(!showPassword)}
+                    edge="end"
+                  >
+                    {showPassword ? <VisibilityOff /> : <Visibility />}
+                  </IconButton>
+                </InputAdornment>
+              )
+            }}
             sx={{ mb: 2 }}
           />
 

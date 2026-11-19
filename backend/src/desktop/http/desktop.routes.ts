@@ -318,10 +318,18 @@ export function createDesktopRoutes(deps: DesktopRoutesDeps): Router {
         }
 
         if (testRes.status === 401 || testRes.status === 403) {
+          let detail = "";
+          try {
+            const errJson = (await testRes.json()) as any;
+            detail = errJson?.error?.message || errJson?.message || "";
+          } catch {
+            detail = await testRes.text().catch(() => "");
+          }
+          const suffix = detail ? `: "${detail}"` : ". Verifica que tu clave de API sea válida y esté activa.";
           res.json({
             success: true,
             ok: false,
-            message: `El proveedor rechazó la autenticación (HTTP ${testRes.status}). Verifica tu clave de API / Bearer token.`
+            message: `El proveedor rechazó la autenticación (HTTP ${testRes.status})${suffix}`
           });
           return;
         }
