@@ -76,9 +76,13 @@ describe("LlmMeetingAnalysisService - Ejecución de Pipeline y Prompts", () => {
       .mockResolvedValueOnce(mockStep1)
       .mockResolvedValueOnce(mockStep2);
 
-    const result = await service.generateAnalysis("Transcripción de prueba...", "Contexto de prueba...", {
-      provider: "google-account"
-    });
+    const result = await service.generateAnalysis(
+      "Transcripción de prueba en el minuto [04:20] acordamos exportar...",
+      "Contexto de prueba...",
+      {
+        provider: "google-account"
+      }
+    );
 
     expect(executeSpy).toHaveBeenCalledTimes(2);
     expect(result.alreadyResolved).toEqual(["Fix del bug de tokens [01:00]"]);
@@ -164,7 +168,7 @@ Fin de respuesta.`;
     // Capa 1: Reglas universales
     expect(step1Prompt).toContain("[CAPA 1 — REGLAS UNIVERSALES DE GENERACIÓN DE ISSUES (OBLIGATORIAS)]");
     expect(step1Prompt).toContain("== 1. FIDELIDAD A LA TRANSCRIPCIÓN ==");
-    expect(step1Prompt).toContain("== 2. RUIDO DE TRANSCRIPCIÓN, NOMBRES Y HABLANTES ==");
+    expect(step1Prompt).toContain("== 2. RUIDO DE TRANSCRIPCIÓN, NOMBRES, VALORES Y HABLANTES ==");
     expect(step1Prompt).toContain("== 3. PREGUNTAS ABIERTAS ==");
     expect(step1Prompt).toContain("== 4. NO CONSTRUYAS SOBRE LO AMBIGUO ==");
     expect(step1Prompt).toContain("== 5. NO INVENTES ESTRUCTURA NI TECNOLOGÍA ==");
@@ -179,6 +183,9 @@ Fin de respuesta.`;
     expect(step1Prompt).toContain("== 14. FORMATO DE SALIDA ==");
     expect(step1Prompt).toContain("== 15. NO FILTRES LA MECÁNICA INTERNA ==");
     expect(step1Prompt).toContain("== 16. FIDELIDAD EN BUGS ==");
+    expect(step1Prompt).toContain("== 17. CAMBIOS DE NOMBRE ==");
+    expect(step1Prompt).toContain("== 18. FRASES SUELTAS DE ESTADO ==");
+    expect(step1Prompt).toContain("== 19. CRITERIOS DE ACEPTACIÓN ==");
 
     // Capa 2: Contexto y tabla de referencia
     expect(step1Prompt).toContain("[CAPA 2 — CONTEXTO DEL PROYECTO]");
@@ -188,10 +195,10 @@ Fin de respuesta.`;
     expect(step1Prompt).toContain("BITACORA.md");
 
     // Capa 3: Glosario
-    expect(step1Prompt).toContain("[CAPA 3 — GLOSARIO DEL DOMINIO Y CORRECCIÓN ASR]");
+    expect(step1Prompt).toContain("[CAPA 3 — GLOSARIO]");
     expect(step1Prompt).toContain('"Lexus" → "Alexis"');
-    expect(step1Prompt).toContain('"RAME" → "derrame"');
-    expect(step1Prompt).toContain('"valida de amante" → "Validar Diamante"');
+    expect(step1Prompt).toContain('"RAME"');
+    expect(step1Prompt).toContain('"valida de amante"');
     expect(step1Prompt).toContain('"al EC" → "Excel"');
 
     // Paso 2 y Single Step

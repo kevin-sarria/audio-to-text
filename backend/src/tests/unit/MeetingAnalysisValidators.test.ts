@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
+import path from "node:path";
 import { MeetingAnalysisValidators } from "../../infrastructure/analysis/MeetingAnalysisValidators.js";
 import { GeneratedMeetingData } from "../../domain/services/IMeetingAnalysisService.js";
 import { DevIssueDto } from "@audio-to-text/shared";
+import { EvaluationRunner } from "../../infrastructure/analysis/evaluation/EvaluationRunner.js";
 
 describe("MeetingAnalysisValidators - Validadores Deterministas en Código", () => {
   const baseValidIssue: DevIssueDto = {
@@ -23,7 +25,7 @@ describe("MeetingAnalysisValidators - Validadores Deterministas en Código", () 
     dependencies: ["Ninguna"],
     prWorkflow: "Rama corta desde dev, PR a dev, skill /revisar-entrega",
     expectedFiles: ["Controllers/ (verificar en el repo)", "AI_CONTEXT.md", "docs/REGLAS_DE_NEGOCIO.md"],
-    acceptanceCriteria: ["Responde 200 OK [04:15]"],
+    acceptanceCriteria: ["Responde 200 OK [04:15]", "[Supuesto] Criterio deducido"],
     agentPrompt: `### Rol y Objetivo
 Actúa como Principal Backend Developer.
 
@@ -50,7 +52,9 @@ xUnit.`
     inProgress: ["Cristian [02:00]"],
     keyDecisions: ["Usar .NET 8"],
     topicsDiscussed: ["Backend"],
-    globalOpenQuestions: ["[BLOQUEANTE] Ambigüedad de corte [03:00]"],
+    globalOpenQuestions: [
+      "[BLOQUEANTE] Ambigüedad de corte [03:00] bloquea BACKEND-1. Si me equivoco: se rehace la lógica de corte"
+    ],
     issues: [baseValidIssue],
     backlog: ["Mejora de logs"],
     repoHoursTotals: { backend: 4, panel: 0, app: 0, total: 4 }
@@ -119,7 +123,7 @@ xUnit.`
   it("detecta descuadres aritméticos entre los issues y repoHoursTotals", () => {
     const dataWithBadSum: GeneratedMeetingData = {
       ...baseValidData,
-      repoHoursTotals: { backend: 99, panel: 0, app: 0, total: 99 } // real es 4
+      repoHoursTotals: { backend: 99, panel: 0, app: 0, total: 99 }
     };
 
     const result = MeetingAnalysisValidators.validate(dataWithBadSum);
@@ -170,76 +174,66 @@ xUnit.`
 
     const result = MeetingAnalysisValidators.validate(dataWithTooManyQuestions);
     expect(result.isValid).toBe(false);
-    expect(result.errors.some((e) => e.includes("9 preguntas globales"))).toBe(true);
+    expect(result.errors.some((e) => e.includes("máximo permitido: 8"))).toBe(true);
   });
 
-  it("detecta dudas de vocabulario formuladas indebidamente como preguntas globales (Regla P)", () => {
+  it("detecta dudas de vocabulario cuestionando términos del glosario (Regla 2 y Glosario)", () => {
     const dataWithVocabDoubt: GeneratedMeetingData = {
       ...baseValidData,
-      globalOpenQuestions: ["Duda de vocabulario: se escuchó 'Lexus' o 'Alexis' [02:10]?"]
+      globalOpenQuestions: ["No se entiende con certeza el término aislamientos [02:10]"]
     };
 
     const result = MeetingAnalysisValidators.validate(dataWithVocabDoubt);
     expect(result.isValid).toBe(false);
-    expect(result.errors.some((e) => e.includes("Regla P") && e.includes("dudas de vocabulario"))).toBe(true);
+    expect(result.errors.some((e) => e.includes("cuestiona el término del glosario"))).toBe(true);
   });
 
-  it("detecta cambios de nombre redundantes o inválidos donde origen y destino son idénticos (Regla Q)", () => {
-    const dataWithRedundantRename: GeneratedMeetingData = {
+  it("detecta horas fijadas ambiguas sin [Interpretación] (Regla 2)", () => {
+    const dataWithFixedTime: GeneratedMeetingData = {
       ...baseValidData,
       issues: [
         {
           ...baseValidIssue,
-          title: "Renombrar campo usuario → usuario",
-          description: "Cambiar nombre actual usuario → usuario"
+          description: "La jornada inicia entre 06:00 y 19:00"
         }
       ]
     };
 
-    const result = MeetingAnalysisValidators.validate(dataWithRedundantRename);
+    const transcript = "A partir de las 7 se inicia la jornada.";
+    const result = MeetingAnalysisValidators.validate(dataWithFixedTime, transcript);
     expect(result.isValid).toBe(false);
-    expect(result.errors.some((e) => e.includes("Regla Q") && e.includes("origen y destino idénticos"))).toBe(true);
+    expect(result.errors.some((e) => e.includes("no aparece literal en la transcripción"))).toBe(true);
   });
 
-  it("emite avisos de calidad para dependencias de terceros (Regla R) y frases sueltas (Regla S)", () => {
-    const dataWithWarnings: GeneratedMeetingData = {
+  it("detecta preguntas BLOQUEANTE que no nombran issue o carecen de 'si me equivoco' (Regla 3)", () => {
+    const dataWithBadBloqueante: GeneratedMeetingData = {
       ...baseValidData,
-      issues: [
-        {
-          ...baseValidIssue,
-          id: "BACKEND-2",
-          title: "[Backend] Bloqueado por configuración externa",
-          description: "Depende de que el cliente cambie la base externa",
-          openQuestions: ["esto está validado"]
-        }
-      ]
+      globalOpenQuestions: ["[BLOQUEANTE] Ambigüedad en la API de Tri sin nombrar issue ni consecuencia"]
     };
 
-    const result = MeetingAnalysisValidators.validate(dataWithWarnings);
-    expect(result.warnings.some((w) => w.includes("Regla R"))).toBe(true);
-    expect(result.warnings.some((w) => w.includes("Regla S"))).toBe(true);
+    const result = MeetingAnalysisValidators.validate(dataWithBadBloqueante);
+    expect(result.isValid).toBe(false);
+    expect(result.errors.some((e) => e.includes("pregunta BLOQUEANTE"))).toBe(true);
   });
 
-  it("autocorrige typos comunes (BITORACA.md -> BITACORA.md) y recalcula la suma aritmética", () => {
-    const dirtyData: GeneratedMeetingData = {
+  it("autocorrige degradando preguntas BLOQUEANTE no conformes a NO BLOQUEANTE", () => {
+    const unanchoredData: GeneratedMeetingData = {
       ...baseValidData,
-      summary: "el Paso 1 indica que todo está listo.",
-      issues: [
-        {
-          ...baseValidIssue,
-          expectedFiles: ["BITORACA.md"],
-          agentPrompt: "el Paso 1 indica leer BITORACA.md"
-        }
-      ],
-      repoHoursTotals: { backend: 999, panel: 999, app: 999, total: 9999 }
+      globalOpenQuestions: ["[BLOQUEANTE] Pregunta sobre API de Tri sin anclaje"]
     };
 
-    const cleaned = MeetingAnalysisValidators.sanitizeAndAutocorrect(dirtyData);
-    expect(cleaned.summary).not.toContain("el Paso 1 indica");
-    expect(cleaned.issues[0]?.expectedFiles).toContain("BITACORA.md");
-    expect(cleaned.issues[0]?.expectedFiles).not.toContain("BITORACA.md");
-    expect(cleaned.issues[0]?.agentPrompt).toContain("BITACORA.md");
-    expect(cleaned.repoHoursTotals?.backend).toBe(4);
-    expect(cleaned.repoHoursTotals?.total).toBe(4);
+    const cleaned = MeetingAnalysisValidators.sanitizeAndAutocorrect(unanchoredData);
+    expect(cleaned.globalOpenQuestions?.[0]).toContain("[NO BLOQUEANTE]");
+    expect(cleaned.globalOpenQuestions?.[0]).not.toContain("[BLOQUEANTE]");
+  });
+
+  it("carga y evalúa el caso de referencia 2026-11-18_08-04-57 con EvaluationRunner", () => {
+    const casesDir = path.resolve(__dirname, "../../infrastructure/analysis/evaluation/cases");
+    const evalCase = EvaluationRunner.loadCase(casesDir, "2026-11-18_08-04-57");
+
+    expect(evalCase.caseId).toBe("2026-11-18_08-04-57");
+    expect(evalCase.transcript.length).toBeGreaterThan(1000);
+    expect(evalCase.expected.expectedIssuesCount).toBe(9);
+    expect(evalCase.expected.expectedRepoBreakdown.app).toBe(0);
   });
 });

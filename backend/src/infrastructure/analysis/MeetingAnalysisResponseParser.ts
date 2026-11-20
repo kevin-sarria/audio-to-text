@@ -3,6 +3,58 @@ import { GeneratedMeetingData } from "../../domain/services/IMeetingAnalysisServ
 import { DevIssueDto } from "@audio-to-text/shared";
 import { MeetingAnalysisValidators } from "./MeetingAnalysisValidators.js";
 
+export const ExtractionPointSchema = z.object({
+  id: z.string().default(() => `P${Math.floor(Math.random() * 900 + 100)}`),
+  cita: z.string().default(""),
+  timestamp: z.string().default("00:00"),
+  clase: z.preprocess((val) => {
+    if (typeof val !== "string") return "nuevo";
+    const v = val.toLowerCase().trim();
+    if (v.includes("cerrad") || v.includes("resuelt")) return "cerrado";
+    if (v.includes("en_curso") || v.includes("curso") || v.includes("proceso")) return "en_curso";
+    if (v.includes("backlog") || v.includes("desestim") || v.includes("futur")) return "backlog";
+    return "nuevo";
+  }, z.enum(["cerrado", "en_curso", "nuevo", "backlog"]).default("nuevo")),
+  accion: z.preprocess((val) => {
+    if (typeof val !== "string") return "codigo";
+    const v = val.toLowerCase().trim();
+    if (v.includes("gestion") || v.includes("extern") || v.includes("tercer") || v.includes("crm") || v.includes("acces")) return "gestion_externa";
+    if (v.includes("decis")) return "decision";
+    if (v.includes("seguim") || v.includes("valid") || v.includes("revis")) return "seguimiento";
+    return "codigo";
+  }, z.enum(["codigo", "gestion_externa", "decision", "seguimiento"]).default("codigo")),
+  repo: z.preprocess((val) => {
+    if (typeof val !== "string") return "ninguno";
+    const v = val.toLowerCase().trim();
+    if (v.includes("back") || v.includes("api") || v.includes("server")) return "backend";
+    if (v.includes("panel") || v.includes("front") || v.includes("web")) return "panel";
+    if (v.includes("app") || v.includes("movil") || v.includes("mobile")) return "app";
+    if (v.includes("vari")) return "varios";
+    return "ninguno";
+  }, z.enum(["backend", "panel", "app", "varios", "ninguno"]).default("ninguno")),
+  quien_lo_lleva: z.string().nullable().default(null),
+  tipo: z.string().default("mejora"),
+  interpretaciones: z.preprocess((val) => (Array.isArray(val) ? val : []), z.array(z.any())).default([]),
+  valores_ambiguos: z.preprocess((val) => (Array.isArray(val) ? val : []), z.array(z.any())).default([]),
+  preguntas: z.preprocess((val) => (Array.isArray(val) ? val : []), z.array(z.any())).default([])
+});
+
+export type ExtractionPointDto = z.infer<typeof ExtractionPointSchema>;
+
+export const ExtractionResultSchema = z.object({
+  summary: z.string().default("Resumen ejecutivo"),
+  puntos: z.array(ExtractionPointSchema).default([]),
+  decisiones: z.preprocess((val) => (Array.isArray(val) ? val : []), z.array(z.any())).default([]),
+  alreadyResolved: z.preprocess((val) => (Array.isArray(val) ? val.map(String) : []), z.array(z.string())).default([]),
+  inProgress: z.preprocess((val) => (Array.isArray(val) ? val.map(String) : []), z.array(z.string())).default([]),
+  keyDecisions: z.preprocess((val) => (Array.isArray(val) ? val.map(String) : []), z.array(z.string())).default([]),
+  globalOpenQuestions: z.preprocess((val) => (Array.isArray(val) ? val.map(String) : []), z.array(z.string())).default([]),
+  topicsDiscussed: z.preprocess((val) => (Array.isArray(val) ? val.map(String) : []), z.array(z.string())).default([]),
+  backlog: z.preprocess((val) => (Array.isArray(val) ? val.map(String) : []), z.array(z.string())).default([])
+});
+
+export type Step1ExtractionDto = z.infer<typeof ExtractionResultSchema>;
+
 export const DevIssueSchema = z.object({
   id: z.string().default(() => `ISSUE-${Math.floor(Math.random() * 900 + 100)}`),
   repo: z.preprocess((val) => {
@@ -38,10 +90,10 @@ export const DevIssueSchema = z.object({
         return { backendHours: 0, panelHours: 0, appHours: 0, totalHours: 0, text: "" };
       }
       const obj = val as Record<string, any>;
-      const b = Number(obj.backendHours) || 0;
-      const p = Number(obj.panelHours) || 0;
-      const a = Number(obj.appHours) || 0;
-      const t = Number(obj.totalHours) || (b + p + a);
+      const b = typeof obj.backendHours === "number" ? obj.backendHours : Number(obj.backendHours) || 0;
+      const p = typeof obj.panelHours === "number" ? obj.panelHours : Number(obj.panelHours) || 0;
+      const a = typeof obj.appHours === "number" ? obj.appHours : Number(obj.appHours) || 0;
+      const t = typeof obj.totalHours === "number" ? obj.totalHours : Number(obj.totalHours) || (b + p + a);
       const text = typeof obj.text === "string" ? obj.text : `Backend: ${b}h | Panel: ${p}h | App: ${a}h | Total: ${t}h`;
       return { backendHours: b, panelHours: p, appHours: a, totalHours: t, text };
     }, z.object({
@@ -122,6 +174,19 @@ export class MeetingAnalysisResponseParser {
     return clean;
   }
 
+  public static parseStep1Extraction(raw: string): Step1ExtractionDto {
+    const clean = this.cleanJsonString(raw);
+    let parsed: any;
+    try {
+      parsed = JSON.parse(clean);
+    } catch (parseError: any) {
+      throw new Error(
+        `Error al parsear JSON de extracción de Etapa 1: ${parseError.message}`
+      );
+    }
+    return ExtractionResultSchema.parse(parsed);
+  }
+
   public static recalculateHoursTotals(issues: DevIssueDto[]): {
     backend: number;
     panel: number;
@@ -159,7 +224,11 @@ export class MeetingAnalysisResponseParser {
     };
   }
 
-  public static parseAndValidate(raw: string, transcript?: string): GeneratedMeetingData {
+  public static parseAndValidate(
+    raw: string,
+    transcript?: string,
+    extractionPoints?: ExtractionPointDto[]
+  ): GeneratedMeetingData {
     const clean = this.cleanJsonString(raw);
     let parsed: any;
     try {
@@ -201,14 +270,14 @@ export class MeetingAnalysisResponseParser {
       repoHoursTotals: verifiedTotals
     };
 
-    // Aplicar saneamiento y autocorrección determinista (typos de docs, etapas internas, horas)
+    // Saneamiento y autocorrección determinista
     const sanitizedResult = MeetingAnalysisValidators.sanitizeAndAutocorrect(initialResult);
 
-    // Ejecutar validaciones deterministas
-    const validation = MeetingAnalysisValidators.validate(sanitizedResult, transcript);
+    // Validaciones deterministas
+    const validation = MeetingAnalysisValidators.validate(sanitizedResult, transcript, extractionPoints);
     if (!validation.isValid) {
       console.warn(
-        `[MeetingAnalysisResponseParser] Validaciones deterministas con avisos/errores: ${validation.errors.join("; ")}`
+        `[MeetingAnalysisResponseParser] Validaciones deterministas con errores: ${validation.errors.join("; ")}`
       );
     }
     if (validation.warnings.length > 0) {

@@ -9,7 +9,12 @@ import { DevIssueDto, MeetingAnalysisProvider } from "@audio-to-text/shared";
 import { ISecretVault } from "../../desktop/infrastructure/settings/ISecretVault.js";
 import { SettingsStore } from "../../desktop/infrastructure/settings/SettingsStore.js";
 import { MeetingAnalysisPrompts } from "./MeetingAnalysisPrompts.js";
-import { MeetingAnalysisResponseParser } from "./MeetingAnalysisResponseParser.js";
+import {
+  MeetingAnalysisResponseParser,
+  ExtractionPointDto,
+  Step1ExtractionDto
+} from "./MeetingAnalysisResponseParser.js";
+import { MeetingAnalysisValidators } from "./MeetingAnalysisValidators.js";
 import { RepoContextScanner } from "./RepoContextScanner.js";
 import { LlmProviderClients } from "./LlmProviderClients.js";
 
@@ -29,54 +34,85 @@ export class LlmMeetingAnalysisService implements IMeetingAnalysisService {
     const { provider, apiKey, model, baseUrl } = await this.resolveProviderAndKey(options);
 
     const step1SystemPrompt = this.buildStep1Prompt(projectContext);
-    const step1UserPrompt = `A continuación se presenta la transcripción completa de la reunión de desarrollo:\n\n${transcript}\n\nPor favor, extrae el resumen ejecutivo, identifica las decisiones clave, formula las preguntas abiertas globales (máximo 8, clasificadas en BLOQUEANTE o NO BLOQUEANTE, sin incluir ruido evidente) y clasifica rigurosamente cada punto tratado en la estructura de puntos JSON (clase: cerrado, en_curso, nuevo, backlog) con su marca [mm:ss], siguiendo estrictamente las REGLAS DE GENERACIÓN DE ISSUES.`;
+    const step1UserPrompt = `A continuación se presenta la transcripción completa de la reunión de desarrollo:\n\n${transcript}\n\nPor favor, extrae el resumen ejecutivo, identifica las decisiones clave, formula las preguntas abiertas globales (máximo 8, clasificadas en BLOQUEANTE o NO BLOQUEANTE, sin incluir ruido evidente) y clasifica rigurosamente cada punto tratado en la estructura de puntos JSON con su clase ('cerrado' | 'en_curso' | 'nuevo' | 'backlog') y su acción ('codigo' | 'gestion_externa' | 'decision' | 'seguimiento') con su marca [mm:ss], siguiendo estrictamente las REGLAS DE GENERACIÓN DE ISSUES.`;
 
     try {
-      // ETAPA 1: Extracción, clasificación y detección de ambigüedades
+      // ETAPA 1: Extracción estructurada y clasificación rigurosa
       const rawStep1 = await this.executeLlmCall(step1SystemPrompt, step1UserPrompt, provider, apiKey, model, baseUrl);
-      const step1Clean = this.cleanJsonString(rawStep1);
-      const step1Data = JSON.parse(step1Clean);
+      const step1Data = MeetingAnalysisResponseParser.parseStep1Extraction(rawStep1);
 
-      // ETAPA 2: Redacción estructurada de issues únicamente a partir de la extracción previa
+      // Filtrar únicamente los puntos que son nuevos y requieren código
+      const validCodePoints = (step1Data.puntos || []).filter(
+        (p) => p.clase === "nuevo" && p.accion === "codigo"
+      );
+
+      // ETAPA 2: Redacción estructurada de issues ÚNICAMENTE a partir de los puntos nuevo/codigo
       const step2SystemPrompt = this.buildStep2Prompt(projectContext);
-      const step2UserPrompt = `A continuación se presentan los puntos extraídos y clasificados en la Etapa 1 de la reunión:\n\n${JSON.stringify(
+      let step2UserPrompt = `A continuación se presentan ÚNICAMENTE los puntos con clase = nuevo y accion = codigo extraídos de la reunión:\n\n${JSON.stringify(
         {
-          puntos: step1Data?.puntos || step1Data?.newItems || [],
-          alreadyResolved: step1Data?.alreadyResolved || [],
-          inProgress: step1Data?.inProgress || [],
-          globalOpenQuestions: step1Data?.globalOpenQuestions || []
+          puntosNuevoCodigo: validCodePoints,
+          alreadyResolved: step1Data.alreadyResolved || [],
+          inProgress: step1Data.inProgress || [],
+          keyDecisions: step1Data.keyDecisions || [],
+          globalOpenQuestions: step1Data.globalOpenQuestions || []
         },
         null,
         2
-      )}\n\nGenera los issues de programación organizados por repositorio afectado para los requerimientos NUEVOS ÚNICAMENTE a partir de estos puntos extraídos (sin inventar tecnologías ni detalles no presentes en la lista). Aplica estrictamente las REGLAS DE GENERACIÓN DE ISSUES (un issue por repo, sin filtrar 'Paso 1' o mecánicas internas, calculando horas exactas conforme a la tabla de referencia y redactando agentPrompt con las 6 secciones requeridas).`;
+      )}\n\nGenera los issues de programación organizados por repositorio afectado para estos requerimientos NUEVOS ÚNICAMENTE (sin inventar detalles ni tecnologías no presentes en la lista). Cumple estrictamente las REGLAS DE GENERACIÓN DE ISSUES (un issue por repo afectado, estimación numérica exacta según tabla de referencia, sin filtrar mecánicas internas 'Paso 1' o 'Paso 2', y agentPrompt completo con las 6 secciones requeridas).`;
 
-      const rawStep2 = await this.executeLlmCall(step2SystemPrompt, step2UserPrompt, provider, apiKey, model, baseUrl);
-      const step2Clean = this.cleanJsonString(rawStep2);
-      const step2Data = JSON.parse(step2Clean);
-
-      let step2Issues: any[] = [];
+      let step2Issues: DevIssueDto[] = [];
       let step2Hours: any = null;
-      if (Array.isArray(step2Data)) {
-        step2Issues = step2Data;
-      } else if (step2Data && Array.isArray(step2Data.issues)) {
-        step2Issues = step2Data.issues;
-        step2Hours = step2Data.repoHoursTotals;
+
+      // Ejecución de Etapa 2 con hasta 2 auto-reintentos si hay errores de validación
+      const maxRetries = 2;
+      let finalMergedData: GeneratedMeetingData | null = null;
+
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        const rawStep2 = await this.executeLlmCall(step2SystemPrompt, step2UserPrompt, provider, apiKey, model, baseUrl);
+        const step2Clean = this.cleanJsonString(rawStep2);
+        let parsedStep2: any;
+        try {
+          parsedStep2 = JSON.parse(step2Clean);
+        } catch {
+          parsedStep2 = { issues: [] };
+        }
+
+        if (Array.isArray(parsedStep2)) {
+          step2Issues = parsedStep2;
+        } else if (parsedStep2 && Array.isArray(parsedStep2.issues)) {
+          step2Issues = parsedStep2.issues;
+          step2Hours = parsedStep2.repoHoursTotals;
+        }
+
+        const candidateMerged: GeneratedMeetingData = {
+          summary: step1Data.summary || "Resumen de la reunión",
+          alreadyResolved: step1Data.alreadyResolved || [],
+          inProgress: step1Data.inProgress || [],
+          keyDecisions: step1Data.keyDecisions || [],
+          topicsDiscussed: step1Data.topicsDiscussed || [],
+          globalOpenQuestions: step1Data.globalOpenQuestions || [],
+          issues: step2Issues,
+          backlog: step1Data.backlog || [],
+          repoHoursTotals: step2Hours || { backend: 0, panel: 0, app: 0, total: 0 }
+        };
+
+        const sanitized = MeetingAnalysisValidators.sanitizeAndAutocorrect(candidateMerged);
+        const validation = MeetingAnalysisValidators.validate(sanitized, transcript, step1Data.puntos);
+
+        finalMergedData = sanitized;
+
+        if (validation.isValid || attempt === maxRetries) {
+          if (!validation.isValid) {
+            console.warn(`[LlmMeetingAnalysisService] Validaciones tras reintento final ${attempt}:`, validation.errors);
+          }
+          break;
+        }
+
+        console.info(`[LlmMeetingAnalysisService] Reintentando Etapa 2 (intento ${attempt + 1}/${maxRetries}) por errores:`, validation.errors);
+        step2UserPrompt += `\n\n[ERRORES CRÍTICOS DETECTADOS EN TU RESPUESTA PREVIA - CORREGIR DE FORMA OBLIGATORIA]:\n${validation.errors.map((e) => `- ${e}`).join("\n")}`;
       }
 
-      // Ensamblar ambas etapas
-      const merged = {
-        summary: step1Data?.summary || "Resumen de la reunión",
-        alreadyResolved: Array.isArray(step1Data?.alreadyResolved) ? step1Data.alreadyResolved : [],
-        inProgress: Array.isArray(step1Data?.inProgress) ? step1Data.inProgress : [],
-        keyDecisions: Array.isArray(step1Data?.keyDecisions) ? step1Data.keyDecisions : [],
-        topicsDiscussed: Array.isArray(step1Data?.topicsDiscussed) ? step1Data.topicsDiscussed : [],
-        globalOpenQuestions: Array.isArray(step1Data?.globalOpenQuestions) ? step1Data.globalOpenQuestions : [],
-        issues: step2Issues,
-        backlog: Array.isArray(step1Data?.backlog) ? step1Data.backlog : [],
-        repoHoursTotals: step2Hours || step2Data?.repoHoursTotals || { backend: 0, panel: 0, app: 0, total: 0 }
-      };
-
-      return this.parseAndValidateResponse(JSON.stringify(merged), transcript);
+      return finalMergedData!;
     } catch (stepErr: any) {
       console.warn("[LlmMeetingAnalysisService] Fallback a análisis de paso único debido a:", stepErr.message);
       const fallbackPrompt = this.buildSingleStepPrompt(projectContext);
@@ -276,7 +312,7 @@ Este contexto servirá como arnés de contexto técnico para que agentes de IA d
       case "google-account":
         return "";
       case "gemini":
-        return "gemini-2.5-flash";
+        return "gemini-3.8-flash";
       case "groq":
         return "llama-3.3-70b-versatile";
       case "openai":
@@ -308,7 +344,6 @@ Este contexto servirá como arnés de contexto técnico para que agentes de IA d
     }
   }
 
-  // Delegaciones para compatibilidad y Clean Architecture
   private buildStep1Prompt(projectContext?: string): string {
     return MeetingAnalysisPrompts.buildStep1Prompt(projectContext);
   }

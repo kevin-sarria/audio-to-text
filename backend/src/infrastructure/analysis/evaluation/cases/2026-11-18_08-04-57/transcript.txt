@@ -1,0 +1,324 @@
+[00:00] Hablante 1: Esto a mí fue lo único que me cambió la App o a todos también les cambiaron o le estaban los botoncitos.
+[00:08] Hablante 2: ¿Cómo así?
+[00:10] Hablante 1: Sí, ahora veo todos los botones en medio, no los veo allá a la derecha, ahora son no sé, está raro.
+[00:20] Hablante 3: No sé, yo estoy viendo la web, entonces todavía no he ingresaba a la al desarrollo móvil.
+[00:25] Hablante 1: No, estoy hablando de teams.
+[00:27] Hablante 3: Ah.
+[00:30] Hablante 1: No, está igual.
+[00:31] Hablante 3: ¿Seguro? A mí sí me aparecen a la derecha, pero hasta ayer me aparecían en el centro.
+[00:38] Hablante 1: A mí me aparece normal. Por dos.
+[00:42] Hablante 3: Bueno, configuración mía.
+[00:45] Hablante 4: Eh bueno muchachos, eh estoy llamando a Juan Esteban porque pues él va a estar con ustedes en el espacio, yo tengo que reunirme con Suzuki que es uno de los pilotos para que él revise con ustedes pues el tema de los de los hallazgos.
+[01:02] Hablante 4: Entonces denme 5 minuticos ya me comunico con él para que se conecte, ¿vale?
+[01:08] Hablante 5: Dale, listo.
+[01:09] Hablante 4: Gracias.
+[04:02] Hablante 1: Bueno, muchachos, yo voy a atenderlos durante esa media hora porque Pan Esteban no me responde y ya me tocó decirle al jefe.
+[04:10] Hablante 1: Eh, entonces voy a presentar la matriz de hallazgos eh y lo que alcancemos pues como a a validar, ¿listo?
+[04:18] Hablante 2: Listo, dale.
+[04:21] Hablante 1: Mentico, ya abro la matriz, porque pues ya me da pena con ustedes que estén esperando ya aquí 10 minutos y nada. eh proyectos, servicio tecnológico.
+[04:40] Hablante 1: Traceabilidad.
+[05:01] Hablante 1: Sí es compartir pantalla, listo.
+[05:05] Hablante 1: Ahí ya pueden ver mi mi pantalla.
+[05:08] Hablante 2: Sí.
+[05:10] Hablante 1: Okay, voy a filtrar por acá.
+[05:18] Hablante 1: yo una cosa, porque es que hay unas cosas que, ay, ya. Eh, abierto en corrección.
+[05:28] Hablante 1: Eh, el el día de ayer estuvimos pues como eh validando lo que nos faltaba por validar, eh creo que nos falta tres eh ítems de validar de amalte para que pues ya quede todo validado de lo que ya pues está en ese estado, ¿listo?
+[05:44] Hablante 1: Eh, en cuanto a esto, bueno, eh ya aquí ya voy a cerrar este este requerimiento que la aplicación fue responsive y el y la móvil eh
+[06:00] Hablante 1: eh ya pues el el funcionar pues es el aplicativo, entonces por acá doy solucionada, bueno, cerrada. Listo.
+[06:15] Hablante 1: 18 26.
+[06:23] Hablante 1: En cuanto a estas dos eh observaciones eh bueno, esta de acá eh quedó para Juan Esteban, creo que ella hizo la prueba, pero pues eh voy a dejar que él la cierre, ¿listo?
+[06:38] Hablante 1: Configuración y personalización del dashboard, pues dijimos que el dashboard iba a hacer algo pues como eh de información diaria pues para el el el supervisor y pues para las personas que que quieran visualizar como tal ese día y que lo que sí se parametrizaba pues eran como tal los reportes.
+[06:58] Hablante 1: Voy a colocar a grabar esta sesión porque ustedes siempre me dicen y a mí siempre se me olvida.
+[07:04] Hablante 1: Espérame, dale.
+[07:07] Hablante 1: Eh tenemos configuración de parámetros según sector o tipo de operación, eh Esto también lo voy a dejar cerrado porque pues ya revisé lo del lo de los formularios con con licitaciones eh pues ellas dicen que pues la información es muy variable, entonces pues ya como tenemos varios campos de que ellas pueden subir los archivos o pueden diligenciar el formulario o pueden armar el pront eh pues estábamos haciendo el ejercicio y se está un poco más sujeto, más ajustado el resultado pues a lo que se quiere.
+[07:52] Hablante 1: Entonces, este también ya le voy a dar cerrado, ¿listo?
+[07:56] Hablante 1: Eh Okay.
+[08:01] Hablante 1: 18.
+[08:13] Hablante 1: Por acá tenemos lote científico que los resultados se enfocan únicamente, ah bueno, generación automática del dimensionamiento y cálculo de los recursos requeridos. Eh se identificó que los los resultados se enfocan únicamente en la estimación del recurso requerido, se requiere tanto en el formulario como el pronto permitan generar recomendaciones de eficiencia operativa como propuestas de equipos o robots.
+[08:35] Hablante 1: Eh ya dentro de la matriz, o sea, dentro de la carpeta de de de desarrollo que tenemos compartida está la matriz de maquinaria, ¿listo? Y por acá está eh ay, otra vez esta.
+[09:00] Hablante 1: Hay una tablita que se llama máquinas de descripción, ¿listo?
+[09:10] Hablante 1: Y por acá está la columna de rendimiento dentro de esa carpeta compartida, ¿listo?
+[09:21] Hablante 1: Para que porfa puedan inyectar eso dentro del módulo de dimensionamiento y de pronto pues se pueda calcular eh eh más exactamente los recursos pues específicos por el por el sector de acuerdo pues como al al al que le inyecten, señor.
+[09:31] Hablante 1: Isa, una pregunta, ¿esa matriz cambió o simplemente le agregaron el rendimiento al final?
+[09:42] Hablante 1: Solamente le agregamos el de rendimiento final, pues yo le dije a eh Juan me ayudó con esto, eh le dije que utilizáramos el mismo archivo, pero creo que no me entendió, pero es el mismo, o sea, solamente se le agregó la columna de esto que ves acá es lo mismo que está en la en el otro archivo de matriz.
+[09:52] Hablante 1: Vale, perfecto.
+[10:03] Hablante 1: Entonces pues ese mientras tanto ahí lo coloco en corrección, ya pues cuando lo inyecten pues me colocan validar diamante y yo ya lo reviso, ¿listo?
+[10:14] Hablante 1: Eh Creo que pues en esto ya estaba Cristian, ya me dirás lo de parametrización de metas y indicadores por cliente, la semana pasada estuvimos conversando pues respecto al tema y aclarando algunas inquietudes.
+[10:24] Hablante 1: Eh No sé si si ya ya quedó claro y pues si ya de pronto está para validar.
+[10:35] Hablante 1: Sí, ya ya eso lo lo estamos corrigiendo, ya ya estamos por terminar de validar, yo creo que más tarde hoy quedan esos cambios, de pronto mañana, pero ya ya estamos terminando de validar.
+[10:45] Hablante 1: Okay, listo.
+[10:56] Hablante 1: Entonces continúa el proceso.
+[11:07] Hablante 1: Eh listo.
+[11:17] Hablante 1: Eh visualización y sincronización de certificaciones de los usuarios, ah bueno.
+[11:28] Hablante 1: Eh aquí en cuanto a las certificaciones pues ya estoy eh dialogando con pues tengo un espacio eh estoy esperando a que me den un espacio directamente con Diego Meléndez que es el el que está pues como liderando el lo de tri eh porque pues hay una líder de contratación, pero pues ella me dijo que lo validáramos con con la persona responsable para saber si hay el campo de las certificaciones dentro de esta plataforma y nos den acceso al API para poder traer esa información de de los certificados de los operarios.
+[11:38] Hablante 1: Entonces yo creo que al finalizar esta semana les estaré eh respondiendo respecto a esto, ¿listo?
+[11:49] Hablante 1: No sé si ahí hay algún comentario.
+[12:01] Hablante 1: O, sí, después de que nos pasen el API, pues ya es un poco más flexible.
+[12:07] Hablante 2: No, pues cuando tengamos la API miraremos a ver qué tanto.
+[12:12] Hablante 1: Tan fácil va a estar.
+[12:14] Hablante 1: Okay, listo.
+[12:17] Hablante 1: Eh, bueno, aquí tenemos lo de los formularios eh, los módulo de formularios, pues realmente aquí el estado es es es es de parte de Juan Esteban, no sé, pues lleva aquí el jefe conectado, no sé si tenga jefe algún comentario
+[12:36] Hablante 1: respecto a esto, pues yo la semana pasada les dije a ellos que pues ya Juan estaba trabajando en los campos y todo eso y pues como trayendo algunos de desde Bicitrack, pues como para configurarlos desde limpieza inteligente,
+[12:51] Hablante 1: pero pues no sé eh en cuanto a la implementación del módulo en limpieza, pues que él ya ha dicho.
+[13:03] Hablante 2: No, él me mostró, buenos días para todos, él me mostró el avance.
+[13:06] Hablante 2: No sé técnicamente pues que qué es lo que haga falta para que eso viaje allá, porque de hecho, pues yo le comenté más o menos cómo era la dinámica actualmente, entonces,
+[13:16] Hablante 2: a partir de eso ella quedó con una idea, iba a hacer unos ajustes para que quedara pues más aterrizada la operación.
+[13:23] Hablante 2: Pero ya de pronto de cara a si eso está bien sincronizado con lo que está haciendo el equipo de arborismo y demás, pues no tendría pues como comentarios.
+[13:32] Hablante 2: Tocaría que esperara a que se pudiera conectar.
+[13:36] Hablante 2: Le voy a le doy un mensajito a ver si se logra conectar, pero pues si no, dejémoslo ahí pendiente.
+[13:42] Hablante 2: Dale, yo hable con él respecto a este requerimiento el jueves de la semana pasada y me dijo, mira, eh ya se iba adaptando, estaba ajustando el código a las reglas del código, que yo le dije, le envié como los ajustes.
+[13:58] Hablante 2: Entonces me dijo que no había problema, que estaba esperando básicamente como que revisarlo con ustedes para que lo aprueben.
+[14:06] Hablante 2: Decía, eh, no se te han presentado avances aún, ya que probándolo con el personal que lo usaría está probándolo con el personal que lo usaría y estamos agregando todos los campos que cada uno va mencionando y pues esto ha tardado un poco.
+[14:22] Hablante 2: Eso fue lo que me dijo el jueves de la semana pasada.
+[14:26] Hablante 2: Entonces yo calculo esta semana.
+[14:29] Hablante 2: Dime.
+[14:30] Hablante 1: Ah, que en la semana pasada pues ya se revisó pues como con la parte operativa, tanto con supervisores como con jefes de operaciones y ellos le dieron pues como eh su punto de vista.
+[14:40] Hablante 1: De allí ya pasó a revisión pues directamente con el jefe eh y pues también él él él nos mostró pues lo que había hecho.
+[14:49] Hablante 1: Yo le dije que por mi parte pues sí, con lo que nos había retroalimentado la operación eh pues estaría bien, pero pues no sé de pronto ya le faltó
+[15:00] Hablante 1: decirte si eh cómo se va a implementar pues digamos en en limpieza, cómo se va a realizar la limpieza inteligente o abrir el módulo al lado de allá.
+[15:09] Hablante 1: Sí, pues lo que él me dijo es que aún no está listo, entonces pues esperemos a ver cuando aparezca que nos diga si ya está listo o si hace falta alguna otra validación.
+[15:18] Hablante 1: Igual yo el día ahorita le doy el mensajito pues por a que miren o te retroalimente respecto al avance de de ese requerimiento.
+[15:27] Hablante 1: Listo.
+[15:36] Hablante 1: Eh, bueno, integración del módulo de asistencia con CRM y ERP para el indicador de cobertura.
+[15:45] Hablante 1: Se requiere contar con un módulo de asistencia que permita registrar y consultar los colaboradores que realizan el inicio de sesión o marcación en limpieza inteligente y contrastar esta información con la cantidad de personal requerida por turno registrada en el CRM y el total de colaboradores asociados en el ERP.
+[15:54] Hablante 1: El día de ayer, ya te doy la palabra, Cristian.
+[16:03] Hablante 1: Eh, pues Cristian ya me estaba haciendo la pregunta de si de si íbamos a agrupar pues como los turnos entre diurno y nocturno.
+[16:12] Hablante 1: Eh, se tomó la decisión que sí.
+[16:21] Hablante 1: Eh, entonces el nocturno empezaría a partir de las 7.
+[16:30] Hablante 1: Todos los turnos que empiecen después de esta hora serían nocturnos y de 6 a 7 serían diurnos.
+[16:39] Hablante 1: Eh, lo importante pues es como la cantidad para nosotros contrarrestar lo que tenemos contratado versus la cantidad pues que realmente está en la operación.
+[16:48] Hablante 1: Entonces eh así se van a agrupar.
+[16:57] Hablante 1: Eh, más sin embargo, yo no sé, querían mostrarles algo y es más que todo de esto.
+[17:06] Hablante 1: Ya te doy la palabra, Cristian.
+[17:15] Hablante 1: Eh, aquí, por ejemplo, yo estoy haciendo las pruebas con con pues la operaria de aquí de la oficina que ya pertenece al centro de costo del personal de cubrimientos Cali, ¿cierto?
+[17:24] Hablante 1: Pero eh a pesar de que me trae a qué centro de costo pertenece ella, eh no me aparecen cuántos pues no sé, ya el jefe me corrige, si en el CRM si no están cargados algún centro de costo como tal, o sea, llámese Colgate o Alquería, sino que si son de cubrimientos no aparece como la información acá, sino solamente en el ERP y por eso no está trayendo la información del endpoint.
+[17:33] Hablante 1: O ya me ten o porque pues igual aquí creo que estás conectado directamente al a la plataforma, buenos días, a la plataforma del CRM.
+[17:42] Hablante 1: Pero pues hm por ejemplo aquí no me sale nada.
+[17:51] Hablante 1: Entonces como que sí, llegaron dos, pero no tendría pues yo como saber allí con qué contrarrestar.
+[18:00] Hablante 1: ahí, ahí, eso es para la validación de las personas que están en el mantenimiento.
+[18:05] Hablante 2: Ajá, aquí serían el número total.
+[18:09] Hablante 1: ¿Cierto? El que está por contrato.
+[18:10] Hablante 2: Pero porque ahí saca la sede cubrimientos y es la sede donde marquen el QR, ¿no?
+[18:17] Hablante 1: Eh, porque esta persona pertenece a ese centro de costo, o bueno, digamos que la la rutina la la metí allí.
+[18:24] Hablante 2: O sea, las personas que llegaron sí están, si te das cuenta Alexis, están los dos, o sea, esos números dos son de los que marcaron QR o en FC.
+[18:34] Hablante 1: Sí, pero Lo que no están deberían es porque no hemos no se ha traído esa información desde el CRM.
+[18:42] Hablante 2: Tocaría ya revisar a detalle por qué específicamente con este centro de costos no está llegando la información.
+[18:50] Hablante 1: No, es que entiendo que las personas son de cubrimientos y está bien, ¿cierto?
+[18:56] Hablante 2: Mhm.
+[18:57] Hablante 1: Pero yo necesito saber es a dónde llegaron.
+[18:59] Hablante 1: Y y hacia dónde pues ustedes saben, porque pues es donde marquen el la tarjeta, ¿no?
+[19:06] Hablante 2: Sí, por eso eso ya está, o sea, mira que llegaron dos, o sea, a este centro de costos llegaron dos.
+[19:11] Hablante 2: El problema es que desde el CRM no está esta información.
+[19:16] Hablante 1: No, es que no entiendo a cuál centro de costo llegaron dos, o es que arriba tiene muchos?
+[19:21] Hablante 2: No sé, es que no no no no hay o sea, no hay como un centro de costo que bueno, sí dice oficina,
+[19:30] Hablante 2: sino que como Sandra pertenecía yo creo que ahí hubo una confusión, pertenece al centro de costo personal de de cubrimientos eh pues
+[19:44] Hablante 2: yo metí la rutina dentro de este centro de costo.
+[19:44] Hablante 1: ¿Pero cuál es el centro de costo de la oficina?
+[19:47] Hablante 2: Eh, sería este.
+[19:54] Hablante 2: Bueno, no no tiene.
+[19:59] Hablante 2: O sea, usted creó la rutina en Cubrimientos Cali.
+[20:02] Hablante 2: Sí, sí, señor, porque no encontré ninguna oficina principal Cali.
+[20:06] Hablante 1: Ya, okay, listo, no. Es que ahí tenía la confusión porque es que nosotros no tenemos ningún centro de costo que se llame
+[20:11] Hablante 1: cubrimiento, bueno, no tenemos ningún mantenimiento, más bien las centro de costo sí, pero al momento no tenemos ningún mantenimiento que se llame cubrimientos
+[20:18] Hablante 1: pescal.
+[20:20] Hablante 2: Cubrimiento Escal y es un centro de costos.
+[20:22] Hablante 1: Pero yo necesito saber es a la gente que llega al mantenimiento.
+[20:26] Hablante 1: Sin embargo, entiendo pues que María metiste pues como las rutinas a veces en a veces dentro de costos como si fuera un mantenimiento porque nasiste la oficina como tal,
+[20:37] Hablante 1: Pero realmente lo que debería pasar es que ahí esté la oficina regional Cali.
+[20:41] Hablante 1: Pero por ejemplo, y si lo hacés, por ejemplo, para Medellín, que está saliendo ahorita,
+[20:46] Hablante 2: es eh ya le digo San Vicente.
+[20:49] Hablante 1: Pues que ya sabemos que está la, pues que estamos.
+[20:58] Hablante 1: Deberían.
+[21:00] Hablante 1: tanto, 142, 27 y 13.
+[21:05] Hablante 1: Esos son todos, ¿cierto? Incluyendo
+[21:08] Hablante 2: Pero creo que hay unos pues sin turno, no sé si en el CRM se está trayendo pues como ah, bueno,
+[21:14] Hablante 2: es que llegaron 31, es que no sé aquí si de pronto
+[21:19] Hablante 1: 32, según veo.
+[21:20] Hablante 2: Sí, 32, pero hay uno que sí lo está como cruzando en el turno diurno, pero 31 que llegaron no lo está cruzando con ningún turno, o sea, como
+[21:30] Hablante 2: como que no es y si llega a las 7, 8, 9 de la mañana o llega en la noche como que no se se está colocando en en la jornada donde está, me imagino que por los ajustes que está haciendo Cristian y ya le doy la palabra porque está que se habla.
+[21:48] Hablante 1: Sí, no, es para aclarar ese tema, eh, pues en el anterior ya ya pues se dieron cuenta de que es efectivamente el CRM que nos está realizando cuántos debería llegar, el que te aparecía como que deberían como con una rayita que no
+[21:59] Hablante 1: porque el CRM no nos está regresando como ese dato.
+[22:07] Hablante 1: En esta parte eh ya el ajuste también se va a subir con lo con lo otro de parametrización del de metas.
+[22:15] Hablante 1: Lo que se hizo fue pues efectivamente los mixtos se pasaron a se se integraron a diurnos.
+[22:20] Hablante 1: Ahorita solo hay turnos diurnos o nocturnos.
+[22:24] Hablante 1: Y esa se parametriza como la hora, ya pues yo dejé por defecto los horarios que tú me pasaste.
+[22:31] Hablante 1: Y dependiendo la hora en que se que llegue el operario, eh pues ahí mismo se instruyen, o llegaron al turno diurno, pues tantos y llegaron al turno turno tantos.
+[22:40] Hablante 1: Estos sin turnos porque pues como como se hablaba efectivamente en en el día del cliente no tenemos como parametrizados esos qué qué persona pertenece a qué turno.
+[22:50] Hablante 1: Entonces pues ya el ajuste se va a subir, espero que por ahí hoy o mañana lo lo terminemos de valiar para poderlo subir.
+[22:58] Hablante 1: Y ya ya ahí quedan para que valie.
+[23:05] Hablante 2: Listo.
+[23:08] Hablante 2: Entonces queda pendiente allí este hallazgo.
+[23:15] Hablante 2: Eh, bueno, eh abiertos.
+[23:18] Hablante 2: A ver, yo miro cuántos faltan.
+[23:22] Hablante 2: Va a pasar a los abiertos, listo.
+[23:26] Hablante 2: Porque a las 8:30 tengo otra reunión. Entonces, listo, dale.
+[23:33] Hablante 2: Dice sincronización del método de inicio tía QR en la app móvil.
+[23:38] Hablante 2: Eh para iniciar en el hospital San Vicente Fundación se le asignó desde la web el método QR código QR para iniciar la actividad, sin embargo, en la aplicación móvil aparece mensaje que ese centro de costo no tiene un método para iniciar actividad, tocó cerrar y volver a iniciar sesión, lo que no debería pasar o tener un botón de sincronización.
+[23:57] Hablante 2: Pero que
+[24:05] Hablante 1: Creo que Juan me había hecho un comentario al respecto o que fue lo mismo que pasó pues cuando hice el cambio de pronto de de aquí en la oficina que también se enloqueció todo.
+[24:20] Hablante 2: Sí, eso ya se ya se dio ajustando falta es la parte del pues el inicio del QR.
+[24:29] Hablante 1: O sea que ya está en corrección, ¿sí?
+[24:32] Hablante 2: Sí, ya, eso ya lo estoy trabajando.
+[24:35] Hablante 1: Okay. Se requiere actualizar actualización de la base de datos de QA según producción. Se requiere actualizar la base de datos del ambiente de QA para que coincida con la de producción, ya que la diferencia entre ambos ambientes generó confusión durante la ejecución de las pruebas.
+[24:50] Hablante 2: Listo, respecto a este eh ya se actualizaron los usuarios que quedan pendientes que era Alexis y Leo respecto al tema del usuario y la cédula, ya se actualizó para que sean las cédulas.
+[25:03] Hablante 2: Eh y me falta como lo que hablábamos la la semana pasada, no me acuerdo qué me queda como pendiente, me falta revisar las notas nuevamente eh para dar por cerrase etiqueta.
+[25:18] Hablante 1: Y una pregunta respecto a lo que nos pasó el día de ayer.
+[25:23] Hablante 1: Pues yo sé que eh lo que estábamos pensando con el jefe es eh si se pueden traer o sea, en en el en el en la data le sale a ustedes también de pronto el personal en el en en el estado que está pendiente o solamente activos e inactivos?
+[25:45] Hablante 2: ¿De qué cosa, Isa? ¿De los usuarios?
+[25:47] Hablante 1: Eh, de los usuarios, porque pues ayer tuvimos como dos o tres casos en los que no aparecía el operador y pues tocó crearla manualmente.
+[26:00] Hablante 2: Nosotros solo nos llegan los activos.
+[26:01] Hablante 1: ¿Solamente los activos?
+[26:02] Hablante 2: Ajá.
+[26:05] Hablante 1: Sí, me toca preguntarle a Lady a ver si si de pronto pues allí aparecen como todos los estados, porque pues ella sí me envió un pantallazo de que estaba como pendiente y fue el mismo pantallazo que me envió Leo.
+[26:20] Hablante 1: Pues como para llamarlos todos y que eso se haga automático, pues para no caer en en que el supervisor o el administrador pues vaya a crearlo manualmente.
+[26:33] Hablante 2: Sí, sino que se sincronice directamente con el sistema.
+[26:36] Hablante 2: Correcto, y ya es un tema interno de ustedes y hay que revisarlo.
+[26:41] Hablante 1: ¿Cómo se le puede dar solución?
+[26:44] Hablante 1: Juan, pregunta, no podemos, o sea, ustedes no pueden ver en la base también quién está pendiente?
+[26:51] Hablante 2: No, solo son o sea, nosotros recibimos una sábana de usuarios eh que de acuerdo a lo que hablamos con Lady son los usuarios activos.
+[27:01] Hablante 1: Ya, o sea, pero ustedes ahí no tiene un estado, ¿sí?
+[27:04] Hablante 2: No, ¿Ustedes filtran algún estado?
+[27:06] Hablante 1: No, ustedes escogen todos los usuarios que aparezcan ahí.
+[27:08] Hablante 2: Exacto. Sí, lo que hablamos con Lady fue eh que esos usuarios sean los activos y entonces pues todos ellos deben tener usuario.
+[27:17] Hablante 1: Entonces, digámosle a Lady que que nos traiga los activos y los pendientes y de esa forma nos van a aparecer ambos, según le entiendo entonces a Juan.
+[27:27] Hablante 2: Sí, está en ese estado pendientes, sí, señor.
+[27:36] Hablante 1: Listo. Eh, bueno.
+[27:43] Hablante 1: El filtro de los llamados debe funcionar en cascada, por ejemplo, si se selecciona el tipo de solicitud TRAME, en el campo de ubicaciones solamente deben de aparecer las ubicaciones que tengas en asociado a ese tipo de solicitud.
+[27:56] Hablante 1: O y se versa.
+[28:00] Hablante 1: Dale, Kevi.
+[28:02] Hablante 2: Uy, se coordinaron esto, les iba a decir que, que pena, se me había olvidado pasar eso a validar diamante, de hecho estaba en abierto, eso ya se había hecho, estaba desde hace rato, solo que no a veces se me olvidaba cambiar el cosito ese.
+[28:19] Hablante 2: Qué pena.
+[28:21] Hablante 1: Vale.
+[28:22] Hablante 1: Sí, colócaselo para que sea más visual para nosotros, saber qué revisar.
+[28:27] Hablante 2: Sí, señora.
+[28:30] Hablante 1: Eh, bueno, yo yo yo yo yo yo no sé si si es que me están esperando en la otra reunión.
+[28:38] Hablante 1: Entonces no sé, jefe, si dejamos hasta ahí o porque Valeria ya me está escribiendo.
+[28:48] Hablante 1: Eh, y pues que qué más te falta? Pues están los abiertos de abiertos, para leer rápidamente, está lo de los llamados se realiza de primera mano eh de manera automática, o sea, pues si es asignación automática o no.
+[29:06] Hablante 1: Eh cambiar el nombre a asignación automática en llamados para no confundir para no confundir porque esta función es para asignar varios operarios a a ese llamada.
+[29:19] Hablante 1: Eh lo del campo de los aislamientos en los llamados por ubicación no deben de ser obligatorios, sino opcional para las ubicaciones que apliquen y no tener que colocar NA a todos a todos, puesto que tampoco se deja crear de forma general en los formularios, eso es eh en el template.
+[29:37] Hablante 1: Eh ya está solucionado, ¿no?
+[29:41] Hablante 1: Si quieres continúa.
+[29:43] Hablante 1: Listo. ¿De qué manera podemos realizar de manera automática el logueo por cada centro de costos sin parametrizar? Por ejemplo, si en el centro de costo hay un NFC, entonces el dispositivo del operario eh lea el sensor y limpieza inteligente le identifique o si es Q
+[30:00] Hablante 1: que se habilite la cámara para reconocer el sitio donde está y que no haya que parametrizarlo, sino que lo reconozca independientemente de lo que haya.
+[30:09] Hablante 1: Eh en todos los campos que se se necesita seleccionar, ya sea lugar o tipo de solicitud, etcétera, que tengan la opción de desplegar la lista y seleccionarlo, pero también se vaya filtrando si uno es la escribe.
+[30:23] Hablante 1: es como más de búsqueda. En el desarrollo móvil del operario, ah bueno, esto está validado Diamante.
+[30:29] Hablante 1: Eh se requiere implementar una funcionalidad o botón que permita reprogramar actividades de las rutinas, especialmente aquellas de frecuencia semanal que debido a novedades o situaciones operativas no se puedan ejecutar en la fecha inicialmente programada.
+[30:44] Hablante 1: Se requiere incorporar estados para facilitar el seguimiento y control de las novedades reportadas durante la prestación del servicio se proponen los siguientes estados.
+[30:52] Hablante 1: Abierto, novedad registrada y pendiente de atención en proceso, novedad en gestión, innovaciones correctivas en curso, solucionada novedad atendida y con solución implementada y cerrada novedad finalizada y validada.
+[31:02] Hablante 1: Por eso es para las novedades del servicio, no para las novedades por insumo faltante.
+[31:06] Hablante 1: Ahí está la respuesta que creo.
+[31:10] Hablante 1: A lo que me estabas preguntando.
+[31:12] Hablante 2: Eh sí, bueno, eh pero después corregí, ese no era el tema, eso ya estaba en la transcripción que tengo de la reunión, era otro, pero ya después me responde.
+[31:22] Hablante 1: Okay, me avisas, sí, internamente.
+[31:24] Hablante 1: Se requiere habilitar una funcionalidad que permita seleccionar y eliminar múltiples registros de manera simultánea, evitando realizar esta acción de forma individual.
+[31:33] Hablante 1: Esta funcionalidad debe implementarse inicialmente en el módulo de ubicaciones, incluyendo edificios, áreas, pisos y espacios de trabajo.
+[31:40] Hablante 1: Asimismo se solicita evaluar su incorporación en los demás módulos donde aplique, tomando como referencia la funcionalidad de selección múltiple y eliminación disponible en el módulo de rutinas.
+[31:50] Hablante 1: Y lo último se requiere habilitar una funcionalidad que permita exportar al Excel las solicitudes registradas en la plataforma, con la posibilidad de aplicar filtros por periodos de tiempo y obtener el detalle completo de cada registro.
+[32:02] Hablante 1: La exportación debe incluir todos los campos asociados a las solicitudes, tales como fechas, tiempo de gestión, estados, eh justificaciones, comentarios, responsables y demás información relacionada.
+[32:13] Hablante 1: El objetivo es contar con una base de datos detallada para que permita realizar análisis adicionales y construir indicadores personalizados y calcular métricas que posibles no están contempladas en los reportes o tableros actuales.
+[32:28] Hablante 2: Yo creo que, gracias María, yo creo que lo importante es no sé si si Juan no lo logra entender o si necesita que la amplíe algún punto de esos.
+[32:39] Hablante 2: Hay dos cosas más que yo
+[32:41] Hablante 1: Ajá.
+[32:42] Hablante 2: Qué pena.
+[32:42] Hablante 2: Por ahora sí están la mayoría claros.
+[32:45] Hablante 2: De igual manera algunos ya se solucionaron, ¿no?
+[32:47] Hablante 2: Eso a medida que tú me los ibas reportando la semana pasada.
+[32:51] Hablante 2: Lo de lascas, sí.
+[32:53] Hablante 2: Correcto, el de el de trancascas
+[32:56] Hablante 2: y el de los aislamientos.
+[32:58] Hablante 2: El de los aislamientos también.
+[33:01] Hablante 1: Y había escuchado otro, el de los estados, abierto, en proceso, solucionado, cerrado.
+[33:07] Hablante 2: Eh, sí, el de las novedades, porque una cosa es novedades que son las quejas, o sea, las quejas del interior es dentro del del mantenimiento.
+[33:20] Hablante 1: Listo. El de la de las novedades.
+[33:23] Hablante 2: creo que para el de las novedades es que nos falta porque no se sabe cómo está el proceso.
+[33:30] Hablante 1: A la gente le interesa saber cómo va el proceso.
+[33:33] Hablante 2: No sé si si dentro de ese se pueda cargar de pronto planes de acción, porque quizás a los supervisores o al jefe de operaciones le toque cargar algún plan.
+[33:45] Hablante 4: Entonces, no sé si se pueda también eh pues como habilitar eh como la opción de adjuntar algún archivo cuando esté en en proceso o en o en proceso de solución, algo así.
+[34:00] Hablante 3: Bueno, por el momento no estaría contemplado así, pero pues si quieres dejamos la anotado como esa posible mejora.
+[34:09] Hablante 4: Qué pena, que te interrumpa.
+[34:11] Hablante 2: Y por esa parte, esa es una de las cosas que ya va en la PR que te dije que revisaras Juan, eso.
+[34:20] Hablante 2: O sea, ya me habían hecho el comentario la vez pasada que nos reunimos y sí, ya me había puesto a trabajar en ello.
+[34:25] Hablante 2: Entonces lo acabo de poner corrección y cualquier cosita, porque pues aquí ya me le están explicando exactamente en el ticket, entonces eh voy ahorita a ponerme a hacer eso y corregirlo.
+[34:37] Hablante 2: Y la otra cosa es que me quedan dudas sobre que quieren que el logueo sea automático.
+[34:44] Hablante 2: Sobre esa parte, o sea, porque a yo, o sea, en mi mente de programador ya se me está complicando muchísimo más como decirle al al equipo que de alguna manera eh adivine.
+[34:57] Hablante 2: ¿Sí me entiendes?
+[34:58] Hablante 2: Por el tema de que si ustedes quieren que al hacer al celular un chip NFC o un QR lo verifique directamente, pues es más complejito por el tema de que eh toca activar dos sensores a la vez y eso no no funciona así tan fácil.
+[35:14] Hablante 2: Entonces pues por eso es lo que quisiera a ver si aterrizar esa idea.
+[35:19] Hablante 1: El no, ¿qué es lo que estamos diciendo ahí que?
+[35:23] Hablante 1: O sea, llega el mantenimiento, usted es un operario y entra a la aplicación y la aplicación lo primero que le pregunta uno es NFC, QR o nada, ¿cierto?
+[35:34] Hablante 1: Creo que yo no sé si ya recobraron lo de nada, pero creo que eso no estaba.
+[35:36] Hablante 1: Eh, si de pronto para ver un mantenimiento donde no aplique ninguno de los ni NFC ni QR, sino que sea punta de botones.
+[35:43] Hablante 1: Entonces, le va a preguntar a uno eso.
+[35:45] Hablante 1: ¿Y uno cuál va a escoger? Pues el que se vea en el mantenimiento, el mantenimiento tiene un QR, pues yo le doy QR.
+[35:51] Hablante 1: Y entonces me activa la cámara y me lo lee y ya sabe que son QR los que hay allá.
+[35:57] Hablante 1: Si hay NFC, pues entonces lo que va a poder leer allá es un NFC.
+[36:00] Hablante 1: Eh, ahí el problema es que de pronto una persona diga que no hay nada y realmente cuando vaya y cuando y haga la rutina sin nada, pero realmente allá se registre bajo QR o NFC.
+[36:10] Hablante 1: Ahí sí sería pues como algo que que que se nos iría pues de las, digamos que no no sería coherente con con la dinámica del mantenimiento.
+[36:23] Hablante 1: Pero bueno, no sé, no sé, de pronto lo que podemos hacer ahí es, bueno, no, de pronto sí entiendo que eso solamente se programa una sola vez, María.
+[36:35] Hablante 2: Exacto.
+[36:36] Hablante 1: Sí, sí, señor.
+[36:38] Hablante 1: Bueno, de pronto lo que podemos evaluar es, bueno, dejémoslo ahí y y y si algo pues no le botemos tanta corriente a eso.
+[36:45] Hablante 1: Igual, yo no lo veo tan complicado, pero de pronto más por garantizar que realmente la persona sea honesta en cuanto al método de registro, es que nos serviría pues el respaldo de la página.
+[36:56] Hablante 1: Yo le he propuesto eso a María, eh porque es que si queremos que entre el aplicativo más sencillo sea para manejar para la gente, mejor se adaptan, ¿sí?
+[37:07] Hablante 1: Entonces, cuando lo usan se generan solitos, cuando las personas escanean y ya les aparece la rutina, todo ese tipo de cosas que lo el supervisor o el líder no tiene que entrar a intervenir tanto en la aplicación, hace que la aplicación fluya muy bien.
+[37:21] Hablante 1: Pero cuando el supervisor tiene que estar ahí adentro a toda hora creando el usuario, eliminando el otro, cree el nuevo, elimine el otro, así la rutina al operario, quítele la rutina al operario, póngale la, todo eso el supervisor no lo va a hacer.
+[37:35] Hablante 1: ¿Sí? Porque ellos tienen pues muchísimas cosas, entonces se vuelve más difícil porque toca que uno está detrás de ellos, ¿no?
+[37:41] Hablante 1: Entonces pasa un mes y tienen todo eso vuelto una nada y entonces vea eh proyectos, ayúdennos otra vez a a a sincronizar todo y uno vuelve y arregla todo.
+[37:51] Hablante 1: Y en un mes vuelve y se baña todo, pues porque pasa eso, no crean el usuario, eh cambia el líder, entonces el el lo que sabía el otro se pierde, hay que enseñarle al nuevo.
+[38:02] Hablante 1: Esta empresa es una empresa que tiene una rotación de aproximadamente el 5% cada mes.
+[38:09] Hablante 1: Desde que nosotros contratamos la mitad de la gente que tenemos actualmente, entonces tenemos 7,000 personas en la compañía, son 7,000 personas el total.
+[38:18] Hablante 1: O sea que y nosotros al año contratamos más o menos 3,500.
+[38:22] Hablante 1: Entonces imagine, pues, o sea, la pérdida de de conocimiento que se que se presenta aquí.
+[38:28] Hablante 1: Entonces por eso queremos que entre más autónomo sea el proceso, nos va a ir muchísimo mejor.
+[38:34] Hablante 1: Eso es lo que estábamos como buscando, ¿no? Que que el proceso sea lo que estamos buscando, que eso sea lo más autónomo posible, porque si no,
+[38:41] Hablante 1: es realmente no no nos no no termina siendo un éxito el proceso.
+[38:47] Hablante 1: Entonces, eh a eso iba, pero bueno, lo podemos dejar ahí, ¿cierto? Podemos dejarlo eh de último pues en las en las propuestas, entendiendo que solamente se
+[39:00] Hablante 1: ese programario una vez y avanzamos con los otros.
+[39:04] Hablante 1: ¿Listo?
+[39:05] Hablante 2: Listo. De una.
+[39:07] Hablante 2: Eh, bueno, ah, jefe, lo que pasa es que Juan me está diciendo que van a quedar algunos pues requerimientos que le hemos al visitado en el backlog.
+[39:16] Hablante 2: Entonces se va a abrir un nuevo archivo para colocar allí pues lo que va a quedar eh como para esta etapa. Entonces eh por ejemplo lo que usted me decía ayer de algo de recorderis.
+[39:32] Hablante 1: De lo de marcación por QR.
+[39:35] Hablante 1: De lo de la solicitud por QR.
+[39:37] Hablante 2: Eso, sí, de lo de los llamados.
+[39:39] Hablante 2: Entonces me dice que sí se puede hacer, pero en el backlog.
+[39:45] Hablante 1: Ah, ajá. ¿Y y en español eso significa qué, Juan?
+[39:48] Hablante 1: ¿Qué pena?
+[39:49] Hablante 2: Yo tampoco.
+[39:51] Hablante 1: Yo tampoco.
+[39:52] Hablante 1: O sea, sería como que se hace en algún espacio donde se pueda hacer mejoras.
+[39:57] Hablante 1: Sí, o sea, ahorita estamos solucionando para ser mínimo viables, ¿sí? Cosas que se nos quedaron por fuera, cosas que que son necesarias para la operación.
+[40:09] Hablante 1: Pero esto como tal, digamos que no evita el que ustedes no puedan hacer un llamado.
+[40:16] Hablante 1: Ajá.
+[40:17] Hablante 1: ¿Listo? Entonces eso sería con.
+[40:19] Hablante 1: Sí, esto esto es una mejora.
+[40:22] Hablante 1: Eso es una mejora, lo lo tenemos claro.
+[40:25] Hablante 1: Sino que es que actualmente hay muchos clientes que están comenzando a pedir cosas así.
+[40:29] Hablante 1: Entonces, yo tengo en este momento tres clientes que se reanudó contrato y vienen incluidos con eso.
+[40:35] Hablante 1: Entonces, realmente yo qué estoy haciendo ahorita.
+[40:38] Hablante 1: Estoy creando un for eh y lo y lo creo con un prellenado,
+[40:45] Hablante 1: ¿cierto? De las áreas, entonces eh hago un QR para el, por ejemplo, y normalmente esto está asociado pues a ciertas ubicaciones, principalmente los baños.
+[40:54] Hablante 1: Entonces, si quieres, María, pasa al otro espacio, yo normalmente le termino de contar esto a Juan como para que pueda avanzar allá.
+[41:00] Hablante 2: Vale.
+[41:01] Hablante 1: Y yo creo que ya con eso terminamos. Yo sí no quiero decir muchas cosas pues porque vos estás liderando el proceso, entonces no quiero que de pronto yo diga algo que ustedes ya hablaron y bueno, no sé, no listo.
+[41:10] Hablante 1: Listo.
+[41:12] Hablante 1: No vamos a repetir allí, solamente le va a contar esto a Juan para que lo piense y nos diga pues si de pronto podemos revisarlo después.
+[41:17] Hablante 2: Okay, bueno, muchas gracias, que estén muy bien. Gracias igualmente, feliz día.
+[41:23] Hablante 1: Entonces, ¿yo qué hago? Creo un for y ese for eh lo lo lo establezco como un prellenado, ¿cierto?
+[41:33] Hablante 1: Y con y cada uno de esos prellenados que tenga, yo tengo, en este momento tengo uno que es un 60 ubicaciones, imagínate.
+[41:40] Hablante 1: Entonces, yo creo un QR para cada una de las ubicaciones, o sea, el formulario prellenado para esa ubicación, cosa que la persona cuando escanee, pues esa ubicación ya está llena.
+[41:49] Hablante 1: Y se los pego a los baños.
+[41:51] Hablante 1: Entonces, cuando la persona escanea eso, él le abre el formulario y el formulario le pregunta eh si quiere solicitar un llamado o si
+[42:00] Hablante 1: quiere solicitar insumos, ¿cierto? ¿Qué toda clase de insumos? el baño no tiene papel, el baño no tiene jabón, el baño no tiene papel toalla o papel higiénico, o no tiene jabón de manos.
+[42:12] Hablante 1: Entonces la persona pone ahí el requerimiento y pum, se guarda el formulario y eso le llega a una a una app, de esas de debajo código eh al supervisor en donde le dice, vea, en tal área están diciendo que no hay papel y él le reporta al operario, vea, Pepito Pérez, por favor.
+[42:37] Hablante 1: Atiéndame esta solicitud eh de tal área que está diciendo que no hay papel. Ese es el flujo en teoría de la de que tenemos nosotros internamente, ¿cierto?
+[42:45] Hablante 1: Para el tema de los reportes de las solicitudes, pero aquí el tema es que cualquier persona puede escanear el QR y cuando digo cualquier cualquiera, o sea, puede ser eh en este momento lo estamos haciendo para sociedad portuaria, entonces cualquier conductor, cualquier persona de la oficina, cualquier visitante del muelle puede hacer eh ese esa llenar ese formulario.
+[43:15] Hablante 1: eh indicando pues a a diamante que hace falta algo o que carecemos pues o de aseo o de algún insumo en el baño. Otro cliente que también íbamos a implementar, pero al final dijo que lo iban a hacer ellos mismos porque querían tener como el dominio de toda la información.
+[43:36] Hablante 1: Eh pedía también además de lo de aseo, lo de lo de higiénicos, pedía también que las personas podían calificar el servicio por adelantado, yo quiero es calificar y les pongo cinco estrellas o les pongo dos y les pongo una nota, ¿ya?
+[43:56] Hablante 1: Correcto. Sí, digamos que era lo que yo le decía, o sea, es una es una oportunidad de mejora que a medida pues que ustedes vayan entrando en la operación, van a encontrar muchísima, ¿sí?
+[44:16] Hablante 2: Entonces ya lo que le decía Isa, mira, esto en estos momentos no es un bloqueante para salir a producción, sí, porque un llamado pues ustedes van a poder realizar eh sin embargo, pues lo que tú me mencionas está superinteresante, entonces que la persona pues pueda escanear un QR ya directamente con eso pues ya se sabe cuál es la ubicación.
+[44:37] Hablante 2: Y él directamente dice, pues es un llamado o es una solicitud o es una novedad, básicamente. Ajá. Y ya y aquí ya sigamos pues los diferentes flujos y pues de acuerdo a lo que se reporte, pues ya que le llegue directamente al operario con notificación pues también al supervisor en caso tal.
+[45:00] Hablante 1: pues eh bueno igual dejamos la inquietud pues por si por si nos da pues por si alcanzamos a hacer ese último detallito porque nos está tocando quejar ese proceso por fuera.
+[45:12] Hablante 2: Listo. Dale.
+[45:14] Hablante 1: Dale, muchas gracias Juan y equipo estamos hablando Gracias por el espacio, gracias equipo.
+[45:20] Hablante 2: Buen día para todos.
