@@ -1,6 +1,9 @@
 import { GeneratedMeetingData } from "../../../domain/services/IMeetingAnalysisService.js";
 import { ExtractionPointDto } from "../MeetingAnalysisResponseParser.js";
 import { MeetingAnalysisCoverageValidators } from "./MeetingAnalysisCoverageValidators.js";
+import { MeetingAnalysisV8Validators } from "./MeetingAnalysisV8Validators.js";
+import { GLOSSARY_TERMS } from "../glossary/ProjectGlossary.js";
+import { TranscriptIndex, parseCitedSeconds } from "../TranscriptIndex.js";
 
 export const ALLOWED_DOCUMENTS = new Set([
   "AI_CONTEXT.md",
@@ -30,16 +33,7 @@ export const REQUIRED_PROMPT_SECTIONS = [
   "Verificación"
 ];
 
-export const GLOSSARY_TERMS = [
-  "aislamientos",
-  "san vicente",
-  "hospital san vicente fundación",
-  "bicitrack",
-  "matriz de maquinaria",
-  "máquina descripción",
-  "cubrimientos cali",
-  "sociedad portuaria"
-];
+export { GLOSSARY_TERMS };
 
 interface TranscriptSegment {
   seconds: number;
@@ -211,17 +205,20 @@ export class MeetingAnalysisErrorValidators {
       }
     }
 
-    // 8. Marcas de tiempo citadas existen en la transcripción
+    // 8. Marcas de tiempo citadas existen en la transcripción (caen dentro de un segmento real).
+    //    Antes se usaba transcript.includes("1:23"), que aceptaba "[1:23]" si existía "11:23".
     if (transcript && transcript.trim().length > 0) {
-      const tsRegex = /\[(\d{1,2}:\d{2})\]/g;
-      for (const issue of data.issues) {
-        const criteriaText = (issue.acceptanceCriteria || []).join(" ");
-        const text = `${issue.title || ""} ${issue.description || ""} ${criteriaText}`;
-        let tsMatch: RegExpExecArray | null;
-        while ((tsMatch = tsRegex.exec(text)) !== null) {
-          const ts = tsMatch[1];
-          if (ts && !transcript.includes(ts)) {
-            errors.push(`El issue [${issue.id}] cita una marca de tiempo inexistente en la transcripción: "[${ts}]".`);
+      const index = new TranscriptIndex(transcript);
+      if (!index.isEmpty) {
+        const fmt = (sec: number) =>
+          `${Math.floor(sec / 60).toString().padStart(2, "0")}:${(sec % 60).toString().padStart(2, "0")}`;
+        for (const issue of data.issues) {
+          const criteriaText = (issue.acceptanceCriteria || []).join(" ");
+          const text = `${issue.title || ""} ${issue.description || ""} ${criteriaText}`;
+          for (const sec of new Set(parseCitedSeconds(text))) {
+            if (!index.timestampExists(sec)) {
+              errors.push(`El issue [${issue.id}] cita una marca de tiempo inexistente en la transcripción: "[${fmt(sec)}]".`);
+            }
           }
         }
       }
@@ -313,23 +310,8 @@ export class MeetingAnalysisErrorValidators {
       }
     }
 
-    // 15. Issue de app sin evidencia móvil (Regla 7) - Ahora es ERROR en v6
-    for (const issue of data.issues) {
-      if (issue.repo === "app") {
-        const text = `${issue.title || ""} ${issue.description || ""} ${issue.agentPrompt || ""}`.toLowerCase();
-        const mentionsMobile =
-          text.includes("app") ||
-          text.includes("móvil") ||
-          text.includes("movil") ||
-          text.includes("operario") ||
-          text.includes("supervisor");
-        if (!mentionsMobile) {
-          errors.push(
-            `El issue [${issue.id}] está asignado a App Móvil pero carece de evidencia móvil (app, operario o supervisor móvil) en la reunión (Regla 7).`
-          );
-        }
-      }
-    }
+    // 15. Issue de app sin evidencia móvil: lo valida MeetingAnalysisV8Validators contra los
+    //     segmentos citados de la transcripción (antes bastaba con que el propio issue dijera "app").
 
     // 16. La frase de detención solo aparece si el issue está BLOQUEADO por una pregunta BLOQUEANTE asociada
     const stopRegex = /\bdetente\b/i;
@@ -351,7 +333,7 @@ export class MeetingAnalysisErrorValidators {
       const transcriptLower = transcript.toLowerCase();
       for (const q of data.globalOpenQuestions || []) {
         if (q.includes("[BLOQUEANTE]")) {
-          if (/\broles?\b/i.test(q) && !transcriptLower.includes("rol") && !transcriptLower.includes("roles")) {
+          if (/\broles?\b/i.test(q) && !/\broles?\b/.test(transcriptLower)) {
             errors.push(
               `La pregunta BLOQUEANTE "${q}" indaga sobre roles/permisos, hecho que no aparece en la transcripción (Regla 1).`
             );
@@ -383,6 +365,9 @@ export class MeetingAnalysisErrorValidators {
 
     // 20. Validadores de cobertura de transcripción e integridad de issues (v7)
     MeetingAnalysisCoverageValidators.validateCoverageAndIntegrityErrors(data, transcript, errors);
+
+    // 21. Validadores v8: cierres posteriores, responsables, origen, app y estructura inventada
+    MeetingAnalysisV8Validators.validateErrors(data, transcript, errors);
 
     return errors;
   }

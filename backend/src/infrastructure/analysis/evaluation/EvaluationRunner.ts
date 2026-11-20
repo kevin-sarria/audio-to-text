@@ -22,6 +22,10 @@ export interface EvaluationReport {
     alreadyResolvedPresent: boolean;
     inProgressPresent: boolean;
     backlogPresent: boolean;
+    backlogCountMatches: boolean;
+    noForbiddenIssueTopics: boolean;
+    noForbiddenQuestionTopics: boolean;
+    noForbiddenResponsibles: boolean;
   };
   details: string[];
 }
@@ -92,11 +96,47 @@ export class EvaluationRunner {
     // Verificación 8: Backlog presente
     const backlogPresent = (generated.backlog || []).length > 0;
 
+    // Verificaciones v8 (datos en expected.json, así cada caso define sus propias trampas)
+    const norm = (t: string) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const expected = evalCase.expected || {};
+
+    const backlogCountMatches =
+      typeof expected.expectedBacklogCount !== "number" || (generated.backlog || []).length === expected.expectedBacklogCount;
+    if (!backlogCountMatches) {
+      details.push(`Backlog: Obtenido ${(generated.backlog || []).length} vs Esperado ${expected.expectedBacklogCount}`);
+    }
+
+    const forbiddenIssueTopics: string[] = expected.forbiddenIssueTopics || [];
+    const issueHits = generated.issues.flatMap((i) =>
+      forbiddenIssueTopics.filter((t) => norm(`${i.title} ${i.description}`).includes(norm(t))).map((t) => `${i.id}: ${t}`)
+    );
+    const noForbiddenIssueTopics = issueHits.length === 0;
+    if (!noForbiddenIssueTopics) details.push(`Issues sobre temas que no llevan issue: ${issueHits.join(", ")}`);
+
+    const forbiddenQuestionTopics: string[] = expected.forbiddenQuestionTopics || [];
+    const questionHits = (generated.globalOpenQuestions || []).filter((q) =>
+      forbiddenQuestionTopics.some((t) => norm(q).includes(norm(t)))
+    );
+    const noForbiddenQuestionTopics = questionHits.length === 0;
+    if (!noForbiddenQuestionTopics) details.push(`Preguntas sobre temas cerrados o no hablados: ${questionHits.join(" | ")}`);
+
+    const forbiddenResponsibles: string[] = expected.forbiddenResponsibles || [];
+    const responsibleText = `${(generated.inProgress || []).join(" ")} ${generated.issues.map((i) => i.description).join(" ")}`;
+    const responsibleHits = forbiddenResponsibles.filter((name) =>
+      new RegExp(`(?:responsable|a cargo de|lo lleva|due[ñn]o)\\s*:?\\s*${name}`, "i").test(responsibleText)
+    );
+    const noForbiddenResponsibles = responsibleHits.length === 0;
+    if (!noForbiddenResponsibles) details.push(`Responsables sin respaldo: ${responsibleHits.join(", ")}`);
+
     const allChecksOk =
       issuesCountMatches &&
       appIssuesAreZero &&
       hasNoFixedTimeFlaws &&
       hasNoInternalStageLeaking &&
+      backlogCountMatches &&
+      noForbiddenIssueTopics &&
+      noForbiddenQuestionTopics &&
+      noForbiddenResponsibles &&
       validation.isValid;
 
     return {
@@ -111,7 +151,11 @@ export class EvaluationRunner {
         keyDecisionsPresent,
         alreadyResolvedPresent,
         inProgressPresent,
-        backlogPresent
+        backlogPresent,
+        backlogCountMatches,
+        noForbiddenIssueTopics,
+        noForbiddenQuestionTopics,
+        noForbiddenResponsibles
       },
       details
     };

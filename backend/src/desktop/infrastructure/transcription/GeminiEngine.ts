@@ -75,6 +75,17 @@ export function cleanJsonString(raw: string): string {
 }
 
 export class GeminiEngine implements ITranscriptionEngine {
+  /** Pausa antes de la segunda pasada sobre tramos fallidos (configurable en pruebas). */
+  public static SECOND_PASS_DELAY_MS = 20000;
+
+  public static isTransientStatus(status: number): boolean {
+    return status === 429 || status === 408 || status >= 500;
+  }
+
+  public static isUnavailableChunk(segments: RawTranscriptionSegment[]): boolean {
+    return segments.length === 1 && /^\[Audio no disponible/.test(segments[0]?.text || "");
+  }
+
   constructor(private config: GeminiEngineConfig) {
     if (!config.apiKey) {
       throw new Error("Clave de API de Gemini no configurada.");
@@ -139,16 +150,35 @@ export class GeminiEngine implements ITranscriptionEngine {
       const allSegments: RawTranscriptionSegment[] = [];
       const totalChunks = chunks.length;
 
+      // Resultado por tramo (caché): una segunda pasada solo repite los tramos que fallaron.
+      const chunkResults: RawTranscriptionSegment[][] = new Array(totalChunks);
+      const failedChunks: number[] = [];
+
       for (let i = 0; i < totalChunks; i++) {
         const chunk = chunks[i]!;
         const chunkSegments = await this.transcribeChunk(chunk.path, chunk.offsetSec, language);
-        allSegments.push(...chunkSegments);
+        chunkResults[i] = chunkSegments;
+        if (GeminiEngine.isUnavailableChunk(chunkSegments)) failedChunks.push(i);
 
         if (options?.onProgress) {
-          const progress = Math.min(100, Math.round(((i + 1) / totalChunks) * 100));
+          const progress = Math.min(99, Math.round(((i + 1) / totalChunks) * 100));
           options.onProgress(progress);
         }
       }
+
+      // Segunda pasada (v7: los tramos de 3 min perdidos por 429/503 no deben quedar en silencio).
+      if (failedChunks.length > 0) {
+        console.warn(`[GeminiEngine] ${failedChunks.length} tramo(s) sin transcribir; segunda pasada tras una pausa.`);
+        await new Promise((r) => setTimeout(r, GeminiEngine.SECOND_PASS_DELAY_MS));
+        for (const i of failedChunks) {
+          const chunk = chunks[i]!;
+          const retried = await this.transcribeChunk(chunk.path, chunk.offsetSec, language);
+          if (!GeminiEngine.isUnavailableChunk(retried)) chunkResults[i] = retried;
+        }
+      }
+
+      for (const segs of chunkResults) allSegments.push(...(segs || []));
+      if (options?.onProgress) options.onProgress(100);
 
       // Ordenar cronológicamente garantizando orden ascendente
       allSegments.sort((a, b) => a.startMs - b.startMs);
@@ -190,6 +220,8 @@ export class GeminiEngine implements ITranscriptionEngine {
       const maxAttempts = 5;
 
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        // Cada intento parte sin respuesta: antes una excepción de red dejaba la respuesta del intento anterior.
+        response = null;
         const isCurrentAsr = activeModel.includes("transcribe");
 
         const currentPrompt = isCurrentAsr
@@ -255,13 +287,16 @@ Devuelve un JSON estrictamente estructurado como un array de objetos con las pro
               // Si el modelo LLM tiene alta demanda (503), alternar al modelo ASR especializado
               activeModel = "gemini-3.5-transcribe";
             }
-            if (attempt < maxAttempts) {
-              const backoffDelays = [2000, 5000, 15000, 20000, 30000];
-              const backoffMs = backoffDelays[attempt - 1] ?? 15000;
-              await new Promise((r) => setTimeout(r, backoffMs));
-              continue;
-            }
           }
+          // Errores no transitorios (400, 401, 403, 404...): reintentar no sirve.
+          if (!GeminiEngine.isTransientStatus(response.status)) break;
+        }
+
+        // Error transitorio (429/5xx), timeout o fallo de red: espera creciente antes de reintentar.
+        if (attempt < maxAttempts) {
+          const backoffDelays = [2000, 5000, 15000, 20000, 30000];
+          const backoffMs = backoffDelays[attempt - 1] ?? 15000;
+          await new Promise((r) => setTimeout(r, backoffMs));
         }
       }
 

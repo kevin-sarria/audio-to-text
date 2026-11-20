@@ -14,9 +14,12 @@ out/
 .env.local
 .env.*.local
 
-# Storage and uploads
-storage/
-uploads/
+# Storage and uploads (anclado a la raíz y a backend/: el patrón "storage/" sin anclar
+# ignoraba también el código fuente de backend/src/infrastructure/storage/)
+/storage/
+/backend/storage/
+/uploads/
+/backend/uploads/
 *.wav
 *.mp3
 *.m4a

@@ -71,33 +71,24 @@ El sistema soporta tanto proveedores integrados por defecto como proveedores din
 
 ---
 
-## 5. Módulo de IA para Issues Técnicas y Pipeline en 2 Pasos
+## 5. Módulo de IA para Issues Técnicas (reglas 1–22, pipeline en 2 etapas)
 
-Para garantizar máxima precisión y erradicar cualquier invención o alucinación de los modelos, el análisis de reuniones técnicas se rige por un **pipeline en dos pasos** y **8 reglas de fidelidad obligatorias**:
+Los modelos siguen el prompt literalmente, así que cada regla se escribe explícita y, cuando se puede, **se verifica por código**. El módulo debe funcionar con cualquier modelo: si un modelo falla, se corrige con una regla universal o un validador, nunca con un parche para ese modelo.
 
-### 5.1 Pipeline en 2 Pasos
-1. **Paso 1 (Extracción, Clasificación y Detección de Ruido):** El LLM procesa la transcripción cruda y extrae:
-   - Resumen ejecutivo estricto.
-   - Puntos `alreadyResolved` (CERRADO / YA HECHO: no generan issue).
-   - Puntos `inProgress` (EN CURSO: con responsable asignado; no se duplican, solo tareas de integración).
-   - Requerimientos `newItems` (NUEVO: pasan al paso 2).
-   - Puntos `backlog` (PARA BACKLOG: no bloqueantes, sin prompt de desarrollo).
-   - Decisiones clave y `globalOpenQuestions` (términos dudosos o ruido de audio con citas textuales y timestamps).
-2. **Paso 2 (Generación de Issues por Repositorio):** Genera las tareas técnicas **únicamente a partir de la lista estructurada del Paso 1**, evitando inventar módulos fuera de lo conversado.
-3. **Fallback Resiliente:** Si el pipeline de dos pasos experimenta fallas de conectividad o formato, conmuta de forma segura a un análisis de paso único estructurado.
+### 5.1 Capas del prompt (`backend/src/infrastructure/analysis/`)
+- **Capa 1 — Reglas universales (1–22):** `MeetingAnalysisPrompts.getUniversalRulesPrompt()`.
+- **Capa 2 — Contexto del proyecto:** contexto de la carpeta vinculada + lista exacta de documentos + tabla de referencia de horas.
+- **Capa 3 — Glosario:** `glossary/ProjectGlossary.ts` es la **fuente única**: el prompt lo renderiza y los validadores usan las mismas listas (personas, terceros, correcciones del ASR, decisiones de alcance pendientes). Para cambiar el glosario, edita solo ese archivo.
 
-### 5.2 Las 8 Reglas Obligatorias de Fidelidad y Salida
-1. **Fidelidad Estricta (Anti-invención):** Solo afirmar lo dicho explícitamente en la reunión. Si se requiere un campo o endpoint no mencionado, rotularlo como `"PROPUESTO (por confirmar)"`. Los archivos son hipótesis: rotular `"Archivos sugeridos (verificar en el repo)"`. Criterios de aceptación deducidos deben llevar el prefijo `[Supuesto]`.
-2. **Ruido de Transcripción y Hablantes:** No intentar adivinar palabras mal captadas por el audio; formular preguntas abiertas citando timestamp y fragmento.
-3. **Preguntas Abiertas Obligatorias:** Cada issue contiene `"openQuestions"` (`"Ninguna"` solo si no hay ambigüedades).
-4. **Clasificación Previa:** No duplicar lo que ya esté resuelto o en curso por miembros del equipo.
-5. **Aislamiento por Repositorio:** Exactamente un issue por repositorio (`backend` / `panel` / `app`). Si una funcionalidad abarca múltiples repos, se divide en issues separados vinculados mediante `"Depende de ISSUE-N"`.
-6. **Estimación y Verificación Aritmética:**
-   - Desglose por issue: `"Backend: Xh | Panel: Yh | App: Zh | Total: Th"`.
-   - Considerar scripts en `db_changes` con formato `AAAAMMDD_0NN.sql`, pruebas automatizadas y soporte offline/pantalla móvil en apps.
-   - Verificación de sumas: El backend recalcula y valida programáticamente las sumas de horas por repositorio (`repoHoursTotals`), impidiendo discrepancias aritméticas o símbolos aproximados (`~`).
-7. **Flujo de PR y Dependencias:** Cada issue define rama corta desde dev, revisión, captura de pantalla y dependencias entre ramas.
-8. **Orden Estricto del Documento:** Resumen ejecutivo → Ya resuelto → En curso → Decisiones clave → Preguntas abiertas globales → Issues (agrupados por repo) → Backlog → Totales de horas por repo.
+### 5.2 Pipeline
+1. **Saneamiento y cobertura:** `TranscriptSanitizer` repara JSON incrustado; `TranscriptCoverageDetector` detecta tramos sin audio. Con cobertura < 90 % no se generan issues (lo decide el código).
+2. **Etapa 1 — Extracción:** JSON con `clase` (cerrado / en_curso / nuevo / backlog), `accion` (codigo / gestion_externa / decision / seguimiento), `quien_lo_lleva` y `cierre_posterior`.
+3. **Normalización determinista (`ExtractionPointNormalizer`):** aplica por código las reglas 6, 7, 21 y 22 antes de redactar: cierres posteriores → cerrado; terceros (CRM, Lady…) → gestion_externa; responsables no nombrados en el segmento → null; app sin frase explícita de app → panel; BLOQUEANTE sin "si me equivoco" → NO BLOQUEANTE.
+4. **Etapa 2 — Redacción:** issues solo desde puntos `nuevo` + `codigo`, con hasta 2 reintentos si un validador de tipo Error falla (o si la respuesta no es JSON).
+5. **Validadores (`validators/`):** Error = rechazar y reintentar; Aviso = marcar para revisión. Los v8 están en `MeetingAnalysisV8Validators.ts`.
+
+### 5.3 Set de evaluación
+`evaluation/cases/<id>/transcript.txt` (transcripción congelada) + `expected.json` (resultado esperado y trampas conocidas: temas sin issue, responsables prohibidos, valores ambiguos). `EvaluationRunner` compara una salida contra el caso. Antes de adoptar un modelo nuevo, correr el caso de referencia con él.
 
 ---
 

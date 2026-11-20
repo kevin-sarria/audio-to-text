@@ -18,6 +18,7 @@ import { MeetingAnalysisValidators } from "./MeetingAnalysisValidators.js";
 import { TranscriptSanitizer } from "./TranscriptSanitizer.js";
 import { TranscriptCoverageDetector } from "./TranscriptCoverageDetector.js";
 import { RepoContextScanner } from "./RepoContextScanner.js";
+import { ExtractionPointNormalizer } from "./ExtractionPointNormalizer.js";
 import { LlmProviderClients } from "./LlmProviderClients.js";
 
 export interface LlmMeetingAnalysisServiceDeps {
@@ -64,6 +65,15 @@ export class LlmMeetingAnalysisService implements IMeetingAnalysisService {
       const rawStep1 = await this.executeLlmCall(step1SystemPrompt, step1UserPrompt, provider, apiKey, model, baseUrl);
       const step1Data = MeetingAnalysisResponseParser.parseStep1Extraction(rawStep1);
 
+      // Reglas 6, 7, 21 y 22 aplicadas por código antes de redactar: cierres posteriores,
+      // terceros → gestion_externa, responsables no nombrados, app sin evidencia, BLOQUEANTE inválidas.
+      const normalization = ExtractionPointNormalizer.normalize(step1Data.puntos || [], sanitizedTranscript);
+      step1Data.puntos = normalization.points;
+      if (normalization.changes.length > 0) {
+        console.info("[LlmMeetingAnalysisService] Normalización determinista de la extracción:", normalization.changes);
+        this.syncSectionsWithPoints(step1Data, normalization.changes.map((c) => c.pointId));
+      }
+
       // Filtrar únicamente los puntos que son nuevos y requieren código
       const validCodePoints = (step1Data.puntos || []).filter(
         (p) => p.clase === "nuevo" && p.accion === "codigo"
@@ -96,7 +106,13 @@ export class LlmMeetingAnalysisService implements IMeetingAnalysisService {
         let parsedStep2: any;
         try {
           parsedStep2 = JSON.parse(step2Clean);
-        } catch {
+        } catch (parseErr: any) {
+          // Antes un JSON inválido se convertía en "0 issues" y pasaba como resultado válido.
+          if (attempt < maxRetries && validCodePoints.length > 0) {
+            console.info(`[LlmMeetingAnalysisService] JSON inválido en Etapa 2 (intento ${attempt + 1}); reintentando.`);
+            step2UserPrompt += `\n\n[ERROR CRÍTICO EN TU RESPUESTA PREVIA]: no era JSON válido (${parseErr.message}). Devuelve exclusivamente el objeto JSON con "issues" y "repoHoursTotals".`;
+            continue;
+          }
           parsedStep2 = { issues: [] };
         }
 
@@ -140,7 +156,7 @@ export class LlmMeetingAnalysisService implements IMeetingAnalysisService {
       console.warn("[LlmMeetingAnalysisService] Fallback a análisis de paso único debido a:", stepErr.message);
       const fallbackPrompt = this.buildSingleStepPrompt(projectContext);
       const rawFallback = await this.executeLlmCall(fallbackPrompt, step1UserPrompt, provider, apiKey, model, baseUrl);
-      return this.parseAndValidateResponse(rawFallback, transcript);
+      return this.parseAndValidateResponse(rawFallback, sanitizedTranscript);
     }
   }
 
@@ -364,6 +380,25 @@ Este contexto servirá como arnés de contexto técnico para que agentes de IA d
       return LlmProviderClients.callGroq(systemPrompt, userPrompt, apiKey, model);
     } else {
       return LlmProviderClients.callOpenAi(systemPrompt, userPrompt, apiKey, model, baseUrl);
+    }
+  }
+
+  /**
+   * Mantiene las secciones del resumen coherentes con los puntos reclasificados por código:
+   * un punto pasado a "cerrado" va a Ya resuelto y uno pasado a gestión externa va a En curso
+   * (si la sección aún no cita su marca de tiempo).
+   */
+  private syncSectionsWithPoints(step1Data: Step1ExtractionDto, changedIds: string[]): void {
+    const changed = new Set(changedIds);
+    const cites = (list: string[], ts: string) => list.some((item) => ts && item.includes(ts));
+    for (const p of step1Data.puntos || []) {
+      if (!changed.has(p.id)) continue;
+      const label = `${(p.cita || "").slice(0, 140)} [${p.timestamp}]`;
+      if (p.clase === "cerrado" && !cites(step1Data.alreadyResolved, p.timestamp)) {
+        step1Data.alreadyResolved.push(label);
+      } else if (p.accion === "gestion_externa" && !cites(step1Data.inProgress, p.timestamp)) {
+        step1Data.inProgress.push(`${label} (gestión externa)`);
+      }
     }
   }
 

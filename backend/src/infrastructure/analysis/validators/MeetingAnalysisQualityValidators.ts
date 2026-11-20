@@ -1,6 +1,9 @@
 import { GeneratedMeetingData } from "../../../domain/services/IMeetingAnalysisService.js";
 import { ExtractionPointDto } from "../MeetingAnalysisResponseParser.js";
-import { GLOSSARY_TERMS } from "./MeetingAnalysisErrorValidators.js";
+import { GLOSSARY_TERMS } from "../glossary/ProjectGlossary.js";
+import { MeetingAnalysisV8Validators } from "./MeetingAnalysisV8Validators.js";
+import { ExtractionPointNormalizer } from "../ExtractionPointNormalizer.js";
+import { normalizeText } from "../TranscriptIndex.js";
 import { MeetingAnalysisCoverageValidators } from "./MeetingAnalysisCoverageValidators.js";
 import { TranscriptCoverageDetector } from "../TranscriptCoverageDetector.js";
 
@@ -16,7 +19,8 @@ export const REFERENCE_HOURS_TABLE: Record<string, number> = {
   "borrado masivo": 8,
   "reprogramación": 8,
   "reprogramacion": 8,
-  "dimensionamiento": 8
+  // v8: por defecto solo inyectar la matriz y ajustar el prompt (6–8 h backend, PROPUESTO).
+  "dimensionamiento": 7
 };
 
 export class MeetingAnalysisQualityValidators {
@@ -28,9 +32,12 @@ export class MeetingAnalysisQualityValidators {
     const warnings: string[] = [];
 
     // 15. Un issue NO BLOQUEADO que contiene la frase de detención sin parte pendiente sin default
-    const stopPhraseRegex = /si (?:esta|la) parte (?:no está resuelta|pendiente)[^.,\n]*detente/i;
+    // Antes se consideraba "bloqueado" todo issue de prioridad alta, lo que ocultaba el aviso.
+    const stopPhraseRegex = /\bdetente\b/i;
     for (const issue of data.issues) {
-      const isBlocked = issue.title.toLowerCase().includes("bloquead") || issue.priority === "high";
+      const isBlocked =
+        issue.title.toLowerCase().includes("bloquead") ||
+        (issue.openQuestions || []).some((q) => q.includes("[BLOQUEANTE]"));
       if (!isBlocked && stopPhraseRegex.test(issue.agentPrompt || "")) {
         warnings.push(
           `El issue [${issue.id}] no está bloqueado pero incluye la frase de detención sin una parte pendiente sin valor por defecto.`
@@ -105,13 +112,9 @@ export class MeetingAnalysisQualityValidators {
       }
     }
 
-    // 20. Normalización de entidades o siglas (ej. LRP -> ERP) sin glosario o sin interpretación
-    if (transcript && transcript.includes("LRP")) {
-      const allText = `${data.summary || ""} ${data.issues.map((i) => `${i.title} ${i.description}`).join(" ")}`;
-      if (allText.includes("ERP") && !allText.includes("LRP") && !allText.includes("[Interpretación")) {
-        warnings.push(`Se normalizó la sigla 'LRP' a 'ERP' sin mantener la referencia original o sin etiqueta [Interpretación].`);
-      }
-    }
+    // 20. Siglas que no están en la transcripción ni en el glosario (sustituye la regla fija LRP→ERP,
+    //     que ahora es una corrección del glosario y por tanto válida).
+    MeetingAnalysisV8Validators.validateWarnings(data, transcript, warnings);
 
     // 21. Avisos de cobertura de transcripción (citas < 30s de tramos sin audio)
     MeetingAnalysisCoverageValidators.validateCoverageWarnings(data, transcript, warnings);
@@ -124,7 +127,11 @@ export class MeetingAnalysisQualityValidators {
     let pSum = 0;
     let aSum = 0;
 
-    const blockingQuestions = (data.globalOpenQuestions || []).filter((q) => q.includes("[BLOQUEANTE]"));
+    // Solo cuentan las BLOQUEANTE válidas (con "si me equivoco"); las demás se degradan más abajo
+    // y por tanto no justifican la frase de detención en ningún issue.
+    const blockingQuestions = (data.globalOpenQuestions || []).filter(
+      (q) => q.includes("[BLOQUEANTE]") && /si me equivoco/i.test(q)
+    );
     const extraBacklog: string[] = [];
 
     // Separar issues que corresponden a backlog (repo 'otro', 0h o prioridad backlog)
@@ -235,23 +242,27 @@ export class MeetingAnalysisQualityValidators {
       prog.replace(/\bHablante\s*\d+\b/gi, "sin identificar")
     );
 
-    // Autocorrección de preguntas BLOQUEANTE
-    const transcriptLower = (transcript || "").toLowerCase();
-    const hasRolesInTranscript = transcriptLower.includes("rol") || transcriptLower.includes("roles");
+    // Autocorrección de preguntas (reglas 3, 21 y 22)
+    const transcriptNorm = normalizeText(transcript || "");
+    const inventedTerms = [/\broles?\b/, /\bpermisos?\b/, /\blimites?\b/].filter((re) => transcript && !re.test(transcriptNorm));
+    const closedTopics = transcript ? ExtractionPointNormalizer.closedTopics(transcript) : [];
+    const existingIds = new Set(finalIssues.map((i) => i.id.toUpperCase()));
 
     const cleanedQuestions = (data.globalOpenQuestions || [])
       .filter((q) => {
-        // Eliminar preguntas de roles inventadas si la transcripción no habló de roles
-        if (transcript && !hasRolesInTranscript && /\broles?\b/i.test(q)) {
-          return false;
-        }
+        const qNorm = normalizeText(q);
+        // Preguntas sobre roles/permisos/límites que nadie planteó en la reunión
+        if (inventedTerms.some((re) => re.test(qNorm))) return false;
+        // Preguntas sobre ítems que se dieron por resueltos más adelante (regla 21)
+        if (closedTopics.some((t) => qNorm.includes(t))) return false;
         return true;
       })
       .map((q) => {
         if (q.includes("[BLOQUEANTE]")) {
-          const hasIssueRef = /\b([A-Z]+-\d+)\b/i.test(q);
+          const refs = q.match(/\b[A-Z]+-\d+\b/g) || [];
+          const hasExistingIssueRef = refs.some((r) => existingIds.has(r.toUpperCase()));
           const hasWorkRedo = /si me equivoco/i.test(q);
-          if (!hasIssueRef || !hasWorkRedo) {
+          if (!hasExistingIssueRef || !hasWorkRedo) {
             return q.replace("[BLOQUEANTE]", "[NO BLOQUEANTE]");
           }
         }

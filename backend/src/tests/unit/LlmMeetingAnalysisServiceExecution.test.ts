@@ -71,6 +71,8 @@ describe("LlmMeetingAnalysisService - Ejecución de Pipeline y Prompts", () => {
       repoHoursTotals: { backend: 3, panel: 0, app: 0, total: 3 }
     });
 
+    // La prueba no debe depender de que el CLI 'agy' esté instalado en la máquina.
+    vi.spyOn(service as any, "resolveAgyPath").mockReturnValue("agy");
     const executeSpy = vi
       .spyOn(service as any, "executeLlmCall")
       .mockResolvedValueOnce(mockStep1)
@@ -205,5 +207,43 @@ Fin de respuesta.`;
     expect(step2Prompt).toContain("[CAPA 1 — REGLAS UNIVERSALES DE GENERACIÓN DE ISSUES (OBLIGATORIAS)]");
     expect(step2Prompt).toContain("ETAPA 2");
     expect(singleStepPrompt).toContain("[CAPA 1 — REGLAS UNIVERSALES DE GENERACIÓN DE ISSUES (OBLIGATORIAS)]");
+  });
+
+  it("normaliza la extracción antes de la etapa 2 y reintenta si la etapa 2 no devuelve JSON válido", async () => {
+    const transcript = [
+      "[00:10] Hablante 1: Digámosle a Lady que nos traiga los activos y los pendientes.",
+      "[00:30] Hablante 1: Se requiere exportar al Excel las solicitudes con filtros.",
+      "[00:50] Hablante 2: Listo."
+    ].join("\n");
+    const step1 = JSON.stringify({
+      summary: "Reunión corta.",
+      puntos: [
+        { id: "P1", cita: "Digámosle a Lady que nos traiga los activos y los pendientes", timestamp: "00:10", clase: "nuevo", accion: "codigo", repo: "backend" },
+        { id: "P2", cita: "exportar al Excel las solicitudes con filtros", timestamp: "00:30", clase: "nuevo", accion: "codigo", repo: "backend" }
+      ],
+      alreadyResolved: [],
+      inProgress: [],
+      keyDecisions: [],
+      globalOpenQuestions: [],
+      backlog: []
+    });
+    const step2 = JSON.stringify({ issues: [], repoHoursTotals: { backend: 0, panel: 0, app: 0, total: 0 } });
+
+    vi.spyOn(service as any, "resolveAgyPath").mockReturnValue("agy");
+    const executeSpy = vi
+      .spyOn(service as any, "executeLlmCall")
+      .mockResolvedValueOnce(step1)
+      .mockResolvedValueOnce("esto no es JSON")
+      .mockResolvedValueOnce(step2);
+
+    const result = await service.generateAnalysis(transcript, undefined, { provider: "google-account" });
+
+    expect(executeSpy).toHaveBeenCalledTimes(3);
+    const firstStep2Prompt = String(executeSpy.mock.calls[1]?.[1] ?? "");
+    expect(firstStep2Prompt).toContain("exportar al Excel");
+    expect(firstStep2Prompt).not.toContain(`"id": "P1"`);
+    const retryPrompt = String(executeSpy.mock.calls[2]?.[1] ?? "");
+    expect(retryPrompt).toContain("no era JSON válido");
+    expect((result.inProgress ?? []).some((i) => i.includes("Lady") && i.includes("gestión externa"))).toBe(true);
   });
 });

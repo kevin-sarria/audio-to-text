@@ -32,7 +32,11 @@ export const ExtractionPointSchema = z.object({
     if (v.includes("vari")) return "varios";
     return "ninguno";
   }, z.enum(["backend", "panel", "app", "varios", "ninguno"]).default("ninguno")),
-  quien_lo_lleva: z.string().nullable().default(null),
+  quien_lo_lleva: z.preprocess((val) => (typeof val === "string" && val.trim() && val.trim().toLowerCase() !== "null" ? val : null), z.string().nullable()).default(null),
+  cierre_posterior: z.preprocess(
+    (val) => (val && typeof val === "object" && typeof (val as any).cita === "string" ? val : null),
+    z.object({ cita: z.string(), timestamp: z.string().optional() }).nullable()
+  ).optional(),
   tipo: z.string().default("mejora"),
   interpretaciones: z.preprocess((val) => (Array.isArray(val) ? val : []), z.array(z.any())).default([]),
   valores_ambiguos: z.preprocess((val) => (Array.isArray(val) ? val : []), z.array(z.any())).default([]),
@@ -271,7 +275,8 @@ export class MeetingAnalysisResponseParser {
     };
 
     // Saneamiento y autocorrección determinista
-    const sanitizedResult = MeetingAnalysisValidators.sanitizeAndAutocorrect(initialResult);
+    // Se pasa la transcripción para que también apliquen la cobertura y las reglas 21–22.
+    const sanitizedResult = MeetingAnalysisValidators.sanitizeAndAutocorrect(initialResult, transcript);
 
     // Validaciones deterministas
     const validation = MeetingAnalysisValidators.validate(sanitizedResult, transcript, extractionPoints);

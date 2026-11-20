@@ -1,3 +1,5 @@
+import { renderGlossaryLayer } from "./glossary/ProjectGlossary.js";
+
 export class MeetingAnalysisPrompts {
   public static getUniversalRulesPrompt(): string {
     return `[CAPA 1 — REGLAS UNIVERSALES DE GENERACIÓN DE ISSUES (OBLIGATORIAS)]
@@ -127,7 +129,20 @@ Orden: Resumen ejecutivo → Ya resuelto → En curso (incluye gestión externa)
 - No cites marcas de tiempo dentro de un tramo sin audio ni afirmes qué se dijo allí.
 - No marques como cerrado, en curso, decisión ni backlog algo cuyo respaldo estaría en un tramo faltante. Si un punto aparece sin su contexto (ej.: un bug leído en voz alta cuya conversación posterior falta), regístralo como "sin estado confirmado" con una pregunta NO BLOQUEANTE y no generes issue.
 - No generes issues de ítems que dependen de contexto faltante; lístalos como "pendiente de retranscripción".
-- No uses "Hablante N" como nombre de persona; si no se dijo el nombre, escribe "sin identificar".`;
+- No uses "Hablante N" como nombre de persona; si no se dijo el nombre, escribe "sin identificar".
+
+== 21. CIERRES POSTERIORES ==
+- Si más adelante alguien afirma que un ítem ya está resuelto ("ya te había solucionado", "ya está solucionado, ¿no?", "el de los aislamientos también", "ya está en la PR"), el ítem es clase = cerrado: sin issue, sin pregunta bloqueante ni de ambigüedad.
+- Busca estos cierres en TODA la transcripción antes de clasificar. Una frase de cierre sin tema se refiere al ítem que se acaba de leer (regla 18).
+
+== 22. RESPONSABLES Y ORIGEN ==
+- Nombra un responsable solo si se dijo explícitamente en ese segmento ("a cargo de", "le toca a", "lo tiene X", "voy a dejar que él la cierre"). Que alguien sea interpelado, mencionado o usado como ejemplo no lo hace responsable. Si no, escribe "sin identificar".
+- No afirmes que existen documentos, roles, permisos, límites ni reglas que no se mencionan en la transcripción. No preguntes por ellos si nadie los planteó.
+- Un ítem cuya acción depende de un tercero (CRM, proveedores de datos, personas externas, APIs de terceros) es gestion_externa o seguimiento: nunca issue de código ni pregunta BLOQUEANTE.
+- Crea un issue de app solo si una frase explícita habla de la app para ese ítem; los endpoints /api/mobile solo se mencionan cuando hay issue de app.
+- Los procesos de la reunión (ej.: "abrir un archivo nuevo para el backlog") no son backlog funcional.
+- No añadas pantallas, cargas de archivo ni endpoints que no se pidieron: si los sugieres, van marcados [Supuesto] en el texto y no suman horas.
+- Respeta las DECISIONES DE ALCANCE PENDIENTES del glosario: implementa solo el alcance mínimo indicado.`;
   }
 
   public static getProjectContextLayer(customContext?: string): string {
@@ -157,27 +172,12 @@ TABLA DE REFERENCIA DE HORAS (Para calibración de estimaciones):
 - Selección múltiple + borrado masivo (panel): 8 h
 - Endpoint de borrado masivo (backend): 8 h
 - Reprogramación (backend / panel): 8 / 8 h
-- Incorporar un dato nuevo al cálculo de dimensionamiento (backend): 8 h
+- Incorporar un dato nuevo al cálculo de dimensionamiento (backend): 6–8 h (PROPUESTO: solo inyectar la matriz con rendimiento y ajustar el prompt; sin pantallas ni endpoints)
 - Migraciones SQL: db_changes/${todayFormatted}_0NN.sql (solo si hay columnas nuevas)`;
   }
 
   public static getProjectGlossary(): string {
-    return `[CAPA 3 — GLOSARIO]
-Personas: Isa, Cristian, Juan (revisor de PR y líder del proceso), Juan Esteban (módulo de formularios),
-          Alexis, Leo, Lady (fuente de usuarios), Diego Meléndez (API de Tri), María, Valeria, Suzuki
-Estados de la matriz de hallazgos: Abierto, En corrección, Validar Diamante, Cerrado
-Términos del dominio: aislamientos, novedades (quejas del servicio), solicitudes, llamados, marcaciones,
-                      dimensionamiento, mantenimiento (= sede/cliente), centro de costo, rutinas, sábana de usuarios
-Lugares/clientes: Hospital San Vicente Fundación, Cubrimientos Cali (lectura dudosa: Escali / Scali), Bicitrack, Sociedad Portuaria
-Archivos: matriz de maquinaria, "máquina descripción" (archivo de la carpeta compartida con columna rendimiento)
-Errores típicos del ASR → forma correcta (corregir en silencio):
-- "Lexus" → "Alexis"
-- "prón" / "pront" → "prompt"
-- "valida de amante" / "validar de amate" → "Validar Diamante"
-- "RAME" / "TRAME" / "derame" → "derrame"
-- "al EC" → "Excel"
-- "LRP" → "ERP"
-- "Bcirat" → "Bicitrack"`;
+    return renderGlossaryLayer();
   }
 
   public static buildStep1Prompt(projectContext?: string): string {
@@ -188,6 +188,7 @@ ${this.getProjectContextLayer(projectContext)}
 ${this.getProjectGlossary()}
 
 Eres un Principal Software Architect de élite. Tu objetivo en esta ETAPA 1 (Extracción y Clasificación) es analizar la transcripción completa y devolver EXCLUSIVAMENTE una estructura JSON limpia con los puntos tratados, asignando obligatoriamente a cada uno su clase ('cerrado' | 'en_curso' | 'nuevo' | 'backlog') y su tipo de acción ('codigo' | 'gestion_externa' | 'decision' | 'seguimiento').
+Antes de clasificar, recorre TODA la transcripción buscando cierres posteriores (regla 21) y registra la frase de cierre en "cierre_posterior". En "quien_lo_lleva" escribe solo un nombre dicho explícitamente como responsable en ese segmento (regla 22); si no, null.
 
 ### FORMATO DE SALIDA DE ETAPA 1 (JSON ESTRICTO):
 {
@@ -201,6 +202,7 @@ Eres un Principal Software Architect de élite. Tu objetivo en esta ETAPA 1 (Ext
       "accion": "codigo | gestion_externa | decision | seguimiento",
       "repo": "backend | panel | app | varios | ninguno",
       "quien_lo_lleva": "nombre o null (solo si se nombra en el texto)",
+      "cierre_posterior": {"cita": "frase posterior que lo da por resuelto", "timestamp": "mm:ss"} o null,
       "tipo": "bug | mejora | consulta | soporte",
       "interpretaciones": [{"transcrito": "...", "probable": "...", "confianza": "alta | baja"}],
       "valores_ambiguos": [{"cita": "a partir de las 7", "lecturas": ["7:00 a.m.", "7:00 p.m."]}],
@@ -281,7 +283,7 @@ ${this.getProjectContextLayer(projectContext)}
 
 ${this.getProjectGlossary()}
 
-Eres un Principal Software Architect y Technical Lead de élite. Convierte la reunión en documentación técnica e issues accionables listas para agentes de IA en formato JSON estricto, aplicando estrictamente las 19 reglas universales:
+Eres un Principal Software Architect y Technical Lead de élite. Convierte la reunión en documentación técnica e issues accionables listas para agentes de IA en formato JSON estricto, aplicando estrictamente las 22 reglas universales:
 
 ### FORMATO DE SALIDA (JSON ESTRICTO):
 {
