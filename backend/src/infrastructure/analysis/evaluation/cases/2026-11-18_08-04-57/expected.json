@@ -1,12 +1,12 @@
 {
   "caseId": "2026-11-18_08-04-57",
-  "description": "Caso de referencia (v8) de reunión de hallazgos y requerimientos de desarrollo (transcripción Google API congelada)",
+  "description": "Caso de referencia (v9) de reunión de hallazgos y requerimientos de desarrollo (transcripción Google API congelada)",
   "alreadyResolved": [
     "Web y móvil responsive [05:44]",
     "Dashboard diario y parametrización en reportes [06:25]",
     "Parámetros por sector con licitaciones [07:04]",
     "Filtro en cascada de llamados, ya implementado y pendiente de pasar a Validar Diamante [27:36]",
-    "Aislamientos opcional sin NA [29:19]; cierres posteriores [29:37] y [32:58]"
+    "Aislamientos opcional sin NA [29:19]; cierre posterior [32:58]"
   ],
   "inProgress": [
     "Tres ítems por validar [05:28]",
@@ -35,7 +35,7 @@
       "Endpoint de exportación a Excel (PROPUESTO)"
     ],
     "panel": [
-      "Renombrar asignación automática (nombre nuevo PROPUESTO)",
+      "Renombrar asignación automática (nombre nuevo por definir)",
       "Selects con búsqueda [30:09]",
       "Reprogramación en panel",
       "Selección múltiple y borrado masivo en panel",
@@ -55,10 +55,11 @@
     "Se pide a Lady activos y pendientes [27:17]"
   ],
   "globalOpenQuestions": [
-    "[NO BLOQUEANTE] Corte diurno/nocturno (a partir de las 7: ¿a.m. o p.m.?)",
+    "[NO BLOQUEANTE] Corte diurno/nocturno a partir de las 7 (sin aclarar a. m./p. m.)",
     "[NO BLOQUEANTE] Nombre nuevo para asignación automática",
     "[NO BLOQUEANTE] Canal de la reprogramación (panel o también app; valor por defecto panel)",
-    "[NO BLOQUEANTE] Si el rendimiento complementa o reemplaza el cálculo de dimensionamiento y unidad de medida"
+    "[NO BLOQUEANTE] Si el rendimiento complementa o reemplaza el cálculo de dimensionamiento y unidad de medida",
+    "[NO BLOQUEANTE] Habilitar cámara para reconocer el sitio (canal ambiguo; unir al backlog de logueo automático si aplica)"
   ],
   "expectedBacklogCount": 3,
   "forbiddenIssueTopics": [
@@ -69,7 +70,9 @@
     "usuarios pendientes",
     "certificaci",
     "estados de novedad",
-    "qa "
+    "qa ",
+    "cámara",
+    "camara"
   ],
   "forbiddenQuestionTopics": [
     "aislamiento",
@@ -86,10 +89,11 @@
   "forbiddenFixedValues": [
     "19:00",
     "7:00 p.m.",
+    "7:00 a.m.",
     "entre 06:00 y 19:00"
   ],
   "referenceHours": {
-    "dimensionamiento_backend": "6-8",
+    "dimensionamiento_backend": "8",
     "reprogramacion": "8/8",
     "borrado_masivo": "8/8",
     "exportacion": "8/4",
@@ -97,7 +101,7 @@
     "renombre": 2
   },
   "pendingDecisions": [
-    "Alcance de dimensionamiento: solo inyectar la matriz y ajustar el prompt (6–8 h backend, valor por defecto) o también pantalla de carga/visualización en el panel.",
+    "Alcance de dimensionamiento: solo inyectar la matriz y ajustar el prompt (8 h backend, valor por defecto) o también pantalla de carga/visualización en el panel.",
     "Reprogramación: ¿la app debe mostrar actividades reprogramadas? Hoy no hay base en la transcripción para un issue de app."
   ],
   "notesV8": [

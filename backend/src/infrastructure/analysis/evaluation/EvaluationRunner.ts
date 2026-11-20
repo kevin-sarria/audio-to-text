@@ -26,6 +26,9 @@ export interface EvaluationReport {
     noForbiddenIssueTopics: boolean;
     noForbiddenQuestionTopics: boolean;
     noForbiddenResponsibles: boolean;
+    noRenameInAlreadyResolved: boolean;
+    noCameraIssues: boolean;
+    noUnsupportedFixedTimes: boolean;
   };
   details: string[];
 }
@@ -128,6 +131,29 @@ export class EvaluationRunner {
     const noForbiddenResponsibles = responsibleHits.length === 0;
     if (!noForbiddenResponsibles) details.push(`Responsables sin respaldo: ${responsibleHits.join(", ")}`);
 
+    // Verificaciones v9
+    const noRenameInAlreadyResolved = !(generated.alreadyResolved || []).some(
+      (r) => norm(r).includes("renombr") || norm(r).includes("asignacion automatica")
+    );
+    if (!noRenameInAlreadyResolved) {
+      details.push("El punto de renombre se marcó erróneamente en alreadyResolved.");
+    }
+
+    const cameraIssues = generated.issues.filter(
+      (i) => (i.repo === "panel" || i.repo === "app") && (norm(i.title).includes("camara") || norm(i.description || "").includes("camara"))
+    );
+    const noCameraIssues = cameraIssues.length === 0;
+    if (!noCameraIssues) {
+      details.push(`Se crearon issues de panel/app sobre cámara: ${cameraIssues.map((i) => i.id).join(", ")}`);
+    }
+
+    const outputText = `${generated.summary} ${(generated.alreadyResolved || []).join(" ")} ${(generated.inProgress || []).join(" ")} ${(generated.keyDecisions || []).join(" ")} ${(generated.backlog || []).join(" ")} ${(generated.globalOpenQuestions || []).join(" ")} ${generated.issues.map((i) => `${i.title} ${i.description}`).join(" ")}`;
+    const hasUnsupportedFixedHours = /\b(?:19:00|7:00\s*(?:p\.?m\.?|a\.?m\.?))\b/i.test(outputText) && !outputText.includes("[Interpretación");
+    const noUnsupportedFixedTimes = !hasUnsupportedFixedHours;
+    if (hasUnsupportedFixedHours) {
+      details.push("La salida contiene horas no respaldadas ('19:00' / '7:00 p.m.').");
+    }
+
     const allChecksOk =
       issuesCountMatches &&
       appIssuesAreZero &&
@@ -137,6 +163,9 @@ export class EvaluationRunner {
       noForbiddenIssueTopics &&
       noForbiddenQuestionTopics &&
       noForbiddenResponsibles &&
+      noRenameInAlreadyResolved &&
+      noCameraIssues &&
+      noUnsupportedFixedTimes &&
       validation.isValid;
 
     return {
@@ -155,7 +184,10 @@ export class EvaluationRunner {
         backlogCountMatches,
         noForbiddenIssueTopics,
         noForbiddenQuestionTopics,
-        noForbiddenResponsibles
+        noForbiddenResponsibles,
+        noRenameInAlreadyResolved,
+        noCameraIssues,
+        noUnsupportedFixedTimes
       },
       details
     };

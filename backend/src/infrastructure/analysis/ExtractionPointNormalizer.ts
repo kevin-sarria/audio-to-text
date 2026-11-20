@@ -39,10 +39,32 @@ export class ExtractionPointNormalizer {
       const citaNorm = normalizeText(p.cita || "");
       const segmentText = index.isEmpty ? citaNorm : `${citaNorm} ${index.windowText(sec, 30, 30)}`;
 
+      // Regla 21 (v9): desestimar cierres aportados por el modelo que sean preguntas
+      if (
+        p.cierre_posterior?.cita &&
+        (p.cierre_posterior.cita.trim().endsWith("?") || /¿no\?/i.test(p.cierre_posterior.cita))
+      ) {
+        changes.push({ pointId: p.id, change: `cierre descartado (pregunta: "${p.cierre_posterior.cita}")` });
+        p.cierre_posterior = null;
+      }
+
       // Regla 21: cierre posterior del mismo tema → cerrado, sin issue ni pregunta.
       // Vale tanto el cierre detectado por código como el que el propio modelo registró.
+      // Un punto de renombre sin nombre nuevo nunca se cierra por un cierre implícito (sin tema).
+      const isRename = citaNorm.includes("cambiar el nombre") || citaNorm.includes("renombr");
       const closure = closures.find((c) => c.sec >= sec - 5 && citaNorm.includes(c.topic));
-      const closureCita = closure?.cita || (p.cierre_posterior?.cita ? p.cierre_posterior.cita : null);
+      let closureCita: string | null = null;
+      if (closure) {
+        if (!isRename || /\b(asignacion|llamados?|renombr|nombre)\b/i.test(normalizeText(closure.cita))) {
+          closureCita = closure.cita;
+        }
+      }
+      if (!closureCita && p.cierre_posterior?.cita) {
+        if (!isRename || /\b(asignacion|llamados?|renombr|nombre)\b/i.test(normalizeText(p.cierre_posterior.cita))) {
+          closureCita = p.cierre_posterior.cita;
+        }
+      }
+
       if (closureCita && p.clase !== "cerrado") {
         changes.push({ pointId: p.id, change: `clase ${p.clase} → cerrado (cierre posterior "${closureCita}")` });
         p.clase = "cerrado";

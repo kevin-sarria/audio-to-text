@@ -2,6 +2,7 @@ import { GeneratedMeetingData } from "../../../domain/services/IMeetingAnalysisS
 import { ExtractionPointDto } from "../MeetingAnalysisResponseParser.js";
 import { MeetingAnalysisCoverageValidators } from "./MeetingAnalysisCoverageValidators.js";
 import { MeetingAnalysisV8Validators } from "./MeetingAnalysisV8Validators.js";
+import { MeetingAnalysisV9Validators } from "./MeetingAnalysisV9Validators.js";
 import { GLOSSARY_TERMS } from "../glossary/ProjectGlossary.js";
 import { TranscriptIndex, parseCitedSeconds } from "../TranscriptIndex.js";
 
@@ -368,6 +369,9 @@ export class MeetingAnalysisErrorValidators {
 
     // 21. Validadores v8: cierres posteriores, responsables, origen, app y estructura inventada
     MeetingAnalysisV8Validators.validateErrors(data, transcript, errors);
+
+    // 22. Validadores v9: cobertura de la matriz, cierres que son pregunta, canal ambiguo, horas no respaldadas
+    MeetingAnalysisV9Validators.validateErrors(data, transcript, errors, extractionPoints);
 
     return errors;
   }

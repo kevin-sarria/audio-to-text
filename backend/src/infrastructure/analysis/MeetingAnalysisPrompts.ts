@@ -132,7 +132,8 @@ Orden: Resumen ejecutivo → Ya resuelto → En curso (incluye gestión externa)
 - No uses "Hablante N" como nombre de persona; si no se dijo el nombre, escribe "sin identificar".
 
 == 21. CIERRES POSTERIORES ==
-- Si más adelante alguien afirma que un ítem ya está resuelto ("ya te había solucionado", "ya está solucionado, ¿no?", "el de los aislamientos también", "ya está en la PR"), el ítem es clase = cerrado: sin issue, sin pregunta bloqueante ni de ambigüedad.
+- El cierre aplica SOLO al ítem que la frase nombra o al inmediatamente anterior si la frase lo señala sin ambigüedad. Un ítem cuyo nombre nuevo o acción no se definió (p. ej. renombrar "asignación automática") nunca se marca como cerrado por una frase suelta cercana: queda como issue pendiente. "Ya está solucionado, ¿no?" con signo de pregunta es una duda, no un cierre: registra el ítem como pendiente de confirmar.
+- Si más adelante alguien afirma que un ítem ya está resuelto ("ya te había solucionado", "el de los aislamientos también", "ya está en la PR"), el ítem es clase = cerrado: sin issue, sin pregunta bloqueante ni de ambigüedad.
 - Busca estos cierres en TODA la transcripción antes de clasificar. Una frase de cierre sin tema se refiere al ítem que se acaba de leer (regla 18).
 
 == 22. RESPONSABLES Y ORIGEN ==
@@ -142,7 +143,15 @@ Orden: Resumen ejecutivo → Ya resuelto → En curso (incluye gestión externa)
 - Crea un issue de app solo si una frase explícita habla de la app para ese ítem; los endpoints /api/mobile solo se mencionan cuando hay issue de app.
 - Los procesos de la reunión (ej.: "abrir un archivo nuevo para el backlog") no son backlog funcional.
 - No añadas pantallas, cargas de archivo ni endpoints que no se pidieron: si los sugieres, van marcados [Supuesto] en el texto y no suman horas.
-- Respeta las DECISIONES DE ALCANCE PENDIENTES del glosario: implementa solo el alcance mínimo indicado.`;
+- Respeta las DECISIONES DE ALCANCE del glosario: implementa solo el alcance mínimo indicado.
+
+== 23. COBERTURA DE LA MATRIZ ==
+- Cada ítem leído de la matriz (frase "se requiere…", "se identificó…", fila leída en voz alta) debe terminar en exactamente UNA salida: cerrado, en curso, issue(s), decisión o backlog. Ningún ítem puede quedar sin salida ni en dos a la vez.
+- Los pedidos de código leídos (borrado masivo, exportación, renombre, selects, reprogramación, dimensionamiento, etc.) generan issue salvo cierre explícito. Si un ítem tiene backend y panel, genera ambos.
+- Un ítem cuyo texto es ambiguo en canal o alcance (p. ej. "habilitar la cámara para reconocer el sitio") no se convierte en issue de panel ni de app: va a "Preguntas abiertas" (NO BLOQUEANTE) y, si coincide con algo aplazado después, se une a ese backlog.
+- Nunca fijes una hora, cifra o umbral que no se dijo con unidad clara. Si el audio dice "a partir de las 7" sin a. m./p. m., escribe "7 (sin aclarar a. m./p. m.)" y deja el valor como parámetro.
+- Un nombre nuevo no definido en la reunión es "por definir"; no propongas uno como hecho. Los archivos nuevos (scripts db_changes, etc.) solo se mencionan si hay un cambio de esquema pedido.
+- Cita siempre la marca [mm:ss] del ítem en cada salida (Ya resuelto, En curso, Decisiones, Backlog, issues), para poder verificar la cobertura.`;
   }
 
   public static getProjectContextLayer(customContext?: string): string {
@@ -172,7 +181,7 @@ TABLA DE REFERENCIA DE HORAS (Para calibración de estimaciones):
 - Selección múltiple + borrado masivo (panel): 8 h
 - Endpoint de borrado masivo (backend): 8 h
 - Reprogramación (backend / panel): 8 / 8 h
-- Incorporar un dato nuevo al cálculo de dimensionamiento (backend): 6–8 h (PROPUESTO: solo inyectar la matriz con rendimiento y ajustar el prompt; sin pantallas ni endpoints)
+- Incorporar un dato nuevo al cálculo de dimensionamiento (backend): 8 h (PROPUESTO: solo inyectar la matriz con rendimiento y ajustar el prompt; sin pantallas ni endpoints)
 - Migraciones SQL: db_changes/${todayFormatted}_0NN.sql (solo si hay columnas nuevas)`;
   }
 
@@ -283,7 +292,7 @@ ${this.getProjectContextLayer(projectContext)}
 
 ${this.getProjectGlossary()}
 
-Eres un Principal Software Architect y Technical Lead de élite. Convierte la reunión en documentación técnica e issues accionables listas para agentes de IA en formato JSON estricto, aplicando estrictamente las 22 reglas universales:
+Eres un Principal Software Architect y Technical Lead de élite. Convierte la reunión en documentación técnica e issues accionables listas para agentes de IA en formato JSON estricto, aplicando estrictamente las 23 reglas universales (reglas 1–23, incluye las 22 reglas base):
 
 ### FORMATO DE SALIDA (JSON ESTRICTO):
 {

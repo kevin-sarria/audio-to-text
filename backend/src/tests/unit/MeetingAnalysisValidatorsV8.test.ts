@@ -254,20 +254,20 @@ describe("MeetingAnalysisValidators v8 sobre la transcripción de referencia", (
   });
 });
 
-describe("Prompt desplegado (v8)", () => {
+describe("Prompt desplegado (v8/v9)", () => {
   const step1 = MeetingAnalysisPrompts.buildStep1Prompt();
   const step2 = MeetingAnalysisPrompts.buildStep2Prompt();
   const single = MeetingAnalysisPrompts.buildSingleStepPrompt();
 
-  it("contiene las reglas 1–22 y el glosario con Alexis no responsable y Lady externa en las tres variantes", () => {
+  it("contiene las reglas 1–23 y el glosario con Alexis no responsable y Lady externa en las tres variantes", () => {
     for (const p of [step1, step2, single]) {
-      for (let n = 1; n <= 22; n++) expect(p).toContain(`== ${n}. `);
+      for (let n = 1; n <= 23; n++) expect(p).toContain(`== ${n}. `);
       expect(p).toContain("Alexis (usuario de QA, no responsable)");
       expect(p).toContain("Lady (fuente de usuarios; externa)");
       expect(p).toContain("aislamientos");
-      expect(p).toContain("DECISIONES DE ALCANCE PENDIENTES");
+      expect(p).toContain("DECISIONES DE ALCANCE (por defecto)");
     }
-    expect(single).toContain("22 reglas");
+    expect(single).toContain("23 reglas");
     expect(step1).toContain("cierre_posterior");
   });
 });
@@ -304,7 +304,11 @@ describe("EvaluationRunner con el caso de referencia (v8)", () => {
       ],
       {
         alreadyResolved: ["Aislamientos opcional sin NA [29:19]"],
-        inProgress: ["Formularios, Juan Esteban [12:17]"],
+        inProgress: [
+          "Formularios, Juan Esteban [12:17]",
+          "Agrupación diurno/nocturno y turnos, Cristian [16:05, 22:07]",
+          "Actualización de QA según producción [24:35]"
+        ],
         keyDecisions: ["Turnos solo diurno y nocturno [22:23]"],
         globalOpenQuestions: ['[NO BLOQUEANTE] Corte diurno/nocturno ("a partir de las 7": ¿a.m. o p.m.?)'],
         backlog: ["Logueo automático NFC/QR [29:43]", "Planes de acción y adjuntos en novedades [34:00]", "QR externo para llamados e insumos [42:56]"]

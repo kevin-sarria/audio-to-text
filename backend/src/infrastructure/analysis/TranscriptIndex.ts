@@ -106,13 +106,28 @@ export class TranscriptIndex {
     return this.segments.some((s) => regex.test(s.norm));
   }
 
+  private isQuestionSegment(text: string): boolean {
+    const trimmed = text.trim();
+    return trimmed.endsWith("?") || /¿no\?/i.test(trimmed);
+  }
+
   /**
    * Cierres posteriores (regla 21): frases que afirman que un ítem ya está resuelto.
    * - Con tema explícito: "El de los aislamientos también", "lo de X ya está solucionado".
-   * - Sin tema ("Ya está solucionado, ¿no?"): el tema es el término del dominio leído en los
+   * - Sin tema ("Ya está solucionado"): el tema es el término del dominio leído en los
    *   segmentos inmediatamente anteriores (regla 18: se refiere a la fila que se está leyendo).
+   * Frases que son preguntas (terminan en '?' o contienen '¿no?') se descartan (regla 21 v9).
    */
   public findLaterClosures(): LaterClosure[] {
+    return this.detectClosures(false);
+  }
+
+  /** Frases de cierre que tienen forma de pregunta (duda o confirmación pendiente, regla 21 v9). */
+  public findQuestionClosures(): LaterClosure[] {
+    return this.detectClosures(true);
+  }
+
+  private detectClosures(onlyQuestions: boolean): LaterClosure[] {
     const closures: LaterClosure[] = [];
     const explicitTopic = /\b(?:el|lo|la) de (?:los |las |la |el )?([a-z]+(?: [a-z]+)?)\s*,?\s*(?:tambien|ya (?:esta|quedo) (?:solucionad|resuelt|cerrad|list))/;
     const bareClosure =
@@ -125,6 +140,9 @@ export class TranscriptIndex {
 
     for (let i = 0; i < this.segments.length; i++) {
       const seg = this.segments[i]!;
+      const isQ = this.isQuestionSegment(seg.text);
+      if (onlyQuestions ? !isQ : isQ) continue;
+
       const explicit = seg.norm.match(explicitTopic);
       if (explicit && explicit[1]) {
         closures.push({ topic: stem(explicit[1].split(" ").pop() || explicit[1]), sec: seg.sec, cita: seg.text });

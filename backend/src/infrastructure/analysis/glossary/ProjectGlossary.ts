@@ -29,6 +29,31 @@ export interface PendingScopeDecision {
   description: string;
 }
 
+/** Decisiones de alcance por defecto confirmadas (v9). */
+export const SCOPE_DEFAULTS: PendingScopeDecision[] = [
+  {
+    topic: "dimensionamiento",
+    disallowedRepos: ["panel", "app"],
+    description:
+      "Dimensionamiento: solo backend, 8 h (inyectar la columna de rendimiento de 'máquina descripción' en el cálculo y ajustar el prompt). Sin pantallas de panel ni endpoints móviles."
+  },
+  {
+    topic: "reprogram",
+    disallowedRepos: ["app"],
+    description:
+      "Reprogramación: backend + panel, sin app. Pregunta NO BLOQUEANTE de canal (valor por defecto: panel)."
+  }
+];
+
+/** Alias exportado para compatibilidad hacia atrás (v8). */
+export const PENDING_SCOPE_DECISIONS = SCOPE_DEFAULTS;
+
+/** Patrones de ítems ambiguos de canal que no deben asignarse a panel ni app (regla 23). */
+export const AMBIGUOUS_CHANNEL_TERMS: RegExp[] = [
+  /\b(?:c[aá]mara|reconoc(?:er|imiento|a))\b.*\b(?:sitio|lugar)\b/i,
+  /\b(?:sitio|lugar)\b.*\b(?:c[aá]mara|reconoc(?:er|imiento|a))\b/i
+];
+
 export const GLOSSARY_PEOPLE: GlossaryPerson[] = [
   { name: "Isa" },
   { name: "Cristian" },
@@ -83,25 +108,6 @@ export const ASR_CORRECTIONS: AsrCorrection[] = [
 /** Terceros: un ítem cuya acción depende de ellos es gestion_externa o seguimiento (regla 22). */
 export const EXTERNAL_PARTIES = ["crm", "lady", "diego meléndez", "diego melendez", "api de tri", "certificaciones"];
 
-/**
- * Decisiones pendientes de Kevin (v8). Mientras sigan pendientes, el alcance por defecto es el
- * mínimo y no se crean issues en los repos indicados.
- */
-export const PENDING_SCOPE_DECISIONS: PendingScopeDecision[] = [
-  {
-    topic: "dimensionamiento",
-    disallowedRepos: ["panel", "app"],
-    description:
-      "Alcance de dimensionamiento: por defecto solo inyectar la matriz con rendimiento y ajustar el prompt (backend, 6–8 h). Pantalla de carga/visualización en el panel o endpoints móviles = PROPUESTO, sin issue hasta confirmar."
-  },
-  {
-    topic: "reprogram",
-    disallowedRepos: ["app"],
-    description:
-      "Reprogramación: no hay base en la transcripción para un issue de app. Canal por defecto = panel; preguntar NO BLOQUEANTE si también va en la app."
-  }
-];
-
 /** Términos del glosario (minúsculas) que nunca deben tratarse como ruido o vocabulario dudoso. */
 export const GLOSSARY_TERMS: string[] = [
   "aislamientos",
@@ -132,7 +138,7 @@ export function renderGlossaryLayer(): string {
   const corrections = ASR_CORRECTIONS.map(
     (c) => `- ${c.heard.map((h) => `"${h}"`).join(" / ")} → "${c.correct}"`
   ).join("\n");
-  const pending = PENDING_SCOPE_DECISIONS.map((d) => `- ${d.description}`).join("\n");
+  const pending = SCOPE_DEFAULTS.map((d) => `- ${d.description}`).join("\n");
 
   return `[CAPA 3 — GLOSARIO]
 Personas: ${people}
@@ -144,6 +150,6 @@ Terceros (sus pendientes son gestion_externa, nunca issue de código): CRM, Lady
 Errores típicos del ASR → forma correcta (corregir en silencio):
 ${corrections}
 
-DECISIONES DE ALCANCE PENDIENTES (PROPUESTO hasta que se confirmen):
+DECISIONES DE ALCANCE (por defecto):
 ${pending}`;
 }

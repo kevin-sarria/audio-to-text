@@ -2,6 +2,7 @@ import { GeneratedMeetingData } from "../../../domain/services/IMeetingAnalysisS
 import { ExtractionPointDto } from "../MeetingAnalysisResponseParser.js";
 import { GLOSSARY_TERMS } from "../glossary/ProjectGlossary.js";
 import { MeetingAnalysisV8Validators } from "./MeetingAnalysisV8Validators.js";
+import { MeetingAnalysisV9Validators } from "./MeetingAnalysisV9Validators.js";
 import { ExtractionPointNormalizer } from "../ExtractionPointNormalizer.js";
 import { normalizeText } from "../TranscriptIndex.js";
 import { MeetingAnalysisCoverageValidators } from "./MeetingAnalysisCoverageValidators.js";
@@ -19,15 +20,15 @@ export const REFERENCE_HOURS_TABLE: Record<string, number> = {
   "borrado masivo": 8,
   "reprogramación": 8,
   "reprogramacion": 8,
-  // v8: por defecto solo inyectar la matriz y ajustar el prompt (6–8 h backend, PROPUESTO).
-  "dimensionamiento": 7
+  // v9: por defecto solo inyectar la matriz y ajustar el prompt (8 h backend, PROPUESTO).
+  "dimensionamiento": 8
 };
 
 export class MeetingAnalysisQualityValidators {
   public static validateWarnings(
     data: GeneratedMeetingData,
     transcript?: string,
-    _extractionPoints?: ExtractionPointDto[]
+    extractionPoints?: ExtractionPointDto[]
   ): string[] {
     const warnings: string[] = [];
 
@@ -118,6 +119,9 @@ export class MeetingAnalysisQualityValidators {
 
     // 21. Avisos de cobertura de transcripción (citas < 30s de tramos sin audio)
     MeetingAnalysisCoverageValidators.validateCoverageWarnings(data, transcript, warnings);
+
+    // 22. Avisos v9: entradas resueltas sin marcas citadas, nombres inventados
+    MeetingAnalysisV9Validators.validateWarnings(data, transcript, warnings, extractionPoints);
 
     return warnings;
   }

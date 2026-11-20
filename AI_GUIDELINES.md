@@ -90,21 +90,21 @@ El sistema soporta tanto proveedores integrados por defecto como proveedores din
 
 ---
 
-## 5. Módulo de IA para Issues Técnicas (reglas 1–22, pipeline en 2 etapas)
+## 5. Módulo de IA para Issues Técnicas (reglas 1–23, pipeline en 2 etapas)
 
 Los modelos siguen el prompt literalmente, así que cada regla se escribe explícita y, cuando se puede, **se verifica por código**. El módulo debe funcionar con cualquier modelo: si un modelo falla, se corrige con una regla universal o un validador, nunca con un parche para ese modelo.
 
 ### 5.1 Capas del prompt (`backend/src/infrastructure/analysis/`)
-- **Capa 1 — Reglas universales (1–22):** `MeetingAnalysisPrompts.getUniversalRulesPrompt()`.
+- **Capa 1 — Reglas universales (1–23):** `MeetingAnalysisPrompts.getUniversalRulesPrompt()`.
 - **Capa 2 — Contexto del proyecto:** contexto de la carpeta vinculada + lista exacta de documentos + tabla de referencia de horas.
 - **Capa 3 — Glosario:** `glossary/ProjectGlossary.ts` es la **fuente única**: el prompt lo renderiza y los validadores usan las mismas listas (personas, terceros, correcciones del ASR, decisiones de alcance pendientes). Para cambiar el glosario, edita solo ese archivo.
 
 ### 5.2 Pipeline
 1. **Saneamiento y cobertura:** `TranscriptSanitizer` repara JSON incrustado; `TranscriptCoverageDetector` detecta tramos sin audio. Con cobertura < 90 % no se generan issues (lo decide el código).
-2. **Etapa 1 — Extracción:** JSON con `clase` (cerrado / en_curso / nuevo / backlog), `accion` (codigo / gestion_externa / decision / seguimiento), `quien_lo_lleva` y `cierre_posterior`.
-3. **Normalización determinista (`ExtractionPointNormalizer`):** aplica por código las reglas 6, 7, 21 y 22 antes de redactar: cierres posteriores → cerrado; terceros (CRM, Lady…) → gestion_externa; responsables no nombrados en el segmento → null; app sin frase explícita de app → panel; BLOQUEANTE sin "si me equivoco" → NO BLOQUEANTE.
+2. **Etapa 1 — Extracción:** JSON con `clase` (cerrado / en_curso / nuevo / backlog), `accion` (codigo / gestion_externa / decision / seguimiento), `quien_lo_lleva` y `cierre_posterior`. Incluye reintento único de etapa 1 si se detectan ítems de la matriz omitidos en la extracción.
+3. **Normalización determinista (`ExtractionPointNormalizer`):** aplica por código las reglas 6, 7, 21 y 22 antes de redactar: cierres posteriores → cerrado; terceros (CRM, Lady…) → gestion_externa; responsables no nombrados en el segmento → null; app sin frase explícita de app → panel; BLOQUEANTE sin "si me equivoco" → NO BLOQUEANTE; descarte de cierres que son preguntas.
 4. **Etapa 2 — Redacción:** issues solo desde puntos `nuevo` + `codigo`, con hasta 2 reintentos si un validador de tipo Error falla (o si la respuesta no es JSON).
-5. **Validadores (`validators/`):** Error = rechazar y reintentar; Aviso = marcar para revisión. Los v8 están en `MeetingAnalysisV8Validators.ts`.
+5. **Validadores (`validators/`):** Error = rechazar y reintentar; Aviso = marcar para revisión. Validadores v8 en `MeetingAnalysisV8Validators.ts` y validadores v9 en `MeetingAnalysisV9Validators.ts` (cobertura de la matriz, cierres que son pregunta, canal ambiguo, horas no respaldadas).
 
 ### 5.3 Set de evaluación
 `evaluation/cases/<id>/transcript.txt` (transcripción congelada) + `expected.json` (resultado esperado y trampas conocidas: temas sin issue, responsables prohibidos, valores ambiguos). `EvaluationRunner` compara una salida contra el caso. Antes de adoptar un modelo nuevo, correr el caso de referencia con él.

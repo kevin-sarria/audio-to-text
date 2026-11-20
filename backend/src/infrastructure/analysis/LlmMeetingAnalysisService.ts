@@ -20,6 +20,7 @@ import { TranscriptCoverageDetector } from "./TranscriptCoverageDetector.js";
 import { RepoContextScanner } from "./RepoContextScanner.js";
 import { ExtractionPointNormalizer } from "./ExtractionPointNormalizer.js";
 import { LlmProviderClients } from "./LlmProviderClients.js";
+import { detectMatrixItems, MatrixItem } from "./validators/MeetingAnalysisV9Validators.js";
 
 export interface LlmMeetingAnalysisServiceDeps {
   secretVault?: ISecretVault;
@@ -62,13 +63,75 @@ export class LlmMeetingAnalysisService implements IMeetingAnalysisService {
 
     try {
       // ETAPA 1: Extracción estructurada y clasificación rigurosa
-      const rawStep1 = await this.executeLlmCall(step1SystemPrompt, step1UserPrompt, provider, apiKey, model, baseUrl);
-      const step1Data = MeetingAnalysisResponseParser.parseStep1Extraction(rawStep1);
+      let rawStep1 = await this.executeLlmCall(step1SystemPrompt, step1UserPrompt, provider, apiKey, model, baseUrl);
+      let step1Data = MeetingAnalysisResponseParser.parseStep1Extraction(rawStep1);
 
       // Reglas 6, 7, 21 y 22 aplicadas por código antes de redactar: cierres posteriores,
       // terceros → gestion_externa, responsables no nombrados, app sin evidencia, BLOQUEANTE inválidas.
-      const normalization = ExtractionPointNormalizer.normalize(step1Data.puntos || [], sanitizedTranscript);
+      let normalization = ExtractionPointNormalizer.normalize(step1Data.puntos || [], sanitizedTranscript);
       step1Data.puntos = normalization.points;
+
+      // Reintento de etapa 1 por cobertura (v9):
+      // Calcular los ítems de la matriz detectados SOLO por la transcripción que no tienen ningún punto de extracción en su tramo.
+      const matrixItemsOnlyTranscript = detectMatrixItems(sanitizedTranscript);
+      const isItemCovered = (item: MatrixItem, points: ExtractionPointDto[]) =>
+        points.some((p) => {
+          const sec = TranscriptCoverageDetector.parseSeconds(p.timestamp || "");
+          return sec >= item.startSec && sec <= item.endSec;
+        });
+
+      const missingMatrixItems = matrixItemsOnlyTranscript.filter(
+        (item) => !isItemCovered(item, step1Data.puntos || [])
+      );
+
+      if (missingMatrixItems.length > 0) {
+        const retryStep1UserPrompt = `${step1UserPrompt}\n\n[ÍTEMS OMITIDOS EN TU EXTRACCIÓN PREVIA - INCLÚYELOS]:\n${missingMatrixItems
+          .map((m) => `- [${m.timestamp}] ${m.text}`)
+          .join("\n")}`;
+
+        try {
+          const rawStep1Retry = await this.executeLlmCall(
+            step1SystemPrompt,
+            retryStep1UserPrompt,
+            provider,
+            apiKey,
+            model,
+            baseUrl
+          );
+          const retryStep1Data = MeetingAnalysisResponseParser.parseStep1Extraction(rawStep1Retry);
+          const retryNormalization = ExtractionPointNormalizer.normalize(
+            retryStep1Data.puntos || [],
+            sanitizedTranscript
+          );
+          retryStep1Data.puntos = retryNormalization.points;
+
+          const stillMissing = matrixItemsOnlyTranscript.filter(
+            (item) => !isItemCovered(item, retryStep1Data.puntos || [])
+          );
+
+          if (
+            stillMissing.length < missingMatrixItems.length ||
+            (stillMissing.length === missingMatrixItems.length &&
+              (retryStep1Data.puntos || []).length >= (step1Data.puntos || []).length)
+          ) {
+            step1Data = retryStep1Data;
+            normalization = retryNormalization;
+            if (stillMissing.length > 0) {
+              console.warn(
+                "[LlmMeetingAnalysisService] Etapa 1 reintentada sigue omitiendo ítems de la matriz:",
+                stillMissing.map((m) => m.timestamp)
+              );
+            }
+          } else {
+            console.warn(
+              "[LlmMeetingAnalysisService] Etapa 1 reintentada no mejoró la cobertura; manteniendo resultado previo."
+            );
+          }
+        } catch (retryErr: any) {
+          console.warn("[LlmMeetingAnalysisService] Falló el reintento de Etapa 1 por cobertura:", retryErr.message);
+        }
+      }
+
       if (normalization.changes.length > 0) {
         console.info("[LlmMeetingAnalysisService] Normalización determinista de la extracción:", normalization.changes);
         this.syncSectionsWithPoints(step1Data, normalization.changes.map((c) => c.pointId));

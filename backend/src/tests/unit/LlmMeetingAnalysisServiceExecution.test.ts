@@ -227,7 +227,27 @@ Fin de respuesta.`;
       globalOpenQuestions: [],
       backlog: []
     });
-    const step2 = JSON.stringify({ issues: [], repoHoursTotals: { backend: 0, panel: 0, app: 0, total: 0 } });
+    const step2 = JSON.stringify({
+      issues: [
+        {
+          id: "BACKEND-1",
+          repo: "backend",
+          title: "[Backend] Exportar al Excel las solicitudes",
+          type: "feature",
+          priority: "high",
+          component: "Controllers / Logic",
+          description: "Exportar al Excel las solicitudes con filtros [00:30].",
+          estimation: { backendHours: 8, panelHours: 0, appHours: 0, totalHours: 8, text: "Backend: 8h | Panel: 0h | App: 0h | Total: 8h" },
+          openQuestions: ["Ninguna"],
+          dependencies: ["Ninguna"],
+          prWorkflow: "Rama corta desde dev, PR a dev, skill /revisar-entrega, captura de la prueba en pantalla y revisión de Juan.",
+          expectedFiles: ["Controllers/ (verificar en el repo)", "docs/REGLAS_DE_NEGOCIO.md"],
+          acceptanceCriteria: ["Exportar [00:30]"],
+          agentPrompt: "### Rol y Objetivo\nActúa como Dev\n\n### Contexto\nContexto [00:30]\n\n### Pasos numerados\n1. Leer AI_CONTEXT.md y docs/REGLAS_DE_NEGOCIO.md\n\n### Restricciones\nNinguna\n\n### Criterios de Aceptación\n- [ ] Ok\n\n### Verificación\nxUnit"
+        }
+      ],
+      repoHoursTotals: { backend: 8, panel: 0, app: 0, total: 8 }
+    });
 
     vi.spyOn(service as any, "resolveAgyPath").mockReturnValue("agy");
     const executeSpy = vi
@@ -245,5 +265,113 @@ Fin de respuesta.`;
     const retryPrompt = String(executeSpy.mock.calls[2]?.[1] ?? "");
     expect(retryPrompt).toContain("no era JSON válido");
     expect((result.inProgress ?? []).some((i) => i.includes("Lady") && i.includes("gestión externa"))).toBe(true);
+  });
+
+  it("reintenta la etapa 1 cuando se omiten ítems de la matriz de la transcripción y preserva el resultado completo (v9)", async () => {
+    const transcript = [
+      "[30:29] Hablante 1: Eh se requiere implementar una funcionalidad o botón que permita reprogramar actividades.",
+      "[31:00] Hablante 1: Continuando con la revisión de la matriz.",
+      "[31:50] Hablante 1: Y lo último se requiere habilitar una funcionalidad que permita exportar al Excel las solicitudes con filtros."
+    ].join("\n");
+
+    const step1Omission = JSON.stringify({
+      summary: "Reunión de requerimientos.",
+      puntos: [
+        {
+          id: "P1",
+          cita: "reprogramar actividades",
+          timestamp: "30:29",
+          clase: "nuevo",
+          accion: "codigo",
+          repo: "panel"
+        }
+      ],
+      alreadyResolved: [],
+      inProgress: [],
+      keyDecisions: [],
+      globalOpenQuestions: [],
+      backlog: []
+    });
+
+    const step1Complete = JSON.stringify({
+      summary: "Reunión de requerimientos completa.",
+      puntos: [
+        {
+          id: "P1",
+          cita: "reprogramar actividades",
+          timestamp: "30:29",
+          clase: "nuevo",
+          accion: "codigo",
+          repo: "panel"
+        },
+        {
+          id: "P2",
+          cita: "exportar al Excel las solicitudes con filtros",
+          timestamp: "31:50",
+          clase: "nuevo",
+          accion: "codigo",
+          repo: "backend"
+        }
+      ],
+      alreadyResolved: [],
+      inProgress: [],
+      keyDecisions: [],
+      globalOpenQuestions: [],
+      backlog: []
+    });
+
+    const step2Response = JSON.stringify({
+      issues: [
+        {
+          id: "PANEL-1",
+          repo: "panel",
+          title: "[Panel] Reprogramar actividades",
+          type: "feature",
+          priority: "high",
+          component: "Rutinas",
+          description: "Reprogramar actividades [30:29].",
+          estimation: { backendHours: 0, panelHours: 8, appHours: 0, totalHours: 8, text: "Backend: 0h | Panel: 8h | App: 0h | Total: 8h" },
+          openQuestions: ["Ninguna"],
+          dependencies: ["Ninguna"],
+          prWorkflow: "Rama corta desde dev, PR a dev",
+          expectedFiles: ["Logic/ (verificar en el repo)", "docs/REGLAS_DE_NEGOCIO.md"],
+          acceptanceCriteria: ["Reprogramar [30:29]"],
+          agentPrompt: "### Rol y Objetivo\nDev\n\n### Contexto\nContexto [30:29]\n\n### Pasos numerados\n1. Leer AI_CONTEXT.md\n\n### Restricciones\nNinguna\n\n### Criterios de Aceptación\n- [ ] Ok\n\n### Verificación\nPruebas"
+        },
+        {
+          id: "BACKEND-1",
+          repo: "backend",
+          title: "[Backend] Exportar solicitudes al Excel",
+          type: "feature",
+          priority: "high",
+          component: "Export",
+          description: "Exportar al Excel con filtros [31:50].",
+          estimation: { backendHours: 8, panelHours: 0, appHours: 0, totalHours: 8, text: "Backend: 8h | Panel: 0h | App: 0h | Total: 8h" },
+          openQuestions: ["Ninguna"],
+          dependencies: ["Ninguna"],
+          prWorkflow: "Rama corta desde dev, PR a dev",
+          expectedFiles: ["Controllers/ (verificar en el repo)", "docs/REGLAS_DE_NEGOCIO.md"],
+          acceptanceCriteria: ["Exportar [31:50]"],
+          agentPrompt: "### Rol y Objetivo\nDev\n\n### Contexto\nContexto [31:50]\n\n### Pasos numerados\n1. Leer AI_CONTEXT.md\n\n### Restricciones\nNinguna\n\n### Criterios de Aceptación\n- [ ] Ok\n\n### Verificación\nxUnit"
+        }
+      ],
+      repoHoursTotals: { backend: 8, panel: 8, app: 0, total: 16 }
+    });
+
+    vi.spyOn(service as any, "resolveAgyPath").mockReturnValue("agy");
+    const executeSpy = vi
+      .spyOn(service as any, "executeLlmCall")
+      .mockResolvedValueOnce(step1Omission)
+      .mockResolvedValueOnce(step1Complete)
+      .mockResolvedValueOnce(step2Response);
+
+    const result = await service.generateAnalysis(transcript, undefined, { provider: "google-account" });
+
+    expect(executeSpy).toHaveBeenCalledTimes(3);
+    const retryStep1Prompt = String(executeSpy.mock.calls[1]?.[1] ?? "");
+    expect(retryStep1Prompt).toContain("[ÍTEMS OMITIDOS EN TU EXTRACCIÓN PREVIA - INCLÚYELOS]:");
+    expect(retryStep1Prompt).toContain("31:50");
+    expect(result.issues).toHaveLength(2);
+    expect(result.issues.some((i) => i.id === "BACKEND-1")).toBe(true);
   });
 });
