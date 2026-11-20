@@ -15,6 +15,7 @@ import {
 } from "@mui/material";
 import { Save as SaveIcon } from "@mui/icons-material";
 import { DesktopSettings, WhisperModelName } from "./SettingsTypes.js";
+import { LlmModelSelector } from "../../../features/customAi/LlmModelSelector.js";
 
 interface TranscriptionEngineSectionProps {
   settings: DesktopSettings;
@@ -124,13 +125,14 @@ export const TranscriptionEngineSection: React.FC<TranscriptionEngineSectionProp
         {/* Opciones de Groq */}
         {settings.engine === "groq" && (
           <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              size="small"
-              label="Nombre del Modelo Groq"
-              value={settings.groqModel}
-              onChange={(e) => onChangeSettings({ ...settings, groqModel: e.target.value })}
-              helperText="Predeterminado: whisper-large-v3-turbo"
+            <LlmModelSelector
+              provider="groq"
+              purpose="transcription"
+              value={settings.groqModel || "whisper-large-v3-turbo"}
+              onChange={(model) => onChangeSettings({ ...settings, groqModel: model })}
+              label="Modelo de Transcripción Groq"
+              placeholder="Selecciona o escribe el modelo"
+              helperText="Modelos optimizados para transcripción de audio (Whisper)"
             />
           </Grid>
         )}
@@ -138,13 +140,14 @@ export const TranscriptionEngineSection: React.FC<TranscriptionEngineSectionProp
         {/* Opciones de Gemini */}
         {settings.engine === "gemini" && (
           <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              size="small"
-              label="Nombre del Modelo Gemini"
-              value={settings.geminiModel}
-              onChange={(e) => onChangeSettings({ ...settings, geminiModel: e.target.value })}
-              helperText="Predeterminado: gemini-2.5-flash"
+            <LlmModelSelector
+              provider="gemini"
+              purpose="transcription"
+              value={settings.geminiModel || "gemini-2.5-flash"}
+              onChange={(model) => onChangeSettings({ ...settings, geminiModel: model })}
+              label="Modelo de Transcripción Gemini"
+              placeholder="Selecciona o escribe el modelo"
+              helperText="Modelos multimodales con soporte nativo de audio"
             />
           </Grid>
         )}

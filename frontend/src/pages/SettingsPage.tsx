@@ -266,20 +266,109 @@ export const SettingsPage: React.FC = () => {
         </Box>
       </Box>
 
-      {/* Pestañas limpias para simplificar el flujo visual */}
-      <Paper sx={{ mb: 3, borderRadius: 2 }}>
+      {/* Pestañas modernas tipo Segmented Control (sin barras azules desbordadas) */}
+      <Box
+        sx={{
+          mb: 3.5,
+          p: 0.6,
+          borderRadius: "14px",
+          border: 1,
+          borderColor: "divider",
+          backgroundColor: (theme) =>
+            theme.palette.mode === "dark" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+          display: "flex"
+        }}
+      >
         <Tabs
           value={activeTab}
           onChange={(_, val) => setActiveTab(val)}
-          indicatorColor="primary"
-          textColor="primary"
           variant="fullWidth"
+          TabIndicatorProps={{ sx: { display: "none" } }}
+          sx={{
+            width: "100%",
+            minHeight: 44,
+            "& .MuiTabs-flexContainer": {
+              gap: 0.75
+            }
+          }}
         >
-          <Tab icon={<MicIcon fontSize="small" />} iconPosition="start" label="Transcripción & Modelos" />
-          <Tab icon={<KeyIcon fontSize="small" />} iconPosition="start" label="IA & Claves de API" />
-          <Tab icon={<FolderSpecialIcon fontSize="small" />} iconPosition="start" label="Carpetas de Proyecto" />
+          <Tab
+            disableRipple
+            icon={<MicIcon fontSize="small" />}
+            iconPosition="start"
+            label="Transcripción & Modelos"
+            sx={{
+              textTransform: "none",
+              fontSize: "0.9rem",
+              fontWeight: 600,
+              minHeight: 44,
+              borderRadius: "10px",
+              transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+              color: "text.secondary",
+              "&.Mui-selected": {
+                backgroundColor: "background.paper",
+                color: "primary.main",
+                fontWeight: 700,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.07)"
+              },
+              "&:hover:not(.Mui-selected)": {
+                backgroundColor: "rgba(0,0,0,0.03)",
+                color: "text.primary"
+              }
+            }}
+          />
+          <Tab
+            disableRipple
+            icon={<KeyIcon fontSize="small" />}
+            iconPosition="start"
+            label="IA & Claves de API"
+            sx={{
+              textTransform: "none",
+              fontSize: "0.9rem",
+              fontWeight: 600,
+              minHeight: 44,
+              borderRadius: "10px",
+              transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+              color: "text.secondary",
+              "&.Mui-selected": {
+                backgroundColor: "background.paper",
+                color: "primary.main",
+                fontWeight: 700,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.07)"
+              },
+              "&:hover:not(.Mui-selected)": {
+                backgroundColor: "rgba(0,0,0,0.03)",
+                color: "text.primary"
+              }
+            }}
+          />
+          <Tab
+            disableRipple
+            icon={<FolderSpecialIcon fontSize="small" />}
+            iconPosition="start"
+            label="Carpetas de Proyecto"
+            sx={{
+              textTransform: "none",
+              fontSize: "0.9rem",
+              fontWeight: 600,
+              minHeight: 44,
+              borderRadius: "10px",
+              transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+              color: "text.secondary",
+              "&.Mui-selected": {
+                backgroundColor: "background.paper",
+                color: "primary.main",
+                fontWeight: 700,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.07)"
+              },
+              "&:hover:not(.Mui-selected)": {
+                backgroundColor: "rgba(0,0,0,0.03)",
+                color: "text.primary"
+              }
+            }}
+          />
         </Tabs>
-      </Paper>
+      </Box>
 
       {/* Pestaña 0: Transcripción y Modelos en Disco */}
       {activeTab === 0 && (

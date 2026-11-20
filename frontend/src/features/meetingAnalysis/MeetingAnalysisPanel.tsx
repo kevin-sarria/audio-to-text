@@ -38,6 +38,7 @@ import {
 import { AnalysisErrorAlert } from "./components/AnalysisErrorAlert.js";
 import { ProjectFolderLinkBar } from "./components/ProjectFolderLinkBar.js";
 import { ProjectContextAccordion } from "./components/ProjectContextAccordion.js";
+import { AnalysisTitleHeader } from "./components/AnalysisTitleHeader.js";
 import { MeetingSummaryCard } from "./components/MeetingSummaryCard.js";
 import { MeetingClassifiedSection } from "./components/MeetingClassifiedSection.js";
 import { HoursTotalsCard } from "./components/HoursTotalsCard.js";
@@ -302,62 +303,19 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
         onToggleConfig={() => setIsConfigExpanded(!isConfigExpanded)}
       />
 
-      <Paper sx={{ p: 2.5, mb: 3, borderRadius: 2 }}>
-        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1 }}>
-          {isEditingTitle ? (
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1, flex: 1, maxWidth: 600 }}>
-              <TextField
-                fullWidth
-                size="small"
-                label="Nombre personalizado del análisis"
-                value={editableTitle}
-                onChange={(e) => setEditableTitle(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSaveTitle()}
-                autoFocus
-              />
-              <Button
-                variant="contained"
-                size="small"
-                startIcon={<SaveIcon />}
-                onClick={handleSaveTitle}
-                disabled={isSavingTitle}
-              >
-                Guardar
-              </Button>
-              <Button size="small" onClick={() => setIsEditingTitle(false)}>
-                Cancelar
-              </Button>
-            </Box>
-          ) : (
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <Typography variant="h5" fontWeight={700}>
-                {analysis?.title || editableTitle}
-              </Typography>
-              <Tooltip title="Renombrar en el historial">
-                <IconButton size="small" onClick={() => setIsEditingTitle(true)}>
-                  <EditIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </Box>
-          )}
-
-          <Box sx={{ display: "flex", gap: 1 }}>
-            <Button
-              variant="contained"
-              color="primary"
-              disabled={isGenerating}
-              startIcon={isGenerating ? <CircularProgress size={18} color="inherit" /> : <AutoAwesomeIcon />}
-              onClick={() => handleGenerate()}
-            >
-              {isGenerating
-                ? "Procesando con IA..."
-                : analysis
-                ? "Regenerar Resumen e Issues"
-                : "Generar Resumen e Issues"}
-            </Button>
-          </Box>
-        </Box>
-      </Paper>
+      <AnalysisTitleHeader
+        title={analysis?.title || editableTitle}
+        isEditingTitle={isEditingTitle}
+        editableTitle={editableTitle}
+        isSavingTitle={isSavingTitle}
+        isGenerating={isGenerating}
+        hasAnalysis={!!analysis}
+        onStartEditing={() => setIsEditingTitle(true)}
+        onCancelEditing={() => setIsEditingTitle(false)}
+        onChangeTitle={setEditableTitle}
+        onSaveTitle={handleSaveTitle}
+        onGenerate={() => handleGenerate()}
+      />
 
       {errorMsg && (
         <AnalysisErrorAlert
@@ -409,41 +367,103 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
       {analysis && (
         <>
           {/* Navegación por pestañas limpias que reduce el ruido de cajas apiladas */}
-          <Paper sx={{ mb: 3, borderRadius: 2 }}>
+          <Box
+            sx={{
+              mb: 3,
+              p: 0.5,
+              borderRadius: "12px",
+              border: 1,
+              borderColor: "divider",
+              backgroundColor: (theme) =>
+                theme.palette.mode === "dark" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"
+            }}
+          >
             <Tabs
               value={activeAnalysisTab}
               onChange={(_, val) => setActiveAnalysisTab(val)}
-              indicatorColor="primary"
-              textColor="primary"
               variant="scrollable"
               scrollButtons="auto"
+              TabIndicatorProps={{ sx: { display: "none" } }}
+              sx={{ minHeight: 40, "& .MuiTabs-flexContainer": { gap: 0.5 } }}
             >
               <Tab
+                disableRipple
                 icon={<CodeIcon fontSize="small" />}
                 iconPosition="start"
-                label={`Issues Técnicas (${analysis.issues.length})`}
+                label={`Issues (${analysis.issues.length})`}
+                sx={{
+                  textTransform: "none",
+                  fontWeight: 600,
+                  fontSize: "0.88rem",
+                  borderRadius: "8px",
+                  minHeight: 40,
+                  "&.Mui-selected": {
+                    backgroundColor: "background.paper",
+                    color: "primary.main",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.06)"
+                  }
+                }}
               />
               <Tab
+                disableRipple
                 icon={<SummaryIcon fontSize="small" />}
                 iconPosition="start"
                 label="Resumen Ejecutivo"
+                sx={{
+                  textTransform: "none",
+                  fontWeight: 600,
+                  fontSize: "0.88rem",
+                  borderRadius: "8px",
+                  minHeight: 40,
+                  "&.Mui-selected": {
+                    backgroundColor: "background.paper",
+                    color: "primary.main",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.06)"
+                  }
+                }}
               />
               <Tab
+                disableRipple
                 icon={<StatusIcon fontSize="small" />}
                 iconPosition="start"
-                label="Estado de la Reunión"
+                label="Estado de Reunión"
+                sx={{
+                  textTransform: "none",
+                  fontWeight: 600,
+                  fontSize: "0.88rem",
+                  borderRadius: "8px",
+                  minHeight: 40,
+                  "&.Mui-selected": {
+                    backgroundColor: "background.paper",
+                    color: "primary.main",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.06)"
+                  }
+                }}
               />
               <Tab
+                disableRipple
                 icon={<QuestionIcon fontSize="small" />}
                 iconPosition="start"
                 label={
                   analysis.globalOpenQuestions?.length
-                    ? `Preguntas Abiertas (${analysis.globalOpenQuestions.length})`
-                    : "Preguntas Abiertas"
+                    ? `Preguntas (${analysis.globalOpenQuestions.length})`
+                    : "Preguntas"
                 }
+                sx={{
+                  textTransform: "none",
+                  fontWeight: 600,
+                  fontSize: "0.88rem",
+                  borderRadius: "8px",
+                  minHeight: 40,
+                  "&.Mui-selected": {
+                    backgroundColor: "background.paper",
+                    color: "primary.main",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.06)"
+                  }
+                }}
               />
             </Tabs>
-          </Paper>
+          </Box>
 
           {/* Pestaña 0: Issues de Programación y Totales */}
           {activeAnalysisTab === 0 && (

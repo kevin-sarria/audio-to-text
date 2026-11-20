@@ -27,6 +27,7 @@ export interface LlmModelSelectorProps {
   placeholder?: string;
   helperText?: string;
   sx?: SxProps<Theme>;
+  purpose?: "transcription" | "analysis";
 }
 
 export const LlmModelSelector: React.FC<LlmModelSelectorProps> = ({
@@ -40,7 +41,8 @@ export const LlmModelSelector: React.FC<LlmModelSelectorProps> = ({
   label = "Modelo de IA",
   placeholder = "Selecciona o escribe el modelo",
   helperText,
-  sx
+  sx,
+  purpose = "analysis"
 }) => {
   const [models, setModels] = useState<AvailableModelItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -56,7 +58,8 @@ export const LlmModelSelector: React.FC<LlmModelSelectorProps> = ({
           {
             provider: prov,
             apiKey: key,
-            baseUrl: url
+            baseUrl: url,
+            purpose
           }
         );
 

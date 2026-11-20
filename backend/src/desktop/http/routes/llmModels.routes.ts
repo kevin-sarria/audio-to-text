@@ -7,8 +7,9 @@ export function createLlmModelsRoutes(deps: DesktopRoutesDeps): Router {
   // POST /settings/llm-models (Descubrimiento dinámico de modelos de IA vía API pública)
   router.post("/settings/llm-models", async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { provider, apiKey, baseUrl } = req.body || {};
+      const { provider, apiKey, baseUrl, purpose } = req.body || {};
       const targetProvider = String(provider || "google-account").trim();
+      const isTranscription = String(purpose || "").trim().toLowerCase() === "transcription";
 
       const settings = deps.settingsStore.getSettings();
       let key = typeof apiKey === "string" ? apiKey.trim() : "";
@@ -42,13 +43,21 @@ export function createLlmModelsRoutes(deps: DesktopRoutesDeps): Router {
           key = (await deps.secretVault?.get("gemini")) || process.env["GEMINI_API_KEY"] || "";
         }
 
-        const fallbackGemini = [
-          { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash (Recomendado, rápido y gratuito)" },
-          { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro (Razonamiento avanzado)" },
-          { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash" },
-          { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro (Contexto masivo 2M)" },
-          { id: "gemini-1.5-flash-8b", name: "Gemini 1.5 Flash 8B (Ultra ligero)" }
-        ];
+        const fallbackGemini = isTranscription
+          ? [
+              { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash (Recomendado - Multimodal y rápido)" },
+              { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro (Máxima precisión para audios complejos)" },
+              { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash (Baja latencia)" },
+              { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash" },
+              { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro (Contexto masivo)" }
+            ]
+          : [
+              { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash (Recomendado, rápido y gratuito)" },
+              { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro (Razonamiento avanzado)" },
+              { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash" },
+              { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro (Contexto masivo 2M)" },
+              { id: "gemini-1.5-flash-8b", name: "Gemini 1.5 Flash 8B (Ultra ligero)" }
+            ];
 
         if (key) {
           try {
@@ -67,7 +76,8 @@ export function createLlmModelsRoutes(deps: DesktopRoutesDeps): Router {
                   (m: any) =>
                     Array.isArray(m.supportedGenerationMethods) &&
                     m.supportedGenerationMethods.includes("generateContent") &&
-                    !String(m.name).includes("embedding")
+                    !String(m.name).includes("embedding") &&
+                    (!isTranscription || String(m.name).startsWith("models/gemini"))
                 )
                 .map((m: any) => {
                   const cleanId = String(m.name).replace(/^models\//, "");
@@ -111,13 +121,19 @@ export function createLlmModelsRoutes(deps: DesktopRoutesDeps): Router {
           key = (await deps.secretVault?.get("groq")) || process.env["GROQ_API_KEY"] || "";
         }
 
-        const fallbackGroq = [
-          { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B Versatile (Recomendado)" },
-          { id: "llama-3.1-8b-instant", name: "Llama 3.1 8B Instant (Ultra veloz)" },
-          { id: "mixtral-8x7b-32768", name: "Mixtral 8x7B (32k ventana)" },
-          { id: "gemma2-9b-it", name: "Gemma 2 9B IT" },
-          { id: "deepseek-r1-distill-llama-70b", name: "DeepSeek R1 Distill Llama 70B (Razonamiento)" }
-        ];
+        const fallbackGroq = isTranscription
+          ? [
+              { id: "whisper-large-v3-turbo", name: "Whisper Large V3 Turbo (Recomendado - Ultrarrápido)" },
+              { id: "whisper-large-v3", name: "Whisper Large V3 (Máxima precisión para audio)" },
+              { id: "distil-whisper-large-v3-en", name: "Distil Whisper Large V3 (Optimizado en inglés)" }
+            ]
+          : [
+              { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B Versatile (Recomendado)" },
+              { id: "llama-3.1-8b-instant", name: "Llama 3.1 8B Instant (Ultra veloz)" },
+              { id: "mixtral-8x7b-32768", name: "Mixtral 8x7B (32k ventana)" },
+              { id: "gemma2-9b-it", name: "Gemma 2 9B IT" },
+              { id: "deepseek-r1-distill-llama-70b", name: "DeepSeek R1 Distill Llama 70B (Razonamiento)" }
+            ];
 
         if (key) {
           try {
@@ -131,23 +147,32 @@ export function createLlmModelsRoutes(deps: DesktopRoutesDeps): Router {
 
             if (groqRes.ok) {
               const groqData = (await groqRes.json()) as any;
+              const filterCondition = (m: any) => {
+                const id = String(m.id).toLowerCase();
+                if (id.includes("embedding")) return false;
+                if (isTranscription) {
+                  return id.includes("whisper");
+                }
+                return !id.includes("whisper");
+              };
+
               const modelsList = (groqData.data || [])
-                .filter(
-                  (m: any) =>
-                    !String(m.id).toLowerCase().includes("whisper") &&
-                    !String(m.id).toLowerCase().includes("embedding")
-                )
-                .map((m: any) => ({
-                  id: String(m.id),
-                  name: String(m.id)
-                }));
+                .filter(filterCondition)
+                .map((m: any) => {
+                  const id = String(m.id);
+                  let name = id;
+                  if (id === "whisper-large-v3-turbo") name = "Whisper Large V3 Turbo (Recomendado)";
+                  else if (id === "whisper-large-v3") name = "Whisper Large V3 (Precisión alta)";
+                  return { id, name };
+                });
+
               if (modelsList.length > 0) {
                 res.json({
                   success: true,
                   data: {
                     provider: "groq",
                     models: modelsList,
-                    defaultModel: "llama-3.3-70b-versatile",
+                    defaultModel: isTranscription ? "whisper-large-v3-turbo" : "llama-3.3-70b-versatile",
                     isLiveDiscovered: true
                   }
                 });
@@ -162,7 +187,7 @@ export function createLlmModelsRoutes(deps: DesktopRoutesDeps): Router {
           data: {
             provider: "groq",
             models: fallbackGroq,
-            defaultModel: "llama-3.3-70b-versatile",
+            defaultModel: isTranscription ? "whisper-large-v3-turbo" : "llama-3.3-70b-versatile",
             isLiveDiscovered: false
           }
         });
