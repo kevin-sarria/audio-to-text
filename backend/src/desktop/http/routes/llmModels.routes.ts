@@ -45,18 +45,16 @@ export function createLlmModelsRoutes(deps: DesktopRoutesDeps): Router {
 
         const fallbackGemini = isTranscription
           ? [
-              { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash (Recomendado - Multimodal y rápido)" },
-              { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro (Máxima precisión para audios complejos)" },
-              { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash (Baja latencia)" },
-              { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash" },
-              { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro (Contexto masivo)" }
+              { id: "gemini-3.8-flash", name: "Gemini 3.8 Flash (Recomendado - Multimodal y ultrarrápido)" },
+              { id: "gemini-3.5-flash", name: "Gemini 3.5 Flash" },
+              { id: "gemini-flash-latest", name: "Gemini Flash Latest" },
+              { id: "gemini-3-flash-preview", name: "Gemini 3 Flash Preview" }
             ]
           : [
-              { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash (Recomendado, rápido y gratuito)" },
-              { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro (Razonamiento avanzado)" },
-              { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash" },
-              { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro (Contexto masivo 2M)" },
-              { id: "gemini-1.5-flash-8b", name: "Gemini 1.5 Flash 8B (Ultra ligero)" }
+              { id: "gemini-3.8-flash", name: "Gemini 3.8 Flash (Recomendado, rápido y de última generación)" },
+              { id: "gemini-3.5-flash", name: "Gemini 3.5 Flash" },
+              { id: "gemini-flash-latest", name: "Gemini Flash Latest" },
+              { id: "gemini-pro-latest", name: "Gemini Pro Latest" }
             ];
 
         if (key) {
@@ -77,6 +75,7 @@ export function createLlmModelsRoutes(deps: DesktopRoutesDeps): Router {
                     Array.isArray(m.supportedGenerationMethods) &&
                     m.supportedGenerationMethods.includes("generateContent") &&
                     !String(m.name).includes("embedding") &&
+                    !String(m.name).includes("gemini-2.5-flash") &&
                     (!isTranscription || String(m.name).startsWith("models/gemini"))
                 )
                 .map((m: any) => {
@@ -93,7 +92,7 @@ export function createLlmModelsRoutes(deps: DesktopRoutesDeps): Router {
                   data: {
                     provider: "gemini",
                     models: modelsList,
-                    defaultModel: "gemini-2.5-flash",
+                    defaultModel: "gemini-3.8-flash",
                     isLiveDiscovered: true
                   }
                 });
@@ -108,7 +107,7 @@ export function createLlmModelsRoutes(deps: DesktopRoutesDeps): Router {
           data: {
             provider: "gemini",
             models: fallbackGemini,
-            defaultModel: "gemini-2.5-flash",
+            defaultModel: "gemini-3.8-flash",
             isLiveDiscovered: false
           }
         });

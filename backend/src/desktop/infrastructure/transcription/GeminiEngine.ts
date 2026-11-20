@@ -23,18 +23,24 @@ const GeminiSegmentSchema = z.object({
 });
 
 export function sanitizeGeminiModelName(rawModel?: string): string {
-  if (!rawModel || !rawModel.trim()) return "gemini-2.5-flash";
+  if (!rawModel || !rawModel.trim()) return "gemini-3.8-flash";
   let cleaned = rawModel.trim();
   const parenMatch = cleaned.match(/\((gemini-[a-zA-Z0-9.-]+)\)/i);
   if (parenMatch && parenMatch[1]) {
-    return parenMatch[1];
+    cleaned = parenMatch[1];
+  } else {
+    cleaned = cleaned.replace(/^models\//i, "");
+    const tokenMatch = cleaned.match(/(gemini-[a-zA-Z0-9.-]+)/i);
+    if (tokenMatch && tokenMatch[1]) {
+      cleaned = tokenMatch[1];
+    } else {
+      cleaned = cleaned.replace(/\s+/g, "");
+    }
   }
-  cleaned = cleaned.replace(/^models\//i, "");
-  const tokenMatch = cleaned.match(/(gemini-[a-zA-Z0-9.-]+)/i);
-  if (tokenMatch && tokenMatch[1]) {
-    return tokenMatch[1];
+  if (cleaned === "gemini-2.5-flash") {
+    return "gemini-3.8-flash";
   }
-  return cleaned.replace(/\s+/g, "");
+  return cleaned;
 }
 
 export function parseTimeToMs(str: string): number | null {
@@ -208,7 +214,7 @@ Devuelve un JSON estrictamente estructurado como un array de objetos con las pro
       const timeout = setTimeout(() => controller.abort(), 120000); // 2 minutos por tramo de 10 min
 
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-      const response = await fetch(url, {
+      let response = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -221,17 +227,36 @@ Devuelve un JSON estrictamente estructurado como un array de objetos con las pro
       clearTimeout(timeout);
 
       if (!response.ok) {
-        const errText = await response.text().catch(() => "");
-        let detailedMsg = `Error HTTP ${response.status}`;
-        try {
-          const errObj = JSON.parse(errText);
-          if (errObj?.error?.message) {
-            detailedMsg = errObj.error.message;
+        let errText = await response.text().catch(() => "");
+        // Si el modelo está deprecado para nuevos usuarios y Google sugiere gemini-3.8-flash, auto-reintentar
+        if (response.status === 404 && errText.includes("gemini-3.8-flash") && model !== "gemini-3.8-flash") {
+          const fallbackRes = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-goog-api-key": this.config.apiKey
+            },
+            body: JSON.stringify(requestBody)
+          });
+          if (fallbackRes.ok) {
+            response = fallbackRes;
+          } else {
+            errText = await fallbackRes.text().catch(() => "");
           }
-        } catch {
-          detailedMsg = errText.slice(0, 300) || response.statusText;
         }
-        throw new Error(`Gemini API falló (${response.status}): ${detailedMsg}`);
+
+        if (!response.ok) {
+          let detailedMsg = `Error HTTP ${response.status}`;
+          try {
+            const errObj = JSON.parse(errText);
+            if (errObj?.error?.message) {
+              detailedMsg = errObj.error.message;
+            }
+          } catch {
+            detailedMsg = errText.slice(0, 300) || response.statusText;
+          }
+          throw new Error(`Gemini API falló (${response.status}): ${detailedMsg}`);
+        }
       }
 
       const json = (await response.json()) as any;

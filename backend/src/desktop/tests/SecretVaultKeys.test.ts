@@ -152,8 +152,8 @@ describe("SecretVault y rutas de claves", () => {
       });
       expect(resGemini.status).toBe(200);
       const jsonGemini = (await resGemini.json()) as any;
-      expect(jsonGemini.data.models.some((m: any) => m.id === "gemini-2.5-flash")).toBe(true);
-      expect(jsonGemini.data.defaultModel).toBe("gemini-2.5-flash");
+      expect(jsonGemini.data.models.some((m: any) => m.id === "gemini-3.8-flash")).toBe(true);
+      expect(jsonGemini.data.defaultModel).toBe("gemini-3.8-flash");
 
       // 3. custom provider deepseek
       const resCustom = await fetch(`http://127.0.0.1:${port}/api/desktop/settings/llm-models`, {

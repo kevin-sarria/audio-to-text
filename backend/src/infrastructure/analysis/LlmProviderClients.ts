@@ -117,7 +117,10 @@ export class LlmProviderClients {
     apiKey: string,
     model: string
   ): Promise<string> {
-    const cleanModel = cleanLlmModelId(model) || "gemini-2.5-flash";
+    let cleanModel = cleanLlmModelId(model) || "gemini-3.8-flash";
+    if (cleanModel === "gemini-2.5-flash") {
+      cleanModel = "gemini-3.8-flash";
+    }
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent`;
 
     const requestBody = {

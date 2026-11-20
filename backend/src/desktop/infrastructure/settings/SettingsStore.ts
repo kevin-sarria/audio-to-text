@@ -25,9 +25,9 @@ export const SettingsSchema = z
     useGpu: z.boolean().default(true),
     retentionHours: z.number().int().min(0).max(8760).default(48),
     groqModel: z.string().default("whisper-large-v3-turbo"),
-    geminiModel: z.string().default("gemini-2.5-flash"),
+    geminiModel: z.string().default("gemini-3.8-flash"),
     issuesDefaultProvider: z.string().default("google-account"),
-    issuesDefaultModel: z.string().default("gemini-2.5-pro"),
+    issuesDefaultModel: z.string().default("gemini-3.8-flash-low"),
     autoGenerateIssues: z.boolean().default(true),
     customProviders: z.array(CustomAiProviderItemSchema).default([])
   })
@@ -38,10 +38,14 @@ export type DesktopSettings = z.infer<typeof SettingsSchema>;
 function cleanModelId(raw?: string): string {
   if (!raw) return "";
   const match = raw.match(/\(([^)]+)\)/);
+  let cleaned = raw.trim();
   if (match && match[1]) {
-    return match[1].trim();
+    cleaned = match[1].trim();
   }
-  return raw.trim();
+  if (cleaned === "gemini-2.5-flash") {
+    return "gemini-3.8-flash";
+  }
+  return cleaned;
 }
 
 export class SettingsStore {
