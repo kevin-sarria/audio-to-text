@@ -13,17 +13,22 @@ export class MeetingAnalysisPrompts {
 - No atribuyas una afirmación a una persona a menos que su nombre se diga en esa misma frase.
 - Usa el GLOSARIO para corregir. Corrige en silencio los nombres y términos cuando el glosario o el contexto lo respaldan con alta confianza (ej.: "Lexus" → "Alexis", "RAME" → "derrame", "valida de amante" → "Validar Diamante", "prón" → "prompt").
 - Si dudas entre dos o más lecturas, cita lo transcrito, propón la más probable con [Interpretación: transcrito → probable] y no construyas nada encima hasta que se confirme.
+- La duda de vocabulario nunca es pregunta global: usa [Interpretación] y sigue (Regla P).
+- Cambios de nombre: Escribe siempre "nombre actual → nombre nuevo". Si el nombre nuevo no se dijo, haz una pregunta NO BLOQUEANTE. Nunca pongas un nombre nuevo igual al actual ni inventes uno (Regla Q).
 - Corregir cómo suena una palabra está permitido. Añadir contenido que no se dijo (condiciones, campos, criterios como "por cédula") NO lo está.
 - Nunca fijes una hora, cifra o rango que la fuente solo menciona de forma ambigua: cita el fragmento, lista las lecturas posibles y pregunta.
 
 == 3. PREGUNTAS ABIERTAS ==
 - Úsalas SOLO cuando la ambigüedad cambia el alcance o una regla de negocio, o falta una decisión de negocio (horarios, nomenclatura, fuente de datos). No las uses para ruido evidente (regla 2).
+- Es BLOQUEANTE solo si equivocarse obliga a rehacer el trabajo y no existe un valor por defecto razonable. En cualquier otro caso es NO BLOQUEANTE: usa [Supuesto] con el valor por defecto y el issue sale normal (Regla P).
 - Clasifica cada pregunta como BLOQUEANTE o NO BLOQUEANTE. No pongas más de 8 preguntas globales en total.
 - Cada pregunta indica: qué falta, a quién preguntar (si se mencionó) y qué haría el agente mientras tanto (lo mínimo, sin inventar).
 - Si la transcripción admite varias lecturas de una hora de corte, un nombre de campo o un alcance, NO fijes ninguna: pregúntala.
+- La duda de vocabulario nunca es pregunta global: usa [Interpretación] y sigue (Regla P).
 
 == 4. NO CONSTRUYAS SOBRE LO AMBIGUO ==
-- Si un ítem tiene una pregunta BLOQUEANTE, crea el issue como BLOQUEADO: sin script SQL, sin criterios inventados y sin estimación definitiva. Estima solo cuando el alcance esté confirmado.
+- Un issue es BLOQUEADO solo si su pregunta toca el núcleo del issue y equivocarse obliga a rehacer el trabajo sin haber un valor por defecto razonable (Regla P). Si no toca el núcleo o hay un valor por defecto razonable, usa [Supuesto] y el issue sale normal.
+- Si un ítem tiene una pregunta BLOQUEANTE sobre su núcleo, crea el issue como BLOQUEADO: sin script SQL, sin criterios inventados y sin estimación definitiva. Estima solo cuando el alcance esté confirmado.
 
 == 5. NO INVENTES ESTRUCTURA NI TECNOLOGÍA ==
 - Usa solo estas carpetas conocidas:
@@ -40,9 +45,11 @@ export class MeetingAnalysisPrompts {
 Clasifica cada punto de la reunión como:
 - CERRADO: solo si la transcripción dice explícitamente cerrado/listo/se cerró. NO crees issue; va a "Ya resuelto".
 - EN CURSO: SOLO si alguien dice que ya lo está haciendo ("ya lo estoy trabajando", "estamos terminando de validar") o que quedan pendientes por cerrar. NO crees issue para lo que ya está en curso. Si crees que queda un remanente, el issue debe decir qué parte NO cubre el trabajo en curso e indicar quién lo lleva.
+  - Terceros y datos de origen: Si la solución depende de que alguien externo cambie un dato o dé un acceso, va a En curso / Gestión externa. Crea issue de código solo si la reunión dijo que el código filtra o transforma ese dato (Regla R).
 - NUEVO: crea el issue. Si alguien pide algo al equipo ("por favor puedan hacer X"), es NUEVO aunque el contexto diga que hay algo "en corrección" sobre el tema.
 - BACKLOG: se dijo que no es bloqueante o que va para una etapa de mejoras. Solo una entrada de backlog, sin prompt de implementación.
 - Cada punto de la reunión termina en una de estas cuatro clases. No omitas trabajo real: si algo requiere acción de alguien y no está cerrado ni en curso, es NUEVO (ej.: dimensionamiento / rendimiento).
+- Frases sueltas de estado: Una frase como "esto está validado" se refiere al ítem que se está leyendo en ese momento. Si no es claro, ignórala. No bloquees un issue por ella (Regla S).
 
 == 7. ENDPOINTS FALTANTES Y DEPENDENCIAS ==
 - Crea UN issue por repositorio afectado (backend / panel / app); nunca mezcles repos en un issue.
@@ -89,7 +96,26 @@ El resumen ejecutivo no incluye datos que no estén en la transcripción.
 == 16. FIDELIDAD EN BUGS ==
 - Al describir un bug, copia el síntoma casi textual y con su marca de tiempo. No reformules la causa ni la condición que lo dispara.
 - Si propones una causa o una condición, márcala [Supuesto].
-- Antes de escribir un bug, comprueba que el issue toca el repo donde ocurre el síntoma (ej.: si la configuración se hace en el panel y el síntoma se ve en la app, dilo así).`;
+- Antes de escribir un bug, comprueba que el issue toca el repo donde ocurre el síntoma (ej.: si la configuración se hace en el panel y el síntoma se ve en la app, dilo así).
+
+== 17. BLOQUEANTE SOLO SI NO HAY VALOR POR DEFECTO RAZONABLE (REGLA P) ==
+- Es BLOQUEANTE solo si equivocarse obliga a rehacer el trabajo y no existe un valor por defecto razonable.
+- En cualquier otro caso es NO BLOQUEANTE: usa [Supuesto] con el valor por defecto y el issue sale normal.
+- Un issue es BLOQUEADO solo si su pregunta toca el núcleo del issue.
+- La duda de vocabulario nunca es pregunta global: usa [Interpretación] y sigue.
+
+== 18. CAMBIOS DE NOMBRE (REGLA Q) ==
+- Escribe siempre "nombre actual → nombre nuevo".
+- Si el nombre nuevo no se dijo, haz una pregunta NO BLOQUEANTE.
+- Nunca pongas un nombre nuevo igual al actual ni inventes uno.
+
+== 19. TERCEROS Y DATOS DE ORIGEN (REGLA R) ==
+- Si la solución depende de que alguien externo cambie un dato o dé un acceso, va a En curso / Gestión externa.
+- Crea issue de código solo si la reunión dijo que el código filtra o transforma ese dato.
+
+== 20. FRASES SUELTAS DE ESTADO (REGLA S) ==
+- Una frase como "esto está validado" se refiere al ítem que se está leyendo en ese momento.
+- Si no es claro, ignórala. No bloquees un issue por ella.`;
   }
 
   public static getProjectContextLayer(customContext?: string): string {

@@ -8,18 +8,12 @@ import {
   TextField,
   Snackbar,
   IconButton,
-  Tooltip,
-  Tabs,
-  Tab
+  Tooltip
 } from "@mui/material";
 import {
   AutoAwesome as AutoAwesomeIcon,
   Edit as EditIcon,
-  Save as SaveIcon,
-  Code as CodeIcon,
-  AssignmentTurnedIn as SummaryIcon,
-  CheckCircle as StatusIcon,
-  HelpOutline as QuestionIcon
+  Save as SaveIcon
 } from "@mui/icons-material";
 import {
   MeetingAnalysisDto,
@@ -39,6 +33,7 @@ import { AnalysisErrorAlert } from "./components/AnalysisErrorAlert.js";
 import { ProjectFolderLinkBar } from "./components/ProjectFolderLinkBar.js";
 import { ProjectContextAccordion } from "./components/ProjectContextAccordion.js";
 import { AnalysisTitleHeader } from "./components/AnalysisTitleHeader.js";
+import { AnalysisTabsNav } from "./components/AnalysisTabsNav.js";
 import { MeetingSummaryCard } from "./components/MeetingSummaryCard.js";
 import { MeetingClassifiedSection } from "./components/MeetingClassifiedSection.js";
 import { HoursTotalsCard } from "./components/HoursTotalsCard.js";
@@ -367,103 +362,12 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
       {analysis && (
         <>
           {/* Navegación por pestañas limpias que reduce el ruido de cajas apiladas */}
-          <Box
-            sx={{
-              mb: 3,
-              p: 0.5,
-              borderRadius: "12px",
-              border: 1,
-              borderColor: "divider",
-              backgroundColor: (theme) =>
-                theme.palette.mode === "dark" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"
-            }}
-          >
-            <Tabs
-              value={activeAnalysisTab}
-              onChange={(_, val) => setActiveAnalysisTab(val)}
-              variant="scrollable"
-              scrollButtons="auto"
-              TabIndicatorProps={{ sx: { display: "none" } }}
-              sx={{ minHeight: 40, "& .MuiTabs-flexContainer": { gap: 0.5 } }}
-            >
-              <Tab
-                disableRipple
-                icon={<CodeIcon fontSize="small" />}
-                iconPosition="start"
-                label={`Issues (${analysis.issues.length})`}
-                sx={{
-                  textTransform: "none",
-                  fontWeight: 600,
-                  fontSize: "0.88rem",
-                  borderRadius: "8px",
-                  minHeight: 40,
-                  "&.Mui-selected": {
-                    backgroundColor: "background.paper",
-                    color: "primary.main",
-                    boxShadow: "0 2px 6px rgba(0,0,0,0.06)"
-                  }
-                }}
-              />
-              <Tab
-                disableRipple
-                icon={<SummaryIcon fontSize="small" />}
-                iconPosition="start"
-                label="Resumen Ejecutivo"
-                sx={{
-                  textTransform: "none",
-                  fontWeight: 600,
-                  fontSize: "0.88rem",
-                  borderRadius: "8px",
-                  minHeight: 40,
-                  "&.Mui-selected": {
-                    backgroundColor: "background.paper",
-                    color: "primary.main",
-                    boxShadow: "0 2px 6px rgba(0,0,0,0.06)"
-                  }
-                }}
-              />
-              <Tab
-                disableRipple
-                icon={<StatusIcon fontSize="small" />}
-                iconPosition="start"
-                label="Estado de Reunión"
-                sx={{
-                  textTransform: "none",
-                  fontWeight: 600,
-                  fontSize: "0.88rem",
-                  borderRadius: "8px",
-                  minHeight: 40,
-                  "&.Mui-selected": {
-                    backgroundColor: "background.paper",
-                    color: "primary.main",
-                    boxShadow: "0 2px 6px rgba(0,0,0,0.06)"
-                  }
-                }}
-              />
-              <Tab
-                disableRipple
-                icon={<QuestionIcon fontSize="small" />}
-                iconPosition="start"
-                label={
-                  analysis.globalOpenQuestions?.length
-                    ? `Preguntas (${analysis.globalOpenQuestions.length})`
-                    : "Preguntas"
-                }
-                sx={{
-                  textTransform: "none",
-                  fontWeight: 600,
-                  fontSize: "0.88rem",
-                  borderRadius: "8px",
-                  minHeight: 40,
-                  "&.Mui-selected": {
-                    backgroundColor: "background.paper",
-                    color: "primary.main",
-                    boxShadow: "0 2px 6px rgba(0,0,0,0.06)"
-                  }
-                }}
-              />
-            </Tabs>
-          </Box>
+          <AnalysisTabsNav
+            activeTab={activeAnalysisTab}
+            onChangeTab={setActiveAnalysisTab}
+            issuesCount={analysis.issues.length}
+            questionsCount={analysis.globalOpenQuestions?.length || 0}
+          />
 
           {/* Pestaña 0: Issues de Programación y Totales */}
           {activeAnalysisTab === 0 && (

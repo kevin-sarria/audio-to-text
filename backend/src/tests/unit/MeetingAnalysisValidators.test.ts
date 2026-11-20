@@ -173,6 +173,53 @@ xUnit.`
     expect(result.errors.some((e) => e.includes("9 preguntas globales"))).toBe(true);
   });
 
+  it("detecta dudas de vocabulario formuladas indebidamente como preguntas globales (Regla P)", () => {
+    const dataWithVocabDoubt: GeneratedMeetingData = {
+      ...baseValidData,
+      globalOpenQuestions: ["Duda de vocabulario: se escuchó 'Lexus' o 'Alexis' [02:10]?"]
+    };
+
+    const result = MeetingAnalysisValidators.validate(dataWithVocabDoubt);
+    expect(result.isValid).toBe(false);
+    expect(result.errors.some((e) => e.includes("Regla P") && e.includes("dudas de vocabulario"))).toBe(true);
+  });
+
+  it("detecta cambios de nombre redundantes o inválidos donde origen y destino son idénticos (Regla Q)", () => {
+    const dataWithRedundantRename: GeneratedMeetingData = {
+      ...baseValidData,
+      issues: [
+        {
+          ...baseValidIssue,
+          title: "Renombrar campo usuario → usuario",
+          description: "Cambiar nombre actual usuario → usuario"
+        }
+      ]
+    };
+
+    const result = MeetingAnalysisValidators.validate(dataWithRedundantRename);
+    expect(result.isValid).toBe(false);
+    expect(result.errors.some((e) => e.includes("Regla Q") && e.includes("origen y destino idénticos"))).toBe(true);
+  });
+
+  it("emite avisos de calidad para dependencias de terceros (Regla R) y frases sueltas (Regla S)", () => {
+    const dataWithWarnings: GeneratedMeetingData = {
+      ...baseValidData,
+      issues: [
+        {
+          ...baseValidIssue,
+          id: "BACKEND-2",
+          title: "[Backend] Bloqueado por configuración externa",
+          description: "Depende de que el cliente cambie la base externa",
+          openQuestions: ["esto está validado"]
+        }
+      ]
+    };
+
+    const result = MeetingAnalysisValidators.validate(dataWithWarnings);
+    expect(result.warnings.some((w) => w.includes("Regla R"))).toBe(true);
+    expect(result.warnings.some((w) => w.includes("Regla S"))).toBe(true);
+  });
+
   it("autocorrige typos comunes (BITORACA.md -> BITACORA.md) y recalcula la suma aritmética", () => {
     const dirtyData: GeneratedMeetingData = {
       ...baseValidData,

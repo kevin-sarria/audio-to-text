@@ -191,6 +191,32 @@ export class MeetingAnalysisValidators {
       errors.push(`Se formularon ${data.globalOpenQuestions.length} preguntas globales abiertas (el límite máximo permitido es 8).`);
     }
 
+    // 9. Duda de vocabulario en preguntas globales (Regla P: vocabulario nunca es pregunta global, usa [Interpretación])
+    const vocabDoubtRegex = /\b(duda de vocabulario|cómo se escribe|cómo se pronuncia|fonétic[oa]|interpretación de la palabra)\b/i;
+    for (const q of data.globalOpenQuestions || []) {
+      if (vocabDoubtRegex.test(q)) {
+        errors.push(
+          `La pregunta global "${q}" viola la Regla P: las dudas de vocabulario nunca son preguntas globales; deben resolverse como [Interpretación] y seguir.`
+        );
+      }
+    }
+
+    // 10. Cambios de nombre inválidos o redundantes (Regla Q: nunca poner un nombre nuevo igual al actual)
+    const renameRegex = /["'«»]?([a-zA-Z0-9_\-\.\/]+)["'«»]?\s*(?:→|->)\s*["'«»]?([a-zA-Z0-9_\-\.\/]+)["'«»]?/g;
+    for (const issue of data.issues) {
+      const checkText = `${issue.title || ""} ${issue.description || ""} ${(issue.acceptanceCriteria || []).join(" ")}`;
+      let match: RegExpExecArray | null;
+      while ((match = renameRegex.exec(checkText)) !== null) {
+        const fromName = match[1]?.trim().toLowerCase();
+        const toName = match[2]?.trim().toLowerCase();
+        if (fromName && toName && fromName === toName) {
+          errors.push(
+            `El issue [${issue.id}] viola la Regla Q: cambio de nombre redundante con origen y destino idénticos ("${match[0]}").`
+          );
+        }
+      }
+    }
+
     // AVISOS (Warnings)
     // Aviso: Frase "si esta parte no está resuelta, detente" en más de la mitad de issues
     let stopPhraseCount = 0;
@@ -212,6 +238,29 @@ export class MeetingAnalysisValidators {
         if (text.includes("/api/") && !text.includes("/api/mobile/")) {
           warnings.push(`El issue [${issue.id}] de App Móvil menciona rutas API generales sin /api/mobile/...`);
         }
+      }
+    }
+
+    // Aviso Regla R: Issue de código que aparenta depender únicamente de terceros o datos externos sin transformar
+    const externalDepsRegex = /\b(depende de que el cliente|solicitar acceso|alguien externo cambie|cambio en base externa|gestión externa de datos)\b/i;
+    const transformRegex = /\b(filtr(?:a|ar|ado|ando)|transform(?:a|ar|ado|ando))\b/i;
+    for (const issue of data.issues) {
+      const issueBlob = `${issue.title || ""} ${issue.description || ""} ${issue.agentPrompt || ""}`;
+      if (externalDepsRegex.test(issueBlob) && !transformRegex.test(issueBlob)) {
+        warnings.push(
+          `El issue [${issue.id}] parece depender de terceros sin lógica de filtrado/transformación (Regla R: va a En curso / Gestión externa).`
+        );
+      }
+    }
+
+    // Aviso Regla S: Frases sueltas de estado usadas para bloquear un issue
+    const looseStatusRegex = /\b(esto está validado|validado en reunión|esto ya quedó)\b/i;
+    for (const issue of data.issues) {
+      const questionsBlob = (issue.openQuestions || []).join(" ");
+      if (issue.title.toLowerCase().includes("bloquead") && looseStatusRegex.test(questionsBlob)) {
+        warnings.push(
+          `El issue [${issue.id}] parece bloqueado por una frase suelta de estado (Regla S: si no es claro debe ignorarse sin bloquear).`
+        );
       }
     }
 
