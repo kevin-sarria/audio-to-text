@@ -25,6 +25,7 @@ export interface SessionDetailState {
   fileFormat: string;
   durationSeconds?: number | null;
   status: SessionStatus;
+  errorMessage?: string | null;
   audioExpiresAt: string;
   isAudioPurged: boolean;
   speakers: SpeakerState[];

@@ -28,17 +28,29 @@ export function parseTimeToMs(str: string): number | null {
   if (parts.some((p) => isNaN(p))) return null;
 
   if (parts.length === 2) {
-    // mm:ss
     return Math.round(((parts[0] ?? 0) * 60 + (parts[1] ?? 0)) * 1000);
   }
   if (parts.length === 3) {
-    // hh:mm:ss
     return Math.round(((parts[0] ?? 0) * 3600 + (parts[1] ?? 0) * 60 + (parts[2] ?? 0)) * 1000);
   }
   if (parts.length === 1) {
     return Math.round((parts[0] ?? 0) * 1000);
   }
   return null;
+}
+
+export function cleanJsonString(raw: string): string {
+  let clean = raw.trim();
+  if (clean.startsWith("```")) {
+    clean = clean.replace(/^```(?:json)?\s*\n?/i, "");
+    clean = clean.replace(/\n?\s*```\s*$/i, "");
+  }
+  const firstBracket = clean.indexOf("[");
+  const lastBracket = clean.lastIndexOf("]");
+  if (firstBracket !== -1 && lastBracket !== -1 && lastBracket >= firstBracket) {
+    clean = clean.slice(firstBracket, lastBracket + 1);
+  }
+  return clean;
 }
 
 export class GeminiEngine implements ITranscriptionEngine {
@@ -56,7 +68,7 @@ export class GeminiEngine implements ITranscriptionEngine {
     const language = options?.language || "es";
 
     try {
-      // 1. Convertir a MP3 mono 16kHz
+      // 1. Convertir a MP3 mono 16kHz a 32kbps
       const mp3Path = path.join(tempDir, "audio.mp3");
       await new Promise<void>((resolve, reject) => {
         ffmpeg(wavPath)
@@ -73,12 +85,15 @@ export class GeminiEngine implements ITranscriptionEngine {
       const stat = await fsp.stat(mp3Path);
       const chunks: { path: string; offsetSec: number }[] = [];
 
-      // Trocear si dura más de 30 minutos (1800 seg) o pesa más de 18MB
-      if (stat.size > 18 * 1024 * 1024) {
+      // A 32kbps mono, 1 segundo ocupa ~4KB. 10 minutos (600s) son ~2.4MB.
+      // Si el MP3 supera los 2.5MB (~10 minutos), troceamos en tramos de 10 minutos (600 seg)
+      // para evitar saturar el contexto de salida de Gemini y mantener la latencia bajo control.
+      const CHUNK_DURATION_SEC = 600;
+      if (stat.size > 2.5 * 1024 * 1024) {
         const chunkPattern = path.join(tempDir, "chunk_%03d.mp3");
         await new Promise<void>((resolve, reject) => {
           ffmpeg(mp3Path)
-            .outputOptions(["-f segment", "-segment_time 1800", "-c copy"])
+            .outputOptions(["-f segment", `-segment_time ${CHUNK_DURATION_SEC}`, "-c copy"])
             .output(chunkPattern)
             .on("end", () => resolve())
             .on("error", (err) => reject(new Error(`Error al segmentar audio para Gemini: ${err.message}`)))
@@ -92,7 +107,7 @@ export class GeminiEngine implements ITranscriptionEngine {
         files.forEach((f, idx) => {
           chunks.push({
             path: path.join(tempDir, f),
-            offsetSec: idx * 1800
+            offsetSec: idx * CHUNK_DURATION_SEC
           });
         });
       } else {
@@ -142,7 +157,7 @@ export class GeminiEngine implements ITranscriptionEngine {
         data: fileBytes.toString("base64")
       };
     } else {
-      // Usar Files API para archivos grandes
+      // Usar Files API para fragmentos que superen 18MB
       fileUri = await this.uploadToFilesApi(chunkPath, "audio/mp3");
     }
 
@@ -153,8 +168,8 @@ No resumas ni omitas partes.
 Identifica los diferentes participantes y clasifícalos como 'Hablante 1', 'Hablante 2', etc.
 Devuelve un JSON estrictamente estructurado como un array de objetos con las propiedades:
 - 'speaker': nombre del hablante (ej. 'Hablante 1')
-- 'start': tiempo de inicio en formato 'mm:ss' (aproximado)
-- 'end': tiempo de fin en formato 'mm:ss' (aproximado)
+- 'start': tiempo de inicio en formato 'mm:ss' (aproximado dentro de este tramo)
+- 'end': tiempo de fin en formato 'mm:ss' (aproximado dentro de este tramo)
 - 'text': transcripción literal de lo dicho`;
 
       const contentsPart: any[] = [];
@@ -168,12 +183,13 @@ Devuelve un JSON estrictamente estructurado como un array de objetos con las pro
       const requestBody = {
         contents: [{ parts: contentsPart }],
         generationConfig: {
-          responseMimeType: "application/json"
+          responseMimeType: "application/json",
+          temperature: 0.1
         }
       };
 
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 90000);
+      const timeout = setTimeout(() => controller.abort(), 120000); // 2 minutos por tramo de 10 min
 
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
       const response = await fetch(url, {
@@ -190,9 +206,16 @@ Devuelve un JSON estrictamente estructurado como un array de objetos con las pro
 
       if (!response.ok) {
         const errText = await response.text().catch(() => "");
-        throw new Error(
-          `Gemini API devolvió error ${response.status}: ${errText.slice(0, 200) || response.statusText}`
-        );
+        let detailedMsg = `Error HTTP ${response.status}`;
+        try {
+          const errObj = JSON.parse(errText);
+          if (errObj?.error?.message) {
+            detailedMsg = errObj.error.message;
+          }
+        } catch {
+          detailedMsg = errText.slice(0, 300) || response.statusText;
+        }
+        throw new Error(`Gemini API falló (${response.status}): ${detailedMsg}`);
       }
 
       const json = (await response.json()) as any;
@@ -203,7 +226,8 @@ Devuelve un JSON estrictamente estructurado como un array de objetos con las pro
 
       let parsed: unknown;
       try {
-        parsed = JSON.parse(textResponse);
+        const cleaned = cleanJsonString(textResponse);
+        parsed = JSON.parse(cleaned);
       } catch {
         throw new Error("Gemini no devolvió un JSON válido en la transcripción");
       }
@@ -232,7 +256,7 @@ Devuelve un JSON estrictamente estructurado como un array de objetos con las pro
 
         // Asegurar endMs > startMs
         if (endMs <= startMs) {
-          endMs = startMs + 1000; // Al menos 1 segundo
+          endMs = startMs + 1000;
         }
 
         // Evitar que el inicio sea anterior al final anterior si el modelo desfasó tiempos
@@ -265,7 +289,6 @@ Devuelve un JSON estrictamente estructurado como un array de objetos con las pro
     const fileBytes = await fsp.readFile(filePath);
     const numBytes = fileBytes.length;
 
-    // 1. Iniciar resumable upload
     const initRes = await fetch(
       "https://generativelanguage.googleapis.com/upload/v1beta/files",
       {
@@ -291,7 +314,6 @@ Devuelve un JSON estrictamente estructurado como un array de objetos con las pro
       throw new Error("No se recibió x-goog-upload-url de Gemini");
     }
 
-    // 2. Subir bytes
     const uploadRes = await fetch(uploadUrl, {
       method: "POST",
       headers: {

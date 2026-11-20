@@ -146,7 +146,10 @@ export function createDesktopContainer(options: CreateDesktopContainerOptions) {
     listSessions,
     renameSpeaker,
     deleteSession,
-    linkSessionToProjectFolder
+    linkSessionToProjectFolder,
+    sessionRepository,
+    storageService,
+    jobQueue
   );
   const exportController = new ExportController(exportSession);
   const eventsController = new EventsController(eventPublisher);

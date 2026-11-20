@@ -126,6 +126,11 @@ export class TranscriptionSession {
     this.props.errorMessage = errorMessage.substring(0, 500);
   }
 
+  public resetToPending(): void {
+    this.props.status = SessionStatus.PENDING;
+    this.props.errorMessage = null;
+  }
+
   public purgeAudio(): void {
     this.props.storagePath = null;
     this.props.isAudioPurged = true;

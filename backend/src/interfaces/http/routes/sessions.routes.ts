@@ -42,6 +42,8 @@ export function createSessionRoutes(
     sessionController.updateProjectFolder
   );
 
+  router.post("/:id/retry", optionalAuth, sessionController.retry);
+
   router.delete("/:id", optionalAuth, sessionController.delete);
 
   if (meetingAnalysisController) {

@@ -1,3 +1,4 @@
+import fs from "node:fs/promises";
 import { InProcessJobQueue } from "./infrastructure/queue/InProcessJobQueue.js";
 import { ISessionRepository } from "../domain/repositories/ISessionRepository.js";
 import { IStorageService } from "../domain/services/IStorageService.js";
@@ -50,7 +51,10 @@ export function setupDesktopPipeline(deps: DesktopPipelineDeps): void {
   const handleTranscribe = createTranscribeHandler({
     transcriptionEngine,
     jobQueue,
-    eventPublisher
+    eventPublisher,
+    storageService,
+    audioProcessor,
+    sessionRepository
   });
 
   const handlePersist = createPersistHandler({
@@ -70,6 +74,9 @@ export function setupDesktopPipeline(deps: DesktopPipelineDeps): void {
   // 3. Callback para fallos definitivos (tras agotar 3 reintentos)
   jobQueue.setFinalFailureCallback(async (stage, payload, error) => {
     try {
+      if (payload.wavPath) {
+        await fs.unlink(payload.wavPath).catch(() => {});
+      }
       await failSession.execute({
         sessionId: payload.sessionId,
         errorMessage: `Error en ${stage}: ${error.message}`

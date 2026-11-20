@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { parseTimeToMs } from "../infrastructure/transcription/GeminiEngine.js";
+import { parseTimeToMs, cleanJsonString } from "../infrastructure/transcription/GeminiEngine.js";
 
 describe("ProviderEngines logic", () => {
   const originalFetch = global.fetch;
@@ -19,6 +19,17 @@ describe("ProviderEngines logic", () => {
     expect(parseTimeToMs("10")).toBe(10000); // 10s
     expect(parseTimeToMs("invalido")).toBeNull();
     expect(parseTimeToMs("")).toBeNull();
+  });
+
+  it("cleanJsonString limpia markdown fences y espacios envolventes", () => {
+    const rawWithFences = '```json\n[{"speaker":"Hablante 1","start":"00:00","end":"00:05","text":"Hola"}]\n```';
+    const cleaned = cleanJsonString(rawWithFences);
+    expect(cleaned).toBe('[{"speaker":"Hablante 1","start":"00:00","end":"00:05","text":"Hola"}]');
+    expect(JSON.parse(cleaned)).toHaveLength(1);
+
+    const rawWithExtraText = 'Aquí está el resultado:\n[{"speaker":"Hablante 2","start":"00:01","end":"00:03","text":"Adiós"}]\nEspero te sirva.';
+    const cleaned2 = cleanJsonString(rawWithExtraText);
+    expect(cleaned2).toBe('[{"speaker":"Hablante 2","start":"00:01","end":"00:03","text":"Adiós"}]');
   });
 
   it("GroqEngine maneja reintento ante 429 respetando Retry-After", async () => {

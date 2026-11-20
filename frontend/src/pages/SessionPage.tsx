@@ -9,11 +9,13 @@ import {
   Paper,
   Divider,
   Tabs,
-  Tab
+  Tab,
+  Button
 } from "@mui/material";
 import {
   Description as TranscriptIcon,
-  AutoAwesome as AiIcon
+  AutoAwesome as AiIcon,
+  Refresh as RefreshIcon
 } from "@mui/icons-material";
 import { SessionStatus } from "@audio-to-text/shared";
 import { api } from "../lib/api.js";
@@ -61,6 +63,27 @@ export const SessionPage: React.FC<SessionPageProps> = ({ sessionId }) => {
   };
 
   const [progress, setProgress] = useState<number | null>(null);
+  const [isRetrying, setIsRetrying] = useState(false);
+
+  const handleRetry = async () => {
+    setIsRetrying(true);
+    setErrorMsg(null);
+    try {
+      const headers: Record<string, string> = {};
+      if (guestToken) {
+        headers["x-guest-token"] = guestToken;
+      }
+      const res = await api.post<any>(`/sessions/${sessionId}/retry`, {}, { headers });
+      if (res.success) {
+        updateSessionStatus(SessionStatus.PENDING);
+        await fetchSessionDetails();
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || "Error al reintentar la transcripción.");
+    } finally {
+      setIsRetrying(false);
+    }
+  };
 
   useEffect(() => {
     fetchSessionDetails();
@@ -155,8 +178,29 @@ export const SessionPage: React.FC<SessionPageProps> = ({ sessionId }) => {
         )}
 
         {currentSession.status === SessionStatus.FAILED && (
-          <Alert severity="error" sx={{ mt: 2 }}>
-            Ocurrió un error al procesar este audio. Por favor intenta subirlo nuevamente.
+          <Alert
+            severity="error"
+            sx={{ mt: 2 }}
+            action={
+              <Button
+                color="inherit"
+                size="small"
+                variant="outlined"
+                disabled={isRetrying}
+                onClick={handleRetry}
+                startIcon={<RefreshIcon />}
+                sx={{ textTransform: "none", fontWeight: 600 }}
+              >
+                {isRetrying ? "Reintentando..." : "Reintentar Transcripción"}
+              </Button>
+            }
+          >
+            <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+              Ocurrió un error al procesar este audio:
+            </Typography>
+            <Typography variant="caption" sx={{ display: "block", color: "text.secondary", wordBreak: "break-word" }}>
+              {currentSession.errorMessage || "Error no especificado durante el procesamiento. Puedes reintentar sin necesidad de volver a subir el archivo."}
+            </Typography>
           </Alert>
         )}
       </Paper>

@@ -7,6 +7,10 @@ import { RenameSpeaker } from "../../../application/use-cases/transcription/Rena
 import { DeleteSession } from "../../../application/use-cases/transcription/DeleteSession.js";
 import { LinkSessionToProjectFolder } from "../../../application/use-cases/transcription/LinkSessionToProjectFolder.js";
 import { UnauthorizedError } from "../../../domain/errors/UnauthorizedError.js";
+import { ISessionRepository } from "../../../domain/repositories/ISessionRepository.js";
+import { IStorageService } from "../../../domain/services/IStorageService.js";
+import { IJobQueue } from "../../../domain/services/IJobQueue.js";
+import { SessionStatus } from "../../../domain/value-objects/SessionStatus.js";
 
 export class SessionController {
   constructor(
@@ -15,7 +19,10 @@ export class SessionController {
     private listSessions: ListSessions,
     private renameSpeakerUseCase: RenameSpeaker,
     private deleteSession: DeleteSession,
-    private linkSessionToProjectFolder?: LinkSessionToProjectFolder
+    private linkSessionToProjectFolder?: LinkSessionToProjectFolder,
+    private sessionRepository?: ISessionRepository,
+    private storageService?: IStorageService,
+    private jobQueue?: IJobQueue
   ) {}
 
   public create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -234,6 +241,66 @@ export class SessionController {
         data: {
           id: updated.id,
           projectFolderId: updated.projectFolderId
+        }
+      });
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  public retry = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!this.sessionRepository || !this.storageService || !this.jobQueue) {
+        throw new Error("Servicios de reintento no configurados en este entorno.");
+      }
+
+      const sessionId = req.params["id"]!;
+      const userId = req.user?.userId || null;
+      const guestToken = req.guestToken;
+      const guestTokenHash = guestToken
+        ? crypto.createHash("sha256").update(guestToken).digest("hex")
+        : null;
+
+      const session = await this.sessionRepository.findById(sessionId);
+      if (!session) {
+        res.status(404).json({ success: false, message: "Sesión no encontrada." });
+        return;
+      }
+
+      if (!session.canAccess(userId, guestTokenHash)) {
+        throw new UnauthorizedError("No tienes permisos para reintentar esta sesión.");
+      }
+
+      if (session.status !== SessionStatus.FAILED) {
+        res.status(400).json({
+          success: false,
+          message: "Solo se pueden reintentar sesiones en estado fallido (FAILED)."
+        });
+        return;
+      }
+
+      if (!session.storagePath || !(await this.storageService.exists(session.storagePath))) {
+        res.status(400).json({
+          success: false,
+          message: "El archivo de audio original ya no se encuentra en el almacenamiento para ser reprocesado."
+        });
+        return;
+      }
+
+      session.resetToPending();
+      await this.sessionRepository.update(session);
+
+      await this.jobQueue.enqueuePreprocess({
+        sessionId: session.id,
+        inputPath: session.storagePath
+      });
+
+      res.json({
+        success: true,
+        message: "Sesión reenviada a procesamiento.",
+        data: {
+          id: session.id,
+          status: session.status
         }
       });
     } catch (err) {
