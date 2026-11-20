@@ -52,8 +52,13 @@ export class LocalStorageService implements IStorageService {
   }
 
   public getAbsolutePath(key: string): string {
-    // Prevenir path traversal
-    const safeKey = key.replace(/^(\.\.[\/\\])+/, "");
-    return path.resolve(this.basePath, safeKey);
+    // Prevenir path traversal: la ruta resuelta debe quedar estrictamente dentro de basePath.
+    // Cubre "../x", "a/../../x", separadores "\" y rutas absolutas (incluida otra unidad en Windows).
+    const fullPath = path.resolve(this.basePath, key);
+    const relative = path.relative(this.basePath, fullPath);
+    if (relative === "" || relative.startsWith("..") || path.isAbsolute(relative)) {
+      throw new Error(`Clave de almacenamiento inválida (fuera del almacenamiento): ${key}`);
+    }
+    return fullPath;
   }
 }

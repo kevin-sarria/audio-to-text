@@ -4,6 +4,7 @@ import { TranscriptionSession } from "../../../domain/entities/TranscriptionSess
 import { ISessionRepository } from "../../../domain/repositories/ISessionRepository.js";
 import { IJobQueue } from "../../../domain/services/IJobQueue.js";
 import { IStorageService } from "../../../domain/services/IStorageService.js";
+import { safeAudioExtension } from "../../../domain/value-objects/AudioFormat.js";
 
 export interface CreateTranscriptionSessionInput {
   userId?: string | null;
@@ -35,7 +36,8 @@ export class CreateTranscriptionSession {
     input: CreateTranscriptionSessionInput
   ): Promise<CreateTranscriptionSessionOutput> {
     const sessionId = crypto.randomUUID();
-    const extension = input.file.originalName.split(".").pop()?.toLowerCase() || "audio";
+    // La extensión es el único dato del usuario en la clave: solo se aceptan las de la lista permitida
+    const extension = safeAudioExtension(input.file.originalName);
     const storageKey = `raw/${sessionId}.${extension}`;
 
     // Almacenar el archivo de audio usando el servicio de almacenamiento

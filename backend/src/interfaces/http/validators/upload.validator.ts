@@ -12,7 +12,8 @@ export interface AudioValidationResult {
   errorMessage?: string;
 }
 
-export const ALLOWED_AUDIO_EXTENSIONS = new Set(["wav", "mp3", "m4a", "ogg", "flac", "webm"]);
+export { ALLOWED_AUDIO_EXTENSIONS } from "../../../domain/value-objects/AudioFormat.js";
+import { ALLOWED_AUDIO_EXTENSIONS } from "../../../domain/value-objects/AudioFormat.js";
 
 export const ALLOWED_MIME_TYPES = new Set([
   "audio/wav",
