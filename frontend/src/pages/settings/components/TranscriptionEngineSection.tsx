@@ -143,7 +143,7 @@ export const TranscriptionEngineSection: React.FC<TranscriptionEngineSectionProp
             <LlmModelSelector
               provider="gemini"
               purpose="transcription"
-              value={settings.geminiModel || "gemini-3.8-flash"}
+              value={settings.geminiModel || "gemini-3.5-flash-lite"}
               onChange={(model) => onChangeSettings({ ...settings, geminiModel: model })}
               label="Modelo de Transcripción Gemini"
               placeholder="Selecciona o escribe el modelo"

@@ -25,7 +25,7 @@ export const SettingsSchema = z
     useGpu: z.boolean().default(true),
     retentionHours: z.number().int().min(0).max(8760).default(48),
     groqModel: z.string().default("whisper-large-v3-turbo"),
-    geminiModel: z.string().default("gemini-3.8-flash"),
+    geminiModel: z.string().default("gemini-3.5-flash-lite"),
     issuesDefaultProvider: z.string().default("google-account"),
     issuesDefaultModel: z.string().default("gemini-3.8-flash-low"),
     autoGenerateIssues: z.boolean().default(true),
@@ -42,8 +42,8 @@ function cleanModelId(raw?: string): string {
   if (match && match[1]) {
     cleaned = match[1].trim();
   }
-  if (cleaned === "gemini-2.5-flash") {
-    return "gemini-3.8-flash";
+  if (cleaned === "gemini-2.5-flash" || cleaned === "gemini-2.0-flash" || cleaned === "gemini-1.5-flash") {
+    return "gemini-3.5-flash-lite";
   }
   return cleaned;
 }

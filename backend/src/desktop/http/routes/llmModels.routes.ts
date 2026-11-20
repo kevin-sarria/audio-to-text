@@ -45,15 +45,15 @@ export function createLlmModelsRoutes(deps: DesktopRoutesDeps): Router {
 
         const fallbackGemini = isTranscription
           ? [
-              { id: "gemini-3.8-flash", name: "Gemini 3.8 Flash (Recomendado - Multimodal y ultrarrápido)" },
-              { id: "gemini-3.5-flash", name: "Gemini 3.5 Flash" },
-              { id: "gemini-flash-latest", name: "Gemini Flash Latest" },
-              { id: "gemini-3-flash-preview", name: "Gemini 3 Flash Preview" }
+              { id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash Lite (Recomendado - Ultrarrápido con Diarización)" },
+              { id: "gemini-3.5-transcribe", name: "Gemini 3.5 Transcribe (Máxima Velocidad ASR)" },
+              { id: "gemini-3.8-flash", name: "Gemini 3.8 Flash (Multimodal Avanzado)" },
+              { id: "gemini-flash-latest", name: "Gemini Flash Latest" }
             ]
           : [
               { id: "gemini-3.8-flash", name: "Gemini 3.8 Flash (Recomendado, rápido y de última generación)" },
               { id: "gemini-3.5-flash", name: "Gemini 3.5 Flash" },
-              { id: "gemini-flash-latest", name: "Gemini Flash Latest" },
+              { id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash Lite" },
               { id: "gemini-pro-latest", name: "Gemini Pro Latest" }
             ];
 
@@ -92,7 +92,7 @@ export function createLlmModelsRoutes(deps: DesktopRoutesDeps): Router {
                   data: {
                     provider: "gemini",
                     models: modelsList,
-                    defaultModel: "gemini-3.8-flash",
+                    defaultModel: isTranscription ? "gemini-3.5-flash-lite" : "gemini-3.8-flash",
                     isLiveDiscovered: true
                   }
                 });
@@ -107,7 +107,7 @@ export function createLlmModelsRoutes(deps: DesktopRoutesDeps): Router {
           data: {
             provider: "gemini",
             models: fallbackGemini,
-            defaultModel: "gemini-3.8-flash",
+            defaultModel: isTranscription ? "gemini-3.5-flash-lite" : "gemini-3.8-flash",
             isLiveDiscovered: false
           }
         });

@@ -271,10 +271,10 @@ export class SessionController {
         throw new UnauthorizedError("No tienes permisos para reintentar esta sesión.");
       }
 
-      if (session.status !== SessionStatus.FAILED) {
+      if (session.status !== SessionStatus.FAILED && session.status !== SessionStatus.PROCESSING) {
         res.status(400).json({
           success: false,
-          message: "Solo se pueden reintentar sesiones en estado fallido (FAILED)."
+          message: "Solo se pueden reintentar sesiones en estado fallido (FAILED) o pendientes."
         });
         return;
       }

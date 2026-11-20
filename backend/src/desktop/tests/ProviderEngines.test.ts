@@ -95,13 +95,13 @@ describe("ProviderEngines logic", () => {
   });
 
   it("sanitizeGeminiModelName limpia display names, paréntesis y prefijos", () => {
-    expect(sanitizeGeminiModelName("Gemini 3.8 Flash (gemini-3.8-flash)")).toBe("gemini-3.8-flash");
-    expect(sanitizeGeminiModelName("models/gemini-3.8-flash")).toBe("gemini-3.8-flash");
-    expect(sanitizeGeminiModelName("gemini-3.5-flash")).toBe("gemini-3.5-flash");
-    expect(sanitizeGeminiModelName("Gemini 2.5 Flash (gemini-2.5-flash)")).toBe("gemini-3.8-flash");
-    expect(sanitizeGeminiModelName("  gemini-2.0-flash  ")).toBe("gemini-2.0-flash");
-    expect(sanitizeGeminiModelName("")).toBe("gemini-3.8-flash");
-    expect(sanitizeGeminiModelName(undefined)).toBe("gemini-3.8-flash");
+    expect(sanitizeGeminiModelName("Gemini 3.5 Flash Lite (gemini-3.5-flash-lite)")).toBe("gemini-3.5-flash-lite");
+    expect(sanitizeGeminiModelName("models/gemini-3.5-flash-lite")).toBe("gemini-3.5-flash-lite");
+    expect(sanitizeGeminiModelName("gemini-3.5-transcribe")).toBe("gemini-3.5-transcribe");
+    expect(sanitizeGeminiModelName("Gemini 2.5 Flash (gemini-2.5-flash)")).toBe("gemini-3.5-flash-lite");
+    expect(sanitizeGeminiModelName("  gemini-2.0-flash  ")).toBe("gemini-3.5-flash-lite");
+    expect(sanitizeGeminiModelName("")).toBe("gemini-3.5-flash-lite");
+    expect(sanitizeGeminiModelName(undefined)).toBe("gemini-3.5-flash-lite");
   });
 
   it("sanitizeGroqModelName limpia display names, paréntesis y prefijos", () => {

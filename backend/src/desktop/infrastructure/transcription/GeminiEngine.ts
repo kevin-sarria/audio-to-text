@@ -23,7 +23,7 @@ const GeminiSegmentSchema = z.object({
 });
 
 export function sanitizeGeminiModelName(rawModel?: string): string {
-  if (!rawModel || !rawModel.trim()) return "gemini-3.8-flash";
+  if (!rawModel || !rawModel.trim()) return "gemini-3.5-flash-lite";
   let cleaned = rawModel.trim();
   const parenMatch = cleaned.match(/\((gemini-[a-zA-Z0-9.-]+)\)/i);
   if (parenMatch && parenMatch[1]) {
@@ -37,8 +37,8 @@ export function sanitizeGeminiModelName(rawModel?: string): string {
       cleaned = cleaned.replace(/\s+/g, "");
     }
   }
-  if (cleaned === "gemini-2.5-flash") {
-    return "gemini-3.8-flash";
+  if (cleaned === "gemini-2.5-flash" || cleaned === "gemini-2.0-flash" || cleaned === "gemini-1.5-flash") {
+    return "gemini-3.5-flash-lite";
   }
   return cleaned;
 }
@@ -107,11 +107,11 @@ export class GeminiEngine implements ITranscriptionEngine {
       const stat = await fsp.stat(mp3Path);
       const chunks: { path: string; offsetSec: number }[] = [];
 
-      // A 32kbps mono, 1 segundo ocupa ~4KB. 10 minutos (600s) son ~2.4MB.
-      // Si el MP3 supera los 2.5MB (~10 minutos), troceamos en tramos de 10 minutos (600 seg)
-      // para evitar saturar el contexto de salida de Gemini y mantener la latencia bajo control.
-      const CHUNK_DURATION_SEC = 600;
-      if (stat.size > 2.5 * 1024 * 1024) {
+      // A 32kbps mono, 1 segundo ocupa ~4KB. 3 minutos (180s) son ~720KB.
+      // Troceamos en tramos de 3 minutos para máxima rapidez, evitar timeouts
+      // y actualizar progresivamente el avance en la interfaz.
+      const CHUNK_DURATION_SEC = 180;
+      if (stat.size > 750 * 1024) {
         const chunkPattern = path.join(tempDir, "chunk_%03d.mp3");
         await new Promise<void>((resolve, reject) => {
           ffmpeg(mp3Path)
@@ -184,8 +184,12 @@ export class GeminiEngine implements ITranscriptionEngine {
     }
 
     try {
-      const model = sanitizeGeminiModelName(this.config.model);
-      const prompt = `Transcribe literalmente el audio en idioma '${language}'.
+      let model = sanitizeGeminiModelName(this.config.model);
+      const isAsr = model.includes("transcribe");
+
+      const prompt = isAsr
+        ? `Transcribe literalmente el audio en idioma '${language}'. No resumas ni omitas palabras.`
+        : `Transcribe literalmente el audio en idioma '${language}'.
 No resumas ni omitas partes.
 Identifica los diferentes participantes y clasifícalos como 'Hablante 1', 'Hablante 2', etc.
 Devuelve un JSON estrictamente estructurado como un array de objetos con las propiedades:
@@ -202,67 +206,91 @@ Devuelve un JSON estrictamente estructurado como un array de objetos con las pro
       }
       contentsPart.push({ text: prompt });
 
-      const requestBody = {
+      const requestBody: any = {
         contents: [{ parts: contentsPart }],
         generationConfig: {
-          responseMimeType: "application/json",
           temperature: 0.1
         }
       };
+      if (!isAsr) {
+        requestBody.generationConfig.responseMimeType = "application/json";
+      }
 
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 120000); // 2 minutos por tramo de 10 min
+      let response: Response | null = null;
+      let lastErrText = "";
 
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-      let response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": this.config.apiKey
-        },
-        body: JSON.stringify(requestBody),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeout);
-
-      if (!response.ok) {
-        let errText = await response.text().catch(() => "");
-        // Si el modelo está deprecado para nuevos usuarios y Google sugiere gemini-3.8-flash, auto-reintentar
-        if (response.status === 404 && errText.includes("gemini-3.8-flash") && model !== "gemini-3.8-flash") {
-          const fallbackRes = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent", {
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 90000);
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+          response = await fetch(url, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
               "x-goog-api-key": this.config.apiKey
             },
-            body: JSON.stringify(requestBody)
+            body: JSON.stringify(requestBody),
+            signal: controller.signal
           });
-          if (fallbackRes.ok) {
-            response = fallbackRes;
-          } else {
-            errText = await fallbackRes.text().catch(() => "");
-          }
+        } catch (fetchErr: any) {
+          lastErrText = fetchErr.message;
+        } finally {
+          clearTimeout(timeout);
         }
 
-        if (!response.ok) {
-          let detailedMsg = `Error HTTP ${response.status}`;
-          try {
-            const errObj = JSON.parse(errText);
-            if (errObj?.error?.message) {
-              detailedMsg = errObj.error.message;
-            }
-          } catch {
-            detailedMsg = errText.slice(0, 300) || response.statusText;
-          }
-          throw new Error(`Gemini API falló (${response.status}): ${detailedMsg}`);
+        if (response && response.ok) {
+          break;
         }
+
+        if (response) {
+          lastErrText = await response.text().catch(() => "");
+          if (response.status === 404 && lastErrText.includes("no longer available")) {
+            model = "gemini-3.5-flash-lite";
+            continue;
+          }
+          if ((response.status === 503 || response.status === 429) && attempt < 3) {
+            await new Promise((r) => setTimeout(r, attempt * 2000));
+            if (model === "gemini-3.8-flash" && attempt === 2) {
+              model = "gemini-3.5-flash-lite";
+            }
+            continue;
+          }
+        }
+      }
+
+      if (!response || !response.ok) {
+        let detailedMsg = response ? `Error HTTP ${response.status}` : "Error de conexión con Gemini";
+        try {
+          const errObj = JSON.parse(lastErrText);
+          if (errObj?.error?.message) {
+            detailedMsg = errObj.error.message;
+          }
+        } catch {
+          detailedMsg = lastErrText.slice(0, 300) || detailedMsg;
+        }
+        throw new Error(`Gemini API falló: ${detailedMsg}`);
       }
 
       const json = (await response.json()) as any;
       const textResponse = json?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!textResponse) {
         return [];
+      }
+
+      if (isAsr) {
+        const cleanText = textResponse.trim();
+        if (!cleanText) return [];
+        const rawSentences = cleanText.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [cleanText];
+        const sentences = rawSentences.map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+        const total = sentences.length || 1;
+        const chunkSpanMs = 180 * 1000;
+        return sentences.map((sentence: string, idx: number) => ({
+          startMs: offsetSec * 1000 + Math.round((idx / total) * chunkSpanMs),
+          endMs: offsetSec * 1000 + Math.round(((idx + 1) / total) * chunkSpanMs),
+          text: sentence,
+          speakerLabel: "Hablante 1"
+        }));
       }
 
       let parsed: unknown;
