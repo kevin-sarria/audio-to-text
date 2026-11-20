@@ -21,7 +21,7 @@ export class MeetingAnalysisQualityValidators {
   public static validateWarnings(
     data: GeneratedMeetingData,
     transcript?: string,
-    extractionPoints?: ExtractionPointDto[]
+    _extractionPoints?: ExtractionPointDto[]
   ): string[] {
     const warnings: string[] = [];
 
@@ -103,24 +103,23 @@ export class MeetingAnalysisQualityValidators {
       }
     }
 
-    // 20. Issue de app cuyo punto de origen no menciona la app, el operario o el supervisor móvil
-    for (const issue of data.issues) {
-      if (issue.repo === "app") {
-        const text = `${issue.title || ""} ${issue.description || ""} ${issue.agentPrompt || ""}`.toLowerCase();
-        const mentionsMobile = text.includes("app") || text.includes("móvil") || text.includes("movil") || text.includes("operario") || text.includes("supervisor");
-        if (!mentionsMobile) {
-          warnings.push(`El issue [${issue.id}] está asignado a App Móvil pero su descripción no menciona la app, operario o supervisor móvil.`);
-        }
+    // 20. Normalización de entidades o siglas (ej. LRP -> ERP) sin glosario o sin interpretación
+    if (transcript && transcript.includes("LRP")) {
+      const allText = `${data.summary || ""} ${data.issues.map((i) => `${i.title} ${i.description}`).join(" ")}`;
+      if (allText.includes("ERP") && !allText.includes("LRP") && !allText.includes("[Interpretación")) {
+        warnings.push(`Se normalizó la sigla 'LRP' a 'ERP' sin mantener la referencia original o sin etiqueta [Interpretación].`);
       }
     }
 
     return warnings;
   }
 
-  public static sanitizeAndAutocorrect(data: GeneratedMeetingData): GeneratedMeetingData {
+  public static sanitizeAndAutocorrect(data: GeneratedMeetingData, transcript?: string): GeneratedMeetingData {
     let bSum = 0;
     let pSum = 0;
     let aSum = 0;
+
+    const blockingQuestions = (data.globalOpenQuestions || []).filter((q) => q.includes("[BLOQUEANTE]"));
 
     const cleanedIssues = data.issues.map((issue) => {
       let cleanedPrompt = issue.agentPrompt || "";
@@ -133,10 +132,37 @@ export class MeetingAnalysisQualityValidators {
       cleanedPrompt = cleanedPrompt.replace(/BITORACA\.md/gi, "BITACORA.md");
       const cleanedExpectedFiles = (issue.expectedFiles || []).map((f) => f.replace(/BITORACA\.md/gi, "BITACORA.md"));
 
-      const b = Number(issue.estimation?.backendHours) || 0;
-      const p = Number(issue.estimation?.panelHours) || 0;
-      const a = Number(issue.estimation?.appHours) || 0;
-      const t = Number(issue.estimation?.totalHours) || (b + p + a);
+      // Eliminar frase de detención si no hay pregunta bloqueante asociada a este issue
+      const isBlockedByQuestion = blockingQuestions.some((q) => q && q.toUpperCase().includes(issue.id.toUpperCase()));
+      if (!isBlockedByQuestion) {
+        cleanedPrompt = cleanedPrompt
+          .replace(/Si\s+[^.,\n]*no está resuelto,?\s*detente[^.,\n]*\./gi, "")
+          .replace(/detente,?\s*repórtalo[^.,\n]*\./gi, "")
+          .replace(/\bdetente\b[^.,\n]*\./gi, "")
+          .trim();
+      }
+
+      // Saneamiento de dependencias: solo IDs o "Ninguna"
+      const cleanedDeps = (issue.dependencies || []).map((dep) => {
+        const trimmed = dep.trim();
+        if (trimmed.toLowerCase() === "ninguna") return "Ninguna";
+        const match = trimmed.match(/\b([A-Z]+-\d+)\b/i);
+        return match && match[1] ? match[1].toUpperCase() : "Ninguna";
+      });
+
+      // Saneamiento numérico de estimación
+      const parseHours = (val: unknown): number => {
+        if (typeof val === "number" && !isNaN(val)) return val;
+        const str = String(val || "").replace(/[^\d.]/g, "");
+        const num = parseFloat(str);
+        return isNaN(num) ? 0 : Math.round(num);
+      };
+
+      const b = parseHours(issue.estimation?.backendHours);
+      const p = parseHours(issue.estimation?.panelHours);
+      const a = parseHours(issue.estimation?.appHours);
+      const parsedTotal = parseHours(issue.estimation?.totalHours);
+      const t = parsedTotal > 0 && parsedTotal === b + p + a ? parsedTotal : b + p + a;
 
       if (issue.repo === "backend") bSum += b > 0 ? b : t;
       else if (issue.repo === "panel") pSum += p > 0 ? p : t;
@@ -144,6 +170,14 @@ export class MeetingAnalysisQualityValidators {
 
       return {
         ...issue,
+        dependencies: cleanedDeps.length > 0 ? cleanedDeps : ["Ninguna"],
+        estimation: {
+          backendHours: b,
+          panelHours: p,
+          appHours: a,
+          totalHours: t,
+          text: `Backend: ${b}h | Panel: ${p}h | App: ${a}h | Total: ${t}h`
+        },
         agentPrompt: cleanedPrompt,
         expectedFiles: cleanedExpectedFiles
       };
@@ -153,17 +187,28 @@ export class MeetingAnalysisQualityValidators {
       .replace(/el Paso\s*[12]\s*indica\s*/gi, "")
       .replace(/según el Paso\s*[12],?\s*/gi, "");
 
-    // Autocorrección de preguntas BLOQUEANTE no ancladas a issue o sin 'si me equivoco' -> degradar a NO BLOQUEANTE
-    const cleanedQuestions = (data.globalOpenQuestions || []).map((q) => {
-      if (q.includes("[BLOQUEANTE]")) {
-        const hasIssueRef = /\b([A-Z]+-\d+)\b/i.test(q);
-        const hasWorkRedo = /si me equivoco/i.test(q);
-        if (!hasIssueRef || !hasWorkRedo) {
-          return q.replace("[BLOQUEANTE]", "[NO BLOQUEANTE]");
+    // Autocorrección de preguntas BLOQUEANTE
+    const transcriptLower = (transcript || "").toLowerCase();
+    const hasRolesInTranscript = transcriptLower.includes("rol") || transcriptLower.includes("roles");
+
+    const cleanedQuestions = (data.globalOpenQuestions || [])
+      .filter((q) => {
+        // Eliminar preguntas de roles inventadas si la transcripción no habló de roles
+        if (transcript && !hasRolesInTranscript && /\broles?\b/i.test(q)) {
+          return false;
         }
-      }
-      return q;
-    });
+        return true;
+      })
+      .map((q) => {
+        if (q.includes("[BLOQUEANTE]")) {
+          const hasIssueRef = /\b([A-Z]+-\d+)\b/i.test(q);
+          const hasWorkRedo = /si me equivoco/i.test(q);
+          if (!hasIssueRef || !hasWorkRedo) {
+            return q.replace("[BLOQUEANTE]", "[NO BLOQUEANTE]");
+          }
+        }
+        return q;
+      });
 
     return {
       ...data,

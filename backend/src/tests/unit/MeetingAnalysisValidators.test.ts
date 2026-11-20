@@ -227,6 +227,149 @@ xUnit.`
     expect(cleaned.globalOpenQuestions?.[0]).not.toContain("[BLOQUEANTE]");
   });
 
+  it("detecta issue de app sin evidencia móvil como ERROR (v6 Regla 7)", () => {
+    const dataWithInvalidApp: GeneratedMeetingData = {
+      ...baseValidData,
+      issues: [
+        {
+          ...baseValidIssue,
+          id: "APP-1",
+          repo: "app",
+          title: "Reprogramación en la interfaz",
+          description: "Configurar pantalla de reprogramación",
+          agentPrompt: baseValidIssue.agentPrompt.replace("Actúa como Principal Backend Developer", "Actúa como Frontend Developer")
+        }
+      ],
+      repoHoursTotals: { backend: 0, panel: 0, app: 4, total: 4 }
+    };
+
+    const result = MeetingAnalysisValidators.validate(dataWithInvalidApp);
+    expect(result.isValid).toBe(false);
+    expect(result.errors.some((e) => e.includes("carece de evidencia móvil"))).toBe(true);
+  });
+
+  it("detecta dependencias con texto libre o formato no permitido (v6)", () => {
+    const dataWithTextDep: GeneratedMeetingData = {
+      ...baseValidData,
+      issues: [
+        {
+          ...baseValidIssue,
+          dependencies: ["Depende de validar en el repo..."]
+        }
+      ]
+    };
+
+    const result = MeetingAnalysisValidators.validate(dataWithTextDep);
+    expect(result.isValid).toBe(false);
+    expect(result.errors.some((e) => e.includes("Solo se permite \"Ninguna\" o IDs de issues"))).toBe(true);
+  });
+
+  it("detecta estimación con paréntesis o texto (v6 Regla 11)", () => {
+    const dataWithTextEst: GeneratedMeetingData = {
+      ...baseValidData,
+      issues: [
+        {
+          ...baseValidIssue,
+          estimation: {
+            backendHours: "(estimación provisional: issue BLOQUEADO)" as any,
+            panelHours: 0,
+            appHours: 0,
+            totalHours: 4,
+            text: "Backend: 4h | Panel: 0h | App: 0h | Total: 4h"
+          }
+        }
+      ]
+    };
+
+    const result = MeetingAnalysisValidators.validate(dataWithTextEst);
+    expect(result.isValid).toBe(false);
+    expect(result.errors.some((e) => e.includes("texto o paréntesis"))).toBe(true);
+  });
+
+  it("detecta frase 'detente' en issue no bloqueado por su propia pregunta bloqueante y lo autocorrige (v6)", () => {
+    const dataWithStopPhrase: GeneratedMeetingData = {
+      ...baseValidData,
+      globalOpenQuestions: [
+        "[NO BLOQUEANTE] ¿Alguna duda de parámetros? No bloquea nada."
+      ],
+      issues: [
+        {
+          ...baseValidIssue,
+          agentPrompt: `${baseValidIssue.agentPrompt}\nSi esta parte no está resuelta, detente, repórtalo en el PR.`
+        }
+      ]
+    };
+
+    const result = MeetingAnalysisValidators.validate(dataWithStopPhrase);
+    expect(result.isValid).toBe(false);
+    expect(result.errors.some((e) => e.includes("frase de detención"))).toBe(true);
+
+    const cleaned = MeetingAnalysisValidators.sanitizeAndAutocorrect(dataWithStopPhrase);
+    expect(cleaned.issues[0]?.agentPrompt).not.toContain("detente");
+  });
+
+  it("detecta pregunta bloqueante inventada sobre roles y la elimina/autocorrige si no se habló de roles (v6)", () => {
+    const dataWithRolesQ: GeneratedMeetingData = {
+      ...baseValidData,
+      globalOpenQuestions: [
+        "[BLOQUEANTE] ¿Cuáles son los roles autorizados para reprogramar? Bloquea BACKEND-1. Si me equivoco: se rehace la matriz de permisos"
+      ]
+    };
+
+    const transcript = "En el minuto [04:15] acordamos crear el endpoint.";
+    const result = MeetingAnalysisValidators.validate(dataWithRolesQ, transcript);
+    expect(result.isValid).toBe(false);
+    expect(result.errors.some((e) => e.includes("roles/permisos"))).toBe(true);
+
+    const cleaned = MeetingAnalysisValidators.sanitizeAndAutocorrect(dataWithRolesQ, transcript);
+    expect(cleaned.globalOpenQuestions?.some((q) => q.includes("roles"))).toBe(false);
+  });
+
+  it("detecta decisión que fija hora no literal sin [Interpretación] (v6 Regla 2)", () => {
+    const dataWithBadDecision: GeneratedMeetingData = {
+      ...baseValidData,
+      keyDecisions: ["El corte de turnos es a las 19:00 exactas."]
+    };
+
+    const transcript = "En la reunión [02:00] se dijo que el corte es a partir de las 7.";
+    const result = MeetingAnalysisValidators.validate(dataWithBadDecision, transcript);
+    expect(result.isValid).toBe(false);
+    expect(result.errors.some((e) => e.includes("fija la hora o rango \"19:00\""))).toBe(true);
+  });
+
+  it("detecta issue derivado de punto con acción gestion_externa o seguimiento (v6 Regla 6)", () => {
+    const dataWithThirdPartyIssue: GeneratedMeetingData = {
+      ...baseValidData,
+      issues: [
+        {
+          ...baseValidIssue,
+          title: "Diagnóstico de CRM para cubrimientos",
+          description: "Revisar por qué el CRM no devuelve el personal requerido en cubrimientos"
+        }
+      ]
+    };
+
+    const extractionPoints = [
+      {
+        id: "P-CRM",
+        cita: "el CRM no devuelve el personal requerido",
+        timestamp: "21:48",
+        clase: "en_curso" as const,
+        accion: "gestion_externa" as const,
+        repo: "ninguno" as const,
+        tipo: "soporte" as const,
+        quien_lo_lleva: null,
+        interpretaciones: [],
+        valores_ambiguos: [],
+        preguntas: []
+      }
+    ];
+
+    const result = MeetingAnalysisValidators.validate(dataWithThirdPartyIssue, undefined, extractionPoints);
+    expect(result.isValid).toBe(false);
+    expect(result.errors.some((e) => e.includes("gestion_externa"))).toBe(true);
+  });
+
   it("carga y evalúa el caso de referencia 2026-11-18_08-04-57 con EvaluationRunner", () => {
     const casesDir = path.resolve(__dirname, "../../infrastructure/analysis/evaluation/cases");
     const evalCase = EvaluationRunner.loadCase(casesDir, "2026-11-18_08-04-57");

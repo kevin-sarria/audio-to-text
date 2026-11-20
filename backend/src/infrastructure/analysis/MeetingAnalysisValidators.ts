@@ -35,7 +35,7 @@ export class MeetingAnalysisValidators {
     };
   }
 
-  public static sanitizeAndAutocorrect(data: GeneratedMeetingData): GeneratedMeetingData {
-    return MeetingAnalysisQualityValidators.sanitizeAndAutocorrect(data);
+  public static sanitizeAndAutocorrect(data: GeneratedMeetingData, transcript?: string): GeneratedMeetingData {
+    return MeetingAnalysisQualityValidators.sanitizeAndAutocorrect(data, transcript);
   }
 }

@@ -302,7 +302,27 @@ Devuelve un JSON estrictamente estructurado como un array de objetos con las pro
         const cleaned = cleanJsonString(textResponse);
         parsed = JSON.parse(cleaned);
       } catch {
-        const cleanText = textResponse.replace(/```json|```/g, "").trim();
+        // Fallback: extraer texto sin filtrar claves JSON ni sintaxis cruda
+        const textMatches = Array.from(textResponse.matchAll(/"text"\s*:\s*"((?:\\.|[^"\\])*)"/g)) as RegExpMatchArray[];
+        let cleanText = "";
+        if (textMatches.length > 0) {
+          cleanText = textMatches
+            .map((m: RegExpMatchArray) => {
+              try {
+                return JSON.parse(`"${m[1]}"`);
+              } catch {
+                return m[1] || "";
+              }
+            })
+            .join(" ");
+        } else {
+          cleanText = textResponse
+            .replace(/```(?:json)?/gi, "")
+            .replace(/[{}[\]"]/g, "")
+            .replace(/\b(?:speaker|start|end|text)\s*:\s*/gi, "")
+            .trim();
+        }
+
         const rawSentences = cleanText.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [cleanText];
         const sentences = rawSentences.map((s: string) => s.trim()).filter((s: string) => s.length > 0);
         const total = sentences.length || 1;

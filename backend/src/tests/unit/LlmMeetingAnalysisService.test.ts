@@ -211,7 +211,7 @@ describe("LlmMeetingAnalysisService - Resolución de Proveedores y Modelos", () 
       expect(result.issues).toHaveLength(2);
       expect(result.issues[0].repo).toBe("backend");
       expect(result.issues[1].repo).toBe("app");
-      expect(result.issues[1].dependencies).toContain("Depende de BACKEND-1");
+      expect(result.issues[1].dependencies).toContain("BACKEND-1");
 
       // Verificación aritmética estricta recalculada
       expect(result.repoHoursTotals.backend).toBe(5);

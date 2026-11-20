@@ -15,6 +15,7 @@ import {
   Step1ExtractionDto
 } from "./MeetingAnalysisResponseParser.js";
 import { MeetingAnalysisValidators } from "./MeetingAnalysisValidators.js";
+import { TranscriptSanitizer } from "./TranscriptSanitizer.js";
 import { RepoContextScanner } from "./RepoContextScanner.js";
 import { LlmProviderClients } from "./LlmProviderClients.js";
 
@@ -31,10 +32,11 @@ export class LlmMeetingAnalysisService implements IMeetingAnalysisService {
     projectContext?: string,
     options?: GenerateAnalysisOptions
   ): Promise<GeneratedMeetingData> {
+    const sanitizedTranscript = TranscriptSanitizer.sanitize(transcript);
     const { provider, apiKey, model, baseUrl } = await this.resolveProviderAndKey(options);
 
     const step1SystemPrompt = this.buildStep1Prompt(projectContext);
-    const step1UserPrompt = `A continuación se presenta la transcripción completa de la reunión de desarrollo:\n\n${transcript}\n\nPor favor, extrae el resumen ejecutivo, identifica las decisiones clave, formula las preguntas abiertas globales (máximo 8, clasificadas en BLOQUEANTE o NO BLOQUEANTE, sin incluir ruido evidente) y clasifica rigurosamente cada punto tratado en la estructura de puntos JSON con su clase ('cerrado' | 'en_curso' | 'nuevo' | 'backlog') y su acción ('codigo' | 'gestion_externa' | 'decision' | 'seguimiento') con su marca [mm:ss], siguiendo estrictamente las REGLAS DE GENERACIÓN DE ISSUES.`;
+    const step1UserPrompt = `A continuación se presenta la transcripción completa de la reunión de desarrollo:\n\n${sanitizedTranscript}\n\nPor favor, extrae el resumen ejecutivo, identifica las decisiones clave, formula las preguntas abiertas globales (máximo 8, clasificadas en BLOQUEANTE o NO BLOQUEANTE, sin incluir ruido evidente) y clasifica rigurosamente cada punto tratado en la estructura de puntos JSON con su clase ('cerrado' | 'en_curso' | 'nuevo' | 'backlog') y su acción ('codigo' | 'gestion_externa' | 'decision' | 'seguimiento') con su marca [mm:ss], siguiendo estrictamente las REGLAS DE GENERACIÓN DE ISSUES.`;
 
     try {
       // ETAPA 1: Extracción estructurada y clasificación rigurosa
@@ -96,8 +98,8 @@ export class LlmMeetingAnalysisService implements IMeetingAnalysisService {
           repoHoursTotals: step2Hours || { backend: 0, panel: 0, app: 0, total: 0 }
         };
 
-        const sanitized = MeetingAnalysisValidators.sanitizeAndAutocorrect(candidateMerged);
-        const validation = MeetingAnalysisValidators.validate(sanitized, transcript, step1Data.puntos);
+        const sanitized = MeetingAnalysisValidators.sanitizeAndAutocorrect(candidateMerged, sanitizedTranscript);
+        const validation = MeetingAnalysisValidators.validate(sanitized, sanitizedTranscript, step1Data.puntos);
 
         finalMergedData = sanitized;
 

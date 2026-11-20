@@ -40,6 +40,11 @@ export const GLOSSARY_TERMS = [
   "sociedad portuaria"
 ];
 
+interface TranscriptSegment {
+  seconds: number;
+  text: string;
+}
+
 export class MeetingAnalysisErrorValidators {
   public static validateErrors(
     data: GeneratedMeetingData,
@@ -133,6 +138,21 @@ export class MeetingAnalysisErrorValidators {
         errors.push(`El issue [${issue.id}] carece de estimación numérica conforme a la regla 11.`);
         continue;
       }
+      const rawBackend = String(est.backendHours ?? "");
+      const rawPanel = String(est.panelHours ?? "");
+      const rawApp = String(est.appHours ?? "");
+      const rawTotal = String(est.totalHours ?? "");
+
+      // Estimación no debe contener texto entre paréntesis (ej. "(estimación provisional)")
+      for (const raw of [rawBackend, rawPanel, rawApp, rawTotal]) {
+        if (/[()a-zA-Z]/.test(raw) && !/^\d+$/.test(raw.trim())) {
+          errors.push(
+            `La estimación del issue [${issue.id}] contiene texto o paréntesis: "${raw}". Las horas deben ser estrictamente numéricas (Regla 11).`
+          );
+          break;
+        }
+      }
+
       const b = Number(est.backendHours);
       const p = Number(est.panelHours);
       const a = Number(est.appHours);
@@ -170,19 +190,21 @@ export class MeetingAnalysisErrorValidators {
       );
     }
 
-    // 7. Dependencias que apuntan a issues inexistentes
+    // 7. Dependencias que apuntan a issues inexistentes o con texto libre
     const issueIds = new Set(data.issues.map((i) => i.id.toUpperCase()));
     for (const issue of data.issues) {
       const deps = issue.dependencies || [];
       for (const dep of deps) {
         const trimmed = dep.trim();
-        if (trimmed && trimmed.toLowerCase() !== "ninguna") {
-          const match = trimmed.match(/\b([A-Z]+-\d+)\b/i);
-          if (match && match[1]) {
-            const targetId = match[1].toUpperCase();
-            if (!issueIds.has(targetId) && targetId !== issue.id.toUpperCase()) {
-              errors.push(`El issue [${issue.id}] declara dependencia inexistente: "${dep}" (no existe ${targetId}).`);
-            }
+        if (trimmed.toLowerCase() === "ninguna") continue;
+        if (!/^[A-Z]+-\d+$/i.test(trimmed)) {
+          errors.push(
+            `El campo Dependencias del issue [${issue.id}] contiene "${dep}". Solo se permite "Ninguna" o IDs de issues (ej. BACKEND-1).`
+          );
+        } else {
+          const targetId = trimmed.toUpperCase();
+          if (!issueIds.has(targetId) && targetId !== issue.id.toUpperCase()) {
+            errors.push(`El issue [${issue.id}] declara dependencia inexistente: "${dep}" (no existe ${targetId}).`);
           }
         }
       }
@@ -226,7 +248,14 @@ export class MeetingAnalysisErrorValidators {
         for (const pt of extractionPoints) {
           if (pt.clase !== "nuevo" || pt.accion !== "codigo") {
             const citeSub = (pt.cita || "").slice(0, 30).toLowerCase();
-            if (citeSub.length > 10 && issueText.includes(citeSub)) {
+            const mentionsCRM = pt.id === "CRM" || (pt.cita || "").toLowerCase().includes("crm");
+            const mentionsLady = (pt.cita || "").toLowerCase().includes("lady");
+
+            if (
+              (citeSub.length > 10 && issueText.includes(citeSub)) ||
+              (mentionsCRM && issueText.includes("crm")) ||
+              (mentionsLady && issueText.includes("lady") && issueText.includes("usuario"))
+            ) {
               errors.push(
                 `El issue [${issue.id}] proviene del punto [${pt.id}] clasificado como '${pt.clase}/${pt.accion}', pero solo se permiten issues de 'nuevo/codigo'.`
               );
@@ -283,6 +312,120 @@ export class MeetingAnalysisErrorValidators {
       }
     }
 
+    // 15. Issue de app sin evidencia móvil (Regla 7) - Ahora es ERROR en v6
+    for (const issue of data.issues) {
+      if (issue.repo === "app") {
+        const text = `${issue.title || ""} ${issue.description || ""} ${issue.agentPrompt || ""}`.toLowerCase();
+        const mentionsMobile =
+          text.includes("app") ||
+          text.includes("móvil") ||
+          text.includes("movil") ||
+          text.includes("operario") ||
+          text.includes("supervisor");
+        if (!mentionsMobile) {
+          errors.push(
+            `El issue [${issue.id}] está asignado a App Móvil pero carece de evidencia móvil (app, operario o supervisor móvil) en la reunión (Regla 7).`
+          );
+        }
+      }
+    }
+
+    // 16. La frase de detención solo aparece si el issue está BLOQUEADO por una pregunta BLOQUEANTE asociada
+    const stopRegex = /\bdetente\b/i;
+    for (const issue of data.issues) {
+      if (stopRegex.test(issue.agentPrompt || "")) {
+        const isBlockedByAssociatedQuestion = (data.globalOpenQuestions || []).some(
+          (q) => q.includes("[BLOQUEANTE]") && q.toUpperCase().includes(issue.id.toUpperCase())
+        );
+        if (!isBlockedByAssociatedQuestion) {
+          errors.push(
+            `El issue [${issue.id}] incluye la frase de detención ('detente') pero no está BLOQUEADO por una pregunta BLOQUEANTE asociada a este issue (Regla 13).`
+          );
+        }
+      }
+    }
+
+    // 17. Pregunta BLOQUEANTE referida a un hecho que no aparece en la transcripción (ej. roles autorizados)
+    if (transcript && transcript.trim().length > 0) {
+      const transcriptLower = transcript.toLowerCase();
+      for (const q of data.globalOpenQuestions || []) {
+        if (q.includes("[BLOQUEANTE]")) {
+          if (/\broles?\b/i.test(q) && !transcriptLower.includes("rol") && !transcriptLower.includes("roles")) {
+            errors.push(
+              `La pregunta BLOQUEANTE "${q}" indaga sobre roles/permisos, hecho que no aparece en la transcripción (Regla 1).`
+            );
+          }
+        }
+      }
+    }
+
+    // 18. Una decisión que contiene una cifra, hora o valor no literal sin etiqueta [Interpretación]
+    if (transcript && transcript.trim().length > 0) {
+      const fixedTimeDecisionRegex = /\b(19:00|06:00|7:00\s*(?:p\.?m\.?|a\.?m\.?)|entre\s*06:00\s*y\s*19:00)\b/gi;
+      for (const dec of data.keyDecisions || []) {
+        let decMatch: RegExpExecArray | null;
+        while ((decMatch = fixedTimeDecisionRegex.exec(dec)) !== null) {
+          const matchedVal = decMatch[0];
+          if (!transcript.includes(matchedVal) && !dec.includes("[Interpretación") && !dec.includes("[Supuesto]")) {
+            errors.push(
+              `La decisión "${dec}" fija la hora o rango "${matchedVal}" sin respaldo literal en la transcripción ni etiqueta [Interpretación] (Regla 2).`
+            );
+          }
+        }
+      }
+    }
+
+    // 19. Citas textuales entre comillas deben coincidir con la transcripción en la marca citada (±10s)
+    if (transcript && transcript.trim().length > 0) {
+      MeetingAnalysisErrorValidators.validateCitations(data, transcript, errors);
+    }
+
     return errors;
+  }
+
+  private static validateCitations(data: GeneratedMeetingData, transcript: string, errors: string[]): void {
+    const segments: TranscriptSegment[] = [];
+    const lines = transcript.split(/\r?\n/);
+    for (const line of lines) {
+      const match = line.match(/\[(\d{1,2}):(\d{2})\]/);
+      if (match && match[1] && match[2]) {
+        const sec = parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
+        segments.push({ seconds: sec, text: line.toLowerCase() });
+      }
+    }
+
+    const quoteRegex = /"([^"\n]{8,80})"/g;
+    const tsRegex = /\[(\d{1,2}):(\d{2})\]/;
+
+    for (const issue of data.issues) {
+      const issueText = `${issue.title || ""} ${issue.description || ""} ${(issue.acceptanceCriteria || []).join(" ")}`;
+      let qm: RegExpExecArray | null;
+      while ((qm = quoteRegex.exec(issueText)) !== null) {
+        const rawQuote = qm[1]?.trim() || "";
+        if (GLOSSARY_TERMS.some((g) => g.toLowerCase().includes(rawQuote.toLowerCase()))) continue;
+
+        // Buscar marca de tiempo próxima a la cita
+        const surrounding = issueText.slice(Math.max(0, qm.index - 30), Math.min(issueText.length, qm.index + rawQuote.length + 30));
+        const tsMatch = surrounding.match(tsRegex);
+        if (!tsMatch || !tsMatch[1] || !tsMatch[2]) continue;
+
+        const targetSec = parseInt(tsMatch[1], 10) * 60 + parseInt(tsMatch[2], 10);
+        const windowSegments = segments.filter((s) => Math.abs(s.seconds - targetSec) <= 10);
+        const windowText = windowSegments.map((s) => s.text).join(" ");
+
+        // Manejo de elipsis en citas (ej. "parte 1... parte 2" o "…")
+        const parts = rawQuote.split(/[….]+/).map((p) => p.trim()).filter((p) => p.length >= 6);
+        for (const part of parts) {
+          const cleanPart = part.toLowerCase().replace(/[,.:;!?]/g, "");
+          const cleanWindow = windowText.replace(/[,.:;!?]/g, "");
+          if (!cleanWindow.includes(cleanPart)) {
+            errors.push(
+              `La cita textual "${rawQuote}" en [${issue.id}] no coincide con el segmento en la marca [${tsMatch[1]}:${tsMatch[2]}] (tolerancia ±10s).`
+            );
+            break;
+          }
+        }
+      }
+    }
   }
 }
