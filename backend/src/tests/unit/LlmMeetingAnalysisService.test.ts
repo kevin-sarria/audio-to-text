@@ -219,5 +219,20 @@ describe("LlmMeetingAnalysisService - Resolución de Proveedores y Modelos", () 
       expect(result.repoHoursTotals.app).toBe(8);
       expect(result.repoHoursTotals.total).toBe(13);
     });
+
+    it("bloquea la generación de issues si la cobertura de la transcripción es < 90% (v7)", async () => {
+      const service = new LlmMeetingAnalysisService();
+      const incompleteTranscript = `[00:00] Inicio.
+[03:00] [Audio no disponible en este tramo por congestión temporal de servidores: 03:00–06:00]
+[15:00] [Audio no disponible en este tramo por congestión temporal de servidores: 15:00–18:00]
+[24:00] [Audio no disponible en este tramo por congestión temporal de servidores: 24:00–27:00]
+[30:00] [Audio no disponible en este tramo por congestión temporal de servidores: 30:00–39:00]
+[45:00] Fin.`;
+
+      const result = await service.generateAnalysis(incompleteTranscript);
+      expect(result.issues).toHaveLength(0);
+      expect(result.summary).toContain("Análisis parcial: transcripción incompleta, reintentar");
+      expect(result.summary).toContain("inferior al 90%");
+    });
   });
 });

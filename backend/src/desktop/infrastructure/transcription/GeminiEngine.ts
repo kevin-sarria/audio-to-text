@@ -256,7 +256,8 @@ Devuelve un JSON estrictamente estructurado como un array de objetos con las pro
               activeModel = "gemini-3.5-transcribe";
             }
             if (attempt < maxAttempts) {
-              const backoffMs = Math.min(8000, attempt * 2000);
+              const backoffDelays = [2000, 5000, 15000, 20000, 30000];
+              const backoffMs = backoffDelays[attempt - 1] ?? 15000;
               await new Promise((r) => setTimeout(r, backoffMs));
               continue;
             }
@@ -266,11 +267,18 @@ Devuelve un JSON estrictamente estructurado como un array de objetos con las pro
 
       if (!response || !response.ok) {
         console.warn(`[GeminiEngine] Tramo en ${offsetSec}s no pudo transcribirse tras ${maxAttempts} intentos: ${lastErrText}`);
+        const startMin = Math.floor(offsetSec / 60).toString().padStart(2, "0");
+        const startSecRem = (offsetSec % 60).toString().padStart(2, "0");
+        const endSecTotal = offsetSec + 180;
+        const endMin = Math.floor(endSecTotal / 60).toString().padStart(2, "0");
+        const endSecRem = (endSecTotal % 60).toString().padStart(2, "0");
+        const rangeStr = `${startMin}:${startSecRem}–${endMin}:${endSecRem}`;
+
         return [
           {
             startMs: offsetSec * 1000,
-            endMs: offsetSec * 1000 + 180 * 1000,
-            text: "[Audio no disponible en este tramo por congestión temporal de servidores]",
+            endMs: (offsetSec + 180) * 1000,
+            text: `[Audio no disponible en este tramo por congestión temporal de servidores: ${rangeStr}]`,
             speakerLabel: "Hablante 1"
           }
         ];

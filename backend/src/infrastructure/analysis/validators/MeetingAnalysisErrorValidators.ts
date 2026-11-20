@@ -1,5 +1,6 @@
 import { GeneratedMeetingData } from "../../../domain/services/IMeetingAnalysisService.js";
 import { ExtractionPointDto } from "../MeetingAnalysisResponseParser.js";
+import { MeetingAnalysisCoverageValidators } from "./MeetingAnalysisCoverageValidators.js";
 
 export const ALLOWED_DOCUMENTS = new Set([
   "AI_CONTEXT.md",
@@ -379,6 +380,9 @@ export class MeetingAnalysisErrorValidators {
     if (transcript && transcript.trim().length > 0) {
       MeetingAnalysisErrorValidators.validateCitations(data, transcript, errors);
     }
+
+    // 20. Validadores de cobertura de transcripción e integridad de issues (v7)
+    MeetingAnalysisCoverageValidators.validateCoverageAndIntegrityErrors(data, transcript, errors);
 
     return errors;
   }

@@ -1,6 +1,8 @@
 import { GeneratedMeetingData } from "../../../domain/services/IMeetingAnalysisService.js";
 import { ExtractionPointDto } from "../MeetingAnalysisResponseParser.js";
 import { GLOSSARY_TERMS } from "./MeetingAnalysisErrorValidators.js";
+import { MeetingAnalysisCoverageValidators } from "./MeetingAnalysisCoverageValidators.js";
+import { TranscriptCoverageDetector } from "../TranscriptCoverageDetector.js";
 
 export const REFERENCE_HOURS_TABLE: Record<string, number> = {
   "cambio de texto": 2,
@@ -111,6 +113,9 @@ export class MeetingAnalysisQualityValidators {
       }
     }
 
+    // 21. Avisos de cobertura de transcripción (citas < 30s de tramos sin audio)
+    MeetingAnalysisCoverageValidators.validateCoverageWarnings(data, transcript, warnings);
+
     return warnings;
   }
 
@@ -120,8 +125,23 @@ export class MeetingAnalysisQualityValidators {
     let aSum = 0;
 
     const blockingQuestions = (data.globalOpenQuestions || []).filter((q) => q.includes("[BLOQUEANTE]"));
+    const extraBacklog: string[] = [];
 
-    const cleanedIssues = data.issues.map((issue) => {
+    // Separar issues que corresponden a backlog (repo 'otro', 0h o prioridad backlog)
+    const filteredIssues = (data.issues || []).filter((issue) => {
+      const isBacklogRepo = (issue.repo as string) === "otro" || (issue.repo as string) === "none";
+      const isZeroHours = Number(issue.estimation?.totalHours) === 0;
+      const isBacklogPriority = issue.priority?.toLowerCase() === "backlog";
+      const hasBacklogTitle = issue.title.toLowerCase().startsWith("[backlog]");
+
+      if (isBacklogRepo || (isZeroHours && isBacklogPriority) || (isBacklogRepo && isZeroHours) || hasBacklogTitle) {
+        extraBacklog.push(`${issue.title}: ${issue.description}`);
+        return false;
+      }
+      return true;
+    });
+
+    const cleanedIssues = filteredIssues.map((issue) => {
       let cleanedPrompt = issue.agentPrompt || "";
       cleanedPrompt = cleanedPrompt
         .replace(/el Paso\s*[12]\s*indica\s*/gi, "")
@@ -183,9 +203,37 @@ export class MeetingAnalysisQualityValidators {
       };
     });
 
-    const cleanedSummary = (data.summary || "")
+    let cleanedSummary = (data.summary || "")
       .replace(/el Paso\s*[12]\s*indica\s*/gi, "")
       .replace(/según el Paso\s*[12],?\s*/gi, "");
+
+    // Validar y anteponer "Análisis parcial" si existen tramos sin audio
+    const coverage = transcript ? TranscriptCoverageDetector.analyze(transcript) : null;
+    let finalIssues = cleanedIssues;
+
+    if (coverage && coverage.isPartial) {
+      const summaryLower = cleanedSummary.toLowerCase();
+      if (!summaryLower.startsWith("análisis parcial") && !summaryLower.includes("analisis parcial")) {
+        const gapLabels = coverage.gaps.map((g) => g.label).join(", ");
+        cleanedSummary = `Análisis parcial: faltan [${gapLabels}] (~${coverage.missingPct}% de la reunión sin audio).\n\n${cleanedSummary}`;
+      }
+
+      // Si la cobertura es menor al 90%, no se deben generar issues
+      if (coverage.coveragePct < 90) {
+        finalIssues = [];
+        bSum = 0;
+        pSum = 0;
+        aSum = 0;
+        if (!cleanedSummary.toLowerCase().includes("transcripción incompleta")) {
+          cleanedSummary = `Análisis parcial: transcripción incompleta, reintentar. Cobertura del ${coverage.coveragePct}% es inferior al 90% requerido.\n\n${cleanedSummary}`;
+        }
+      }
+    }
+
+    // Normalizar personas responsables en inProgress (sin Hablante N)
+    const cleanedInProgress = (data.inProgress || []).map((prog) =>
+      prog.replace(/\bHablante\s*\d+\b/gi, "sin identificar")
+    );
 
     // Autocorrección de preguntas BLOQUEANTE
     const transcriptLower = (transcript || "").toLowerCase();
@@ -210,11 +258,15 @@ export class MeetingAnalysisQualityValidators {
         return q;
       });
 
+    const combinedBacklog = [...(data.backlog || []), ...extraBacklog];
+
     return {
       ...data,
       summary: cleanedSummary,
       globalOpenQuestions: cleanedQuestions,
-      issues: cleanedIssues,
+      inProgress: cleanedInProgress,
+      issues: finalIssues,
+      backlog: combinedBacklog,
       repoHoursTotals: {
         backend: bSum,
         panel: pSum,

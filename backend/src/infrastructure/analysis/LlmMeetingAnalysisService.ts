@@ -16,6 +16,7 @@ import {
 } from "./MeetingAnalysisResponseParser.js";
 import { MeetingAnalysisValidators } from "./MeetingAnalysisValidators.js";
 import { TranscriptSanitizer } from "./TranscriptSanitizer.js";
+import { TranscriptCoverageDetector } from "./TranscriptCoverageDetector.js";
 import { RepoContextScanner } from "./RepoContextScanner.js";
 import { LlmProviderClients } from "./LlmProviderClients.js";
 
@@ -33,6 +34,26 @@ export class LlmMeetingAnalysisService implements IMeetingAnalysisService {
     options?: GenerateAnalysisOptions
   ): Promise<GeneratedMeetingData> {
     const sanitizedTranscript = TranscriptSanitizer.sanitize(transcript);
+
+    // Validador de cobertura v7 (el código decide, no el modelo): si la cobertura es < 90%, no se generan issues
+    const coverage = TranscriptCoverageDetector.analyze(sanitizedTranscript);
+    if (coverage.coveragePct < 90 && coverage.gaps.length > 0) {
+      const gapsStr = coverage.gaps.map((g) => g.label).join(", ");
+      return {
+        summary: `Análisis parcial: transcripción incompleta, reintentar. Faltan [${gapsStr}] (~${coverage.missingPct}% de la reunión sin audio). Cobertura del ${coverage.coveragePct}% es inferior al 90% requerido.`,
+        alreadyResolved: [],
+        inProgress: [],
+        keyDecisions: [],
+        topicsDiscussed: ["Cobertura insuficiente de audio"],
+        globalOpenQuestions: [
+          `[NO BLOQUEANTE] Se requiere retranscribir los tramos sin audio [${gapsStr}] para procesar los requerimientos de la reunión.`
+        ],
+        issues: [],
+        backlog: [],
+        repoHoursTotals: { backend: 0, panel: 0, app: 0, total: 0 }
+      };
+    }
+
     const { provider, apiKey, model, baseUrl } = await this.resolveProviderAndKey(options);
 
     const step1SystemPrompt = this.buildStep1Prompt(projectContext);

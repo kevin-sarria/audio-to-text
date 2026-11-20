@@ -120,7 +120,14 @@ Orden: Resumen ejecutivo → Ya resuelto → En curso (incluye gestión externa)
 
 == 19. CRITERIOS DE ACEPTACIÓN ==
 - Cada criterio que no se dijo en la reunión lleva [Supuesto]. No presentes como requisito algo que tú deduces (ej.: "devuelve el resultado por registro", "el rango de fechas es obligatorio").
-- Usa solo estas etiquetas: [Supuesto], [Interpretación: ... → ...], [Derivado de ISSUE-N], PROPUESTO (por confirmar). No inventes otras.`;
+- Usa solo estas etiquetas: [Supuesto], [Interpretación: ... → ...], [Derivado de ISSUE-N], PROPUESTO (por confirmar). No inventes otras.
+
+== 20. COBERTURA DE LA TRANSCRIPCIÓN ==
+- Si la transcripción contiene marcadores como "[Audio no disponible…]" o saltos de más de 60 s sin texto, esos tramos NO se escucharon. Empieza la salida con el aviso "Análisis parcial: faltan [mm:ss–mm:ss, …] (X % de la reunión)".
+- No cites marcas de tiempo dentro de un tramo sin audio ni afirmes qué se dijo allí.
+- No marques como cerrado, en curso, decisión ni backlog algo cuyo respaldo estaría en un tramo faltante. Si un punto aparece sin su contexto (ej.: un bug leído en voz alta cuya conversación posterior falta), regístralo como "sin estado confirmado" con una pregunta NO BLOQUEANTE y no generes issue.
+- No generes issues de ítems que dependen de contexto faltante; lístalos como "pendiente de retranscripción".
+- No uses "Hablante N" como nombre de persona; si no se dijo el nombre, escribe "sin identificar".`;
   }
 
   public static getProjectContextLayer(customContext?: string): string {
