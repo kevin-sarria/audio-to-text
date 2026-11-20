@@ -8,12 +8,18 @@ import {
   TextField,
   Snackbar,
   IconButton,
-  Tooltip
+  Tooltip,
+  Tabs,
+  Tab
 } from "@mui/material";
 import {
   AutoAwesome as AutoAwesomeIcon,
   Edit as EditIcon,
-  Save as SaveIcon
+  Save as SaveIcon,
+  Code as CodeIcon,
+  AssignmentTurnedIn as SummaryIcon,
+  CheckCircle as StatusIcon,
+  HelpOutline as QuestionIcon
 } from "@mui/icons-material";
 import {
   MeetingAnalysisDto,
@@ -50,6 +56,9 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
   const [isGenerating, setIsGenerating] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [snackMessage, setSnackMessage] = useState<string | null>(null);
+
+  // Pestaña activa del análisis
+  const [activeAnalysisTab, setActiveAnalysisTab] = useState(0);
 
   // Título editable del análisis
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -172,6 +181,7 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
         setAnalysis(res.data);
         setEditableTitle(res.data.title || `Análisis: ${currentSession?.originalFileName || "Reunión"}`);
         setIsConfigExpanded(false);
+        setActiveAnalysisTab(0);
         setSnackMessage("¡Resumen e issues generadas exitosamente!");
       }
     } catch (err: any) {
@@ -398,26 +408,81 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
 
       {analysis && (
         <>
-          <MeetingSummaryCard analysis={analysis} />
-          <MeetingClassifiedSection analysis={analysis} />
-          {analysis.repoHoursTotals && <HoursTotalsCard totals={analysis.repoHoursTotals} />}
-          <DevIssuesSection
-            issues={filteredIssues}
-            totalIssuesCount={analysis.issues.length}
-            filterRepo={filterRepo}
-            onFilterRepoChange={setFilterRepo}
-            filterType={filterType}
-            onFilterTypeChange={setFilterType}
-            filterPriority={filterPriority}
-            onFilterPriorityChange={setFilterPriority}
-            copiedId={copiedId}
-            onCopyAllIssues={handleCopyAllIssues}
-            onDownloadMarkdown={handleDownloadMarkdown}
-            onDownloadJson={handleDownloadJson}
-            onCopyPrompt={(prompt, id) =>
-              copyToClipboard(prompt, id, `¡Prompt de ${id} copiado al portapapeles!`)
-            }
-          />
+          {/* Navegación por pestañas limpias que reduce el ruido de cajas apiladas */}
+          <Paper sx={{ mb: 3, borderRadius: 2 }}>
+            <Tabs
+              value={activeAnalysisTab}
+              onChange={(_, val) => setActiveAnalysisTab(val)}
+              indicatorColor="primary"
+              textColor="primary"
+              variant="scrollable"
+              scrollButtons="auto"
+            >
+              <Tab
+                icon={<CodeIcon fontSize="small" />}
+                iconPosition="start"
+                label={`Issues Técnicas (${analysis.issues.length})`}
+              />
+              <Tab
+                icon={<SummaryIcon fontSize="small" />}
+                iconPosition="start"
+                label="Resumen Ejecutivo"
+              />
+              <Tab
+                icon={<StatusIcon fontSize="small" />}
+                iconPosition="start"
+                label="Estado de la Reunión"
+              />
+              <Tab
+                icon={<QuestionIcon fontSize="small" />}
+                iconPosition="start"
+                label={
+                  analysis.globalOpenQuestions?.length
+                    ? `Preguntas Abiertas (${analysis.globalOpenQuestions.length})`
+                    : "Preguntas Abiertas"
+                }
+              />
+            </Tabs>
+          </Paper>
+
+          {/* Pestaña 0: Issues de Programación y Totales */}
+          {activeAnalysisTab === 0 && (
+            <>
+              {analysis.repoHoursTotals && <HoursTotalsCard totals={analysis.repoHoursTotals} />}
+              <DevIssuesSection
+                issues={filteredIssues}
+                totalIssuesCount={analysis.issues.length}
+                filterRepo={filterRepo}
+                onFilterRepoChange={setFilterRepo}
+                filterType={filterType}
+                onFilterTypeChange={setFilterType}
+                filterPriority={filterPriority}
+                onFilterPriorityChange={setFilterPriority}
+                copiedId={copiedId}
+                onCopyAllIssues={handleCopyAllIssues}
+                onDownloadMarkdown={handleDownloadMarkdown}
+                onDownloadJson={handleDownloadJson}
+                onCopyPrompt={(prompt, id) =>
+                  copyToClipboard(prompt, id, `¡Prompt de ${id} copiado al portapapeles!`)
+                }
+              />
+            </>
+          )}
+
+          {/* Pestaña 1: Resumen y Decisiones Clave */}
+          {activeAnalysisTab === 1 && (
+            <MeetingSummaryCard analysis={analysis} />
+          )}
+
+          {/* Pestaña 2: Ya Resuelto, En Curso y Backlog */}
+          {activeAnalysisTab === 2 && (
+            <MeetingClassifiedSection analysis={analysis} section="status" />
+          )}
+
+          {/* Pestaña 3: Preguntas Abiertas y Ambigüedades */}
+          {activeAnalysisTab === 3 && (
+            <MeetingClassifiedSection analysis={analysis} section="questions" />
+          )}
         </>
       )}
 

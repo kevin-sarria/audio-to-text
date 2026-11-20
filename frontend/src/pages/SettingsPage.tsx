@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Box, Typography, Button, Snackbar } from "@mui/material";
-import { FolderOpen as FolderIcon } from "@mui/icons-material";
+import { Box, Typography, Button, Snackbar, Tabs, Tab, Paper } from "@mui/material";
+import {
+  FolderOpen as FolderIcon,
+  Mic as MicIcon,
+  VpnKey as KeyIcon,
+  FolderSpecial as FolderSpecialIcon,
+  AutoAwesome as AutoAwesomeIcon
+} from "@mui/icons-material";
 import { ProjectFolderDto } from "@audio-to-text/shared";
 import { api } from "../lib/api.js";
 import { ProjectFolderModal } from "../features/projectFolders/ProjectFolderModal.js";
@@ -18,9 +24,11 @@ import { WhisperModelsSection } from "./settings/components/WhisperModelsSection
 import { ApiKeysSection } from "./settings/components/ApiKeysSection.js";
 import { AiIssuesSettingsSection } from "./settings/components/AiIssuesSettingsSection.js";
 import { ProjectFoldersSection } from "./settings/components/ProjectFoldersSection.js";
-import { RecommendedProvidersSection } from "./settings/components/RecommendedProvidersSection.js";
+import { RecommendedProvidersModal } from "./settings/components/RecommendedProvidersModal.js";
 
 export const SettingsPage: React.FC = () => {
+  const [activeTab, setActiveTab] = useState(0);
+
   const [settings, setSettings] = useState<DesktopSettings>({
     engine: "whisper-local",
     language: "es",
@@ -48,6 +56,7 @@ export const SettingsPage: React.FC = () => {
   const [models, setModels] = useState<ModelItem[]>([]);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [recDisclaimer, setRecDisclaimer] = useState("");
+  const [isRecModalOpen, setIsRecModalOpen] = useState(false);
 
   const { folders, refreshFolders, deleteFolder: deleteProjectFolder } = useProjectFolders();
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
@@ -230,80 +239,120 @@ export const SettingsPage: React.FC = () => {
 
   return (
     <Box sx={{ maxWidth: 900, mx: "auto", pb: 6 }}>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
+      {/* Encabezado con acciones rápidas */}
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2.5, flexWrap: "wrap", gap: 1 }}>
         <Typography variant="h4" fontWeight={700}>
           Configuración
         </Typography>
-        {window.desktop && (
+        <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
           <Button
             variant="outlined"
             size="small"
-            startIcon={<FolderIcon />}
-            onClick={handleOpenDataFolder}
+            startIcon={<AutoAwesomeIcon />}
+            onClick={() => setIsRecModalOpen(true)}
           >
-            Abrir Carpeta de Datos
+            Proveedores Recomendados
           </Button>
-        )}
+          {window.desktop && (
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<FolderIcon />}
+              onClick={handleOpenDataFolder}
+            >
+              Carpeta de Datos
+            </Button>
+          )}
+        </Box>
       </Box>
 
-      <TranscriptionEngineSection
-        settings={settings}
-        onChangeSettings={setSettings}
-        onSave={handleSaveSettings}
-        loading={loading}
-      />
+      {/* Pestañas limpias para simplificar el flujo visual */}
+      <Paper sx={{ mb: 3, borderRadius: 2 }}>
+        <Tabs
+          value={activeTab}
+          onChange={(_, val) => setActiveTab(val)}
+          indicatorColor="primary"
+          textColor="primary"
+          variant="fullWidth"
+        >
+          <Tab icon={<MicIcon fontSize="small" />} iconPosition="start" label="Transcripción & Modelos" />
+          <Tab icon={<KeyIcon fontSize="small" />} iconPosition="start" label="IA & Claves de API" />
+          <Tab icon={<FolderSpecialIcon fontSize="small" />} iconPosition="start" label="Carpetas de Proyecto" />
+        </Tabs>
+      </Paper>
 
-      <WhisperModelsSection
-        models={models}
-        onDownloadModel={handleDownloadModel}
-        onCancelDownload={handleCancelDownload}
-        onDeleteModel={handleDeleteModel}
-      />
+      {/* Pestaña 0: Transcripción y Modelos en Disco */}
+      {activeTab === 0 && (
+        <>
+          <TranscriptionEngineSection
+            settings={settings}
+            onChangeSettings={setSettings}
+            onSave={handleSaveSettings}
+            loading={loading}
+          />
+          <WhisperModelsSection
+            models={models}
+            onDownloadModel={handleDownloadModel}
+            onCancelDownload={handleCancelDownload}
+            onDeleteModel={handleDeleteModel}
+          />
+        </>
+      )}
 
-      <ApiKeysSection
-        keys={keys}
-        groqKeyInput={groqKeyInput}
-        onGroqKeyInputChange={setGroqKeyInput}
-        geminiKeyInput={geminiKeyInput}
-        onGeminiKeyInputChange={setGeminiKeyInput}
-        openaiKeyInput={openaiKeyInput}
-        onOpenaiKeyInputChange={setOpenaiKeyInput}
-        onSaveKey={handleSaveKey}
-        onTestKey={handleTestKey}
-        onDeleteKey={handleDeleteKey}
-        customProviders={settings.customProviders || []}
-        onOpenCustomModal={() => setIsCustomModalOpen(true)}
-        onDeleteCustomProvider={handleDeleteCustomProvider}
-        testResult={testResult}
-        onCloseTestResult={() => setTestResult(null)}
-      />
+      {/* Pestaña 1: Claves de API y Configuración de Issues */}
+      {activeTab === 1 && (
+        <>
+          <ApiKeysSection
+            keys={keys}
+            groqKeyInput={groqKeyInput}
+            onGroqKeyInputChange={setGroqKeyInput}
+            geminiKeyInput={geminiKeyInput}
+            onGeminiKeyInputChange={setGeminiKeyInput}
+            openaiKeyInput={openaiKeyInput}
+            onOpenaiKeyInputChange={setOpenaiKeyInput}
+            onSaveKey={handleSaveKey}
+            onTestKey={handleTestKey}
+            onDeleteKey={handleDeleteKey}
+            customProviders={settings.customProviders || []}
+            onOpenCustomModal={() => setIsCustomModalOpen(true)}
+            onDeleteCustomProvider={handleDeleteCustomProvider}
+            testResult={testResult}
+            onCloseTestResult={() => setTestResult(null)}
+          />
+          <AiIssuesSettingsSection
+            settings={settings}
+            onChangeSettings={setSettings}
+            onSave={handleSaveSettings}
+            loading={loading}
+          />
+        </>
+      )}
 
-      <AiIssuesSettingsSection
-        settings={settings}
-        onChangeSettings={setSettings}
-        onSave={handleSaveSettings}
-        loading={loading}
-      />
+      {/* Pestaña 2: Carpetas de Proyecto (Harnesses) */}
+      {activeTab === 2 && (
+        <ProjectFoldersSection
+          folders={folders}
+          onNewFolder={() => {
+            setEditingFolder(null);
+            setIsFolderModalOpen(true);
+          }}
+          onEditFolder={(f) => {
+            setEditingFolder(f);
+            setIsFolderModalOpen(true);
+          }}
+          onDeleteFolder={async (f) => {
+            if (window.confirm(`¿Eliminar la carpeta '${f.name}'?`)) {
+              await deleteProjectFolder(f.id);
+              setSnackMessage("Carpeta eliminada.");
+            }
+          }}
+        />
+      )}
 
-      <ProjectFoldersSection
-        folders={folders}
-        onNewFolder={() => {
-          setEditingFolder(null);
-          setIsFolderModalOpen(true);
-        }}
-        onEditFolder={(f) => {
-          setEditingFolder(f);
-          setIsFolderModalOpen(true);
-        }}
-        onDeleteFolder={async (f) => {
-          if (window.confirm(`¿Eliminar la carpeta '${f.name}'?`)) {
-            await deleteProjectFolder(f.id);
-            setSnackMessage("Carpeta eliminada.");
-          }
-        }}
-      />
-
-      <RecommendedProvidersSection
+      {/* Modal elegante de Proveedores Recomendados (sin saturar la pantalla principal) */}
+      <RecommendedProvidersModal
+        open={isRecModalOpen}
+        onClose={() => setIsRecModalOpen(false)}
         recommendations={recommendations}
         disclaimer={recDisclaimer}
       />

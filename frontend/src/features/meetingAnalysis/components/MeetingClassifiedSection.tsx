@@ -12,13 +12,20 @@ import { MeetingAnalysisDto } from "@audio-to-text/shared";
 
 interface MeetingClassifiedSectionProps {
   analysis: MeetingAnalysisDto;
+  section?: "status" | "questions" | "all";
 }
 
-export const MeetingClassifiedSection: React.FC<MeetingClassifiedSectionProps> = ({ analysis }) => {
+export const MeetingClassifiedSection: React.FC<MeetingClassifiedSectionProps> = ({
+  analysis,
+  section = "all"
+}) => {
+  const showStatus = section === "all" || section === "status";
+  const showQuestions = section === "all" || section === "questions";
+
   return (
     <>
       {/* 1. Ya Resuelto / Cerrado */}
-      {analysis.alreadyResolved && analysis.alreadyResolved.length > 0 && (
+      {showStatus && analysis.alreadyResolved && analysis.alreadyResolved.length > 0 && (
         <Paper
           sx={{
             p: 3,
@@ -54,7 +61,7 @@ export const MeetingClassifiedSection: React.FC<MeetingClassifiedSectionProps> =
       )}
 
       {/* 2. En Curso (Asignado / Sin Duplicar) */}
-      {analysis.inProgress && analysis.inProgress.length > 0 && (
+      {showStatus && analysis.inProgress && analysis.inProgress.length > 0 && (
         <Paper
           sx={{
             p: 3,
@@ -94,7 +101,7 @@ export const MeetingClassifiedSection: React.FC<MeetingClassifiedSectionProps> =
       )}
 
       {/* 3. Preguntas Abiertas Globales y Ambigüedades */}
-      {analysis.globalOpenQuestions && analysis.globalOpenQuestions.length > 0 && (
+      {showQuestions && analysis.globalOpenQuestions && analysis.globalOpenQuestions.length > 0 && (
         <Paper
           sx={{
             p: 3,
@@ -128,7 +135,7 @@ export const MeetingClassifiedSection: React.FC<MeetingClassifiedSectionProps> =
       )}
 
       {/* 4. Backlog */}
-      {analysis.backlog && analysis.backlog.length > 0 && (
+      {showStatus && analysis.backlog && analysis.backlog.length > 0 && (
         <Paper
           sx={{
             p: 3,

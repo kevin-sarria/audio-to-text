@@ -1,0 +1,22 @@
+{
+  "name": "@audio-to-text/algorithm-manager-bot",
+  "version": "1.0.0",
+  "description": "Bot inteligente de reuniones para Google Meet, Microsoft Teams, Zoom y modo local: detección de tipo de reunión (Interna vs Cliente) y generador de propuestas comerciales con IA",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "meeting-bot",
+    "teams",
+    "meet",
+    "zoom",
+    "commercial-proposal",
+    "ai",
+    "transcription"
+  ],
+  "author": "Audio-to-Text Team",
+  "license": "UNLICENSED"
+}
