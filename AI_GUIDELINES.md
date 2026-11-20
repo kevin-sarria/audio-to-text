@@ -27,6 +27,25 @@ Antes de realizar `git commit` o `git push`:
 
 Si alguna prueba falla o se detecta una regresión, está terminantemente prohibido hacer commit o push hasta que esté completamente corregida y probada.
 
+### 1.1 Compilar el instalador desktop después de cada cambio en `main`
+
+> [!IMPORTANT]
+> **Cada vez que se sube un cambio a `main` (push, merge o fast-forward), se debe compilar la nueva versión del instalador de escritorio.** No se da por terminado un cambio en `main` hasta que el instalador esté regenerado.
+
+Pasos, en este orden (el instalador empaqueta `frontend/dist`, así que el frontend debe compilarse primero):
+1. Compilar todo el monorepo:
+   ```bash
+   npm run build
+   ```
+2. Cerrar Audio2Text si está abierto desde `desktop/release/win-unpacked/` (electron-builder reemplaza esa carpeta y falla si los archivos están en uso).
+3. Generar el instalador de Windows:
+   ```bash
+   npm --prefix desktop run dist:win
+   ```
+4. Verificar que exista `desktop/release/Audio2Text Setup <versión>.exe` con fecha actual e informar su ruta.
+
+Si `desktop/resources/bin/win32/` está vacío, ejecutar antes `npm --prefix desktop run fetch:binaries`.
+
 ---
 
 ## 2. Arquitectura de Proveedores de IA y Almacén Cifrado (SecretVault)
