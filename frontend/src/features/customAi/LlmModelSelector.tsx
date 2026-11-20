@@ -91,8 +91,34 @@ export const LlmModelSelector: React.FC<LlmModelSelectorProps> = ({
     fetchModels(provider, apiKey, baseUrl, false);
   };
 
+  // Normalizar el valor eliminando decoraciones de etiqueta "Nombre (id)"
+  const normalizedValue = React.useMemo(() => {
+    if (!value) return "";
+    const trimmed = value.trim();
+    const matchByName = models.find((m) => m.name.toLowerCase() === trimmed.toLowerCase());
+    if (matchByName) return matchByName.id;
+    const matchById = models.find((m) => m.id.toLowerCase() === trimmed.toLowerCase());
+    if (matchById) return matchById.id;
+
+    const parenMatch = trimmed.match(/\(([^)]+)\)/);
+    if (parenMatch && parenMatch[1]) {
+      const inside = parenMatch[1].trim();
+      const matchInside = models.find((m) => m.id.toLowerCase() === inside.toLowerCase());
+      if (matchInside) return matchInside.id;
+      return inside;
+    }
+    return trimmed;
+  }, [value, models]);
+
+  // Si normalizedValue difiere de value (ej. venía con texto descriptivo guardado), sincronizar hacia el padre
+  useEffect(() => {
+    if (normalizedValue && normalizedValue !== value) {
+      onChange(normalizedValue);
+    }
+  }, [normalizedValue, value, onChange]);
+
   // Encontrar el objeto de modelo actual para tooltip o visualización
-  const currentModelObj = models.find((m) => m.id === value);
+  const currentModelObj = models.find((m) => m.id === normalizedValue);
 
   return (
     <Box sx={{ width: "100%", ...sx }}>
@@ -101,17 +127,29 @@ export const LlmModelSelector: React.FC<LlmModelSelectorProps> = ({
         size={size}
         disabled={disabled}
         options={models.map((m) => m.id)}
-        value={value}
-        onInputChange={(_event, newInputValue) => {
-          onChange(newInputValue);
+        value={normalizedValue}
+        onInputChange={(_event, newInputValue, reason) => {
+          if (reason === "input") {
+            const match = models.find((m) => m.name.toLowerCase() === newInputValue.trim().toLowerCase());
+            onChange(match ? match.id : newInputValue);
+          } else if (reason === "clear") {
+            onChange("");
+          }
+          // Ignorar 'reset' para evitar que la etiqueta descriptiva sobreescriba el ID técnico
         }}
         onChange={(_event, newValue) => {
-          onChange(newValue || "");
+          if (typeof newValue === "string") {
+            const match = models.find((m) => m.name.toLowerCase() === newValue.trim().toLowerCase());
+            onChange(match ? match.id : newValue);
+          } else {
+            onChange("");
+          }
         }}
         getOptionLabel={(option) => {
           const match = models.find((m) => m.id === option);
           return match ? match.name : option;
         }}
+        isOptionEqualToValue={(option, val) => option === val || option === normalizedValue}
         renderOption={(props, option) => {
           const match = models.find((m) => m.id === option);
           return (

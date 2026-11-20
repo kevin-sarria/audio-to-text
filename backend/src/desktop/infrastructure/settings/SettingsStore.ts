@@ -35,6 +35,15 @@ export const SettingsSchema = z
 
 export type DesktopSettings = z.infer<typeof SettingsSchema>;
 
+function cleanModelId(raw?: string): string {
+  if (!raw) return "";
+  const match = raw.match(/\(([^)]+)\)/);
+  if (match && match[1]) {
+    return match[1].trim();
+  }
+  return raw.trim();
+}
+
 export class SettingsStore {
   private filePath: string;
   private currentSettings: DesktopSettings;
@@ -49,6 +58,9 @@ export class SettingsStore {
       if (fs.existsSync(this.filePath)) {
         const content = fs.readFileSync(this.filePath, "utf-8");
         const parsed = JSON.parse(content);
+        if (parsed.geminiModel) parsed.geminiModel = cleanModelId(parsed.geminiModel);
+        if (parsed.groqModel) parsed.groqModel = cleanModelId(parsed.groqModel);
+        if (parsed.issuesDefaultModel) parsed.issuesDefaultModel = cleanModelId(parsed.issuesDefaultModel);
         return SettingsSchema.parse(parsed);
       }
     } catch (err) {
@@ -65,9 +77,14 @@ export class SettingsStore {
   }
 
   public async updateSettings(partial: Partial<DesktopSettings>): Promise<DesktopSettings> {
+    const cleaned = { ...partial };
+    if (cleaned.geminiModel) cleaned.geminiModel = cleanModelId(cleaned.geminiModel);
+    if (cleaned.groqModel) cleaned.groqModel = cleanModelId(cleaned.groqModel);
+    if (cleaned.issuesDefaultModel) cleaned.issuesDefaultModel = cleanModelId(cleaned.issuesDefaultModel);
+
     const updated = SettingsSchema.parse({
       ...this.currentSettings,
-      ...partial
+      ...cleaned
     });
 
     await this.saveAtomic(updated);

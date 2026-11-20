@@ -15,11 +15,26 @@ export interface GroqEngineConfig {
   model: string;
 }
 
+export function sanitizeGroqModelName(rawModel?: string): string {
+  if (!rawModel || !rawModel.trim()) return "whisper-large-v3-turbo";
+  let cleaned = rawModel.trim();
+  const parenMatch = cleaned.match(/\(([^)]+)\)/);
+  if (parenMatch && parenMatch[1]) {
+    return parenMatch[1].trim();
+  }
+  const tokenMatch = cleaned.match(/(whisper-[a-zA-Z0-9.-]+)/i);
+  if (tokenMatch && tokenMatch[1]) {
+    return tokenMatch[1];
+  }
+  return cleaned.replace(/\s+/g, "");
+}
+
 export class GroqEngine implements ITranscriptionEngine {
   constructor(private config: GroqEngineConfig) {
     if (!config.apiKey) {
       throw new Error("Clave de API de Groq no configurada.");
     }
+    this.config.model = sanitizeGroqModelName(this.config.model);
   }
 
   public async transcribe(
@@ -112,7 +127,7 @@ export class GroqEngine implements ITranscriptionEngine {
       attempts++;
       const formData = new FormData();
       formData.append("file", blob, "audio.mp3");
-      formData.append("model", this.config.model || "whisper-large-v3-turbo");
+      formData.append("model", sanitizeGroqModelName(this.config.model));
       formData.append("response_format", "verbose_json");
       formData.append("language", language);
       formData.append("timestamp_granularities[]", "segment");

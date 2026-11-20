@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { parseTimeToMs, cleanJsonString } from "../infrastructure/transcription/GeminiEngine.js";
+import { parseTimeToMs, cleanJsonString, sanitizeGeminiModelName } from "../infrastructure/transcription/GeminiEngine.js";
+import { sanitizeGroqModelName } from "../infrastructure/transcription/GroqEngine.js";
 
 describe("ProviderEngines logic", () => {
   const originalFetch = global.fetch;
@@ -91,5 +92,21 @@ describe("ProviderEngines logic", () => {
 
     expect(validSegments.length).toBe(1);
     expect(validSegments[0]!.text).toBe("Segmento válido");
+  });
+
+  it("sanitizeGeminiModelName limpia display names, paréntesis y prefijos", () => {
+    expect(sanitizeGeminiModelName("Gemini 2.5 Flash (gemini-2.5-flash)")).toBe("gemini-2.5-flash");
+    expect(sanitizeGeminiModelName("models/gemini-2.5-flash")).toBe("gemini-2.5-flash");
+    expect(sanitizeGeminiModelName("gemini-2.5-pro")).toBe("gemini-2.5-pro");
+    expect(sanitizeGeminiModelName("  gemini-2.0-flash  ")).toBe("gemini-2.0-flash");
+    expect(sanitizeGeminiModelName("")).toBe("gemini-2.5-flash");
+    expect(sanitizeGeminiModelName(undefined)).toBe("gemini-2.5-flash");
+  });
+
+  it("sanitizeGroqModelName limpia display names, paréntesis y prefijos", () => {
+    expect(sanitizeGroqModelName("Whisper Large V3 Turbo (whisper-large-v3-turbo)")).toBe("whisper-large-v3-turbo");
+    expect(sanitizeGroqModelName("whisper-large-v3")).toBe("whisper-large-v3");
+    expect(sanitizeGroqModelName("")).toBe("whisper-large-v3-turbo");
+    expect(sanitizeGroqModelName(undefined)).toBe("whisper-large-v3-turbo");
   });
 });

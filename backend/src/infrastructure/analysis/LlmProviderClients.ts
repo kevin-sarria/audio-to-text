@@ -1,5 +1,14 @@
 import { spawn } from "node:child_process";
 
+function cleanLlmModelId(raw?: string): string {
+  if (!raw) return "";
+  const match = raw.match(/\(([^)]+)\)/);
+  if (match && match[1]) {
+    return match[1].trim();
+  }
+  return raw.replace(/^models\//i, "").trim();
+}
+
 export class LlmProviderClients {
   public static async callGoogleAccount(
     agyPath: string,
@@ -26,8 +35,9 @@ export class LlmProviderClients {
         "claude-opus-4-6-thinking",
         "gpt-oss-120b-medium"
       ];
-      if (model && knownAgyModels.includes(model.trim()) && model.trim() !== "gemini-3.8-flash-high") {
-        args.push("--model", model.trim());
+      const targetModel = cleanLlmModelId(model);
+      if (targetModel && knownAgyModels.includes(targetModel) && targetModel !== "gemini-3.8-flash-high") {
+        args.push("--model", targetModel);
       } else {
         args.push("--model", "gemini-3.8-flash-low");
       }
@@ -107,7 +117,8 @@ export class LlmProviderClients {
     apiKey: string,
     model: string
   ): Promise<string> {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+    const cleanModel = cleanLlmModelId(model) || "gemini-2.5-flash";
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent`;
 
     const requestBody = {
       system_instruction: {
@@ -170,9 +181,10 @@ export class LlmProviderClients {
     model: string
   ): Promise<string> {
     const url = "https://api.groq.com/openai/v1/chat/completions";
+    const cleanModel = cleanLlmModelId(model) || "whisper-large-v3-turbo";
 
     const requestBody = {
-      model,
+      model: cleanModel,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }

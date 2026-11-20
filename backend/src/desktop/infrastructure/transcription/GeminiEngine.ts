@@ -22,6 +22,21 @@ const GeminiSegmentSchema = z.object({
   text: z.string()
 });
 
+export function sanitizeGeminiModelName(rawModel?: string): string {
+  if (!rawModel || !rawModel.trim()) return "gemini-2.5-flash";
+  let cleaned = rawModel.trim();
+  const parenMatch = cleaned.match(/\((gemini-[a-zA-Z0-9.-]+)\)/i);
+  if (parenMatch && parenMatch[1]) {
+    return parenMatch[1];
+  }
+  cleaned = cleaned.replace(/^models\//i, "");
+  const tokenMatch = cleaned.match(/(gemini-[a-zA-Z0-9.-]+)/i);
+  if (tokenMatch && tokenMatch[1]) {
+    return tokenMatch[1];
+  }
+  return cleaned.replace(/\s+/g, "");
+}
+
 export function parseTimeToMs(str: string): number | null {
   if (!str) return null;
   const parts = str.trim().split(":").map((p) => parseFloat(p));
@@ -58,6 +73,7 @@ export class GeminiEngine implements ITranscriptionEngine {
     if (!config.apiKey) {
       throw new Error("Clave de API de Gemini no configurada.");
     }
+    this.config.model = sanitizeGeminiModelName(this.config.model);
   }
 
   public async transcribe(
@@ -162,7 +178,7 @@ export class GeminiEngine implements ITranscriptionEngine {
     }
 
     try {
-      const model = this.config.model || "gemini-2.5-flash";
+      const model = sanitizeGeminiModelName(this.config.model);
       const prompt = `Transcribe literalmente el audio en idioma '${language}'.
 No resumas ni omitas partes.
 Identifica los diferentes participantes y clasifícalos como 'Hablante 1', 'Hablante 2', etc.
