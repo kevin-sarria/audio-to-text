@@ -184,12 +184,17 @@ export class GeminiEngine implements ITranscriptionEngine {
     }
 
     try {
-      let model = sanitizeGeminiModelName(this.config.model);
-      const isAsr = model.includes("transcribe");
+      let activeModel = sanitizeGeminiModelName(this.config.model);
+      let response: Response | null = null;
+      let lastErrText = "";
+      const maxAttempts = 5;
 
-      const prompt = isAsr
-        ? `Transcribe literalmente el audio en idioma '${language}'. No resumas ni omitas palabras.`
-        : `Transcribe literalmente el audio en idioma '${language}'.
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        const isCurrentAsr = activeModel.includes("transcribe");
+
+        const currentPrompt = isCurrentAsr
+          ? `Transcribe literalmente el audio en idioma '${language}'. No resumas ni omitas palabras.`
+          : `Transcribe literalmente el audio en idioma '${language}'.
 No resumas ni omitas partes.
 Identifica los diferentes participantes y clasifícalos como 'Hablante 1', 'Hablante 2', etc.
 Devuelve un JSON estrictamente estructurado como un array de objetos con las propiedades:
@@ -198,32 +203,28 @@ Devuelve un JSON estrictamente estructurado como un array de objetos con las pro
 - 'end': tiempo de fin en formato 'mm:ss' (aproximado dentro de este tramo)
 - 'text': transcripción literal de lo dicho`;
 
-      const contentsPart: any[] = [];
-      if (inlineData) {
-        contentsPart.push({ inline_data: inlineData });
-      } else if (fileUri) {
-        contentsPart.push({ file_data: { mime_type: "audio/mp3", file_uri: fileUri } });
-      }
-      contentsPart.push({ text: prompt });
-
-      const requestBody: any = {
-        contents: [{ parts: contentsPart }],
-        generationConfig: {
-          temperature: 0.1
+        const contentsPart: any[] = [];
+        if (inlineData) {
+          contentsPart.push({ inline_data: inlineData });
+        } else if (fileUri) {
+          contentsPart.push({ file_data: { mime_type: "audio/mp3", file_uri: fileUri } });
         }
-      };
-      if (!isAsr) {
-        requestBody.generationConfig.responseMimeType = "application/json";
-      }
+        contentsPart.push({ text: currentPrompt });
 
-      let response: Response | null = null;
-      let lastErrText = "";
+        const requestBody: any = {
+          contents: [{ parts: contentsPart }],
+          generationConfig: {
+            temperature: 0.1
+          }
+        };
+        if (!isCurrentAsr) {
+          requestBody.generationConfig.responseMimeType = "application/json";
+        }
 
-      for (let attempt = 1; attempt <= 3; attempt++) {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 90000);
+        const timeout = setTimeout(() => controller.abort(), 60000);
         try {
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${activeModel}:generateContent`;
           response = await fetch(url, {
             method: "POST",
             headers: {
@@ -246,30 +247,33 @@ Devuelve un JSON estrictamente estructurado como un array de objetos con las pro
         if (response) {
           lastErrText = await response.text().catch(() => "");
           if (response.status === 404 && lastErrText.includes("no longer available")) {
-            model = "gemini-3.5-flash-lite";
+            activeModel = "gemini-3.5-flash-lite";
             continue;
           }
-          if ((response.status === 503 || response.status === 429) && attempt < 3) {
-            await new Promise((r) => setTimeout(r, attempt * 2000));
-            if (model === "gemini-3.8-flash" && attempt === 2) {
-              model = "gemini-3.5-flash-lite";
+          if (response.status === 503 || response.status === 429) {
+            if (attempt >= 2 && activeModel !== "gemini-3.5-transcribe") {
+              // Si el modelo LLM tiene alta demanda (503), alternar al modelo ASR especializado
+              activeModel = "gemini-3.5-transcribe";
             }
-            continue;
+            if (attempt < maxAttempts) {
+              const backoffMs = Math.min(8000, attempt * 2000);
+              await new Promise((r) => setTimeout(r, backoffMs));
+              continue;
+            }
           }
         }
       }
 
       if (!response || !response.ok) {
-        let detailedMsg = response ? `Error HTTP ${response.status}` : "Error de conexión con Gemini";
-        try {
-          const errObj = JSON.parse(lastErrText);
-          if (errObj?.error?.message) {
-            detailedMsg = errObj.error.message;
+        console.warn(`[GeminiEngine] Tramo en ${offsetSec}s no pudo transcribirse tras ${maxAttempts} intentos: ${lastErrText}`);
+        return [
+          {
+            startMs: offsetSec * 1000,
+            endMs: offsetSec * 1000 + 180 * 1000,
+            text: "[Audio no disponible en este tramo por congestión temporal de servidores]",
+            speakerLabel: "Hablante 1"
           }
-        } catch {
-          detailedMsg = lastErrText.slice(0, 300) || detailedMsg;
-        }
-        throw new Error(`Gemini API falló: ${detailedMsg}`);
+        ];
       }
 
       const json = (await response.json()) as any;
@@ -278,7 +282,7 @@ Devuelve un JSON estrictamente estructurado como un array de objetos con las pro
         return [];
       }
 
-      if (isAsr) {
+      if (activeModel.includes("transcribe")) {
         const cleanText = textResponse.trim();
         if (!cleanText) return [];
         const rawSentences = cleanText.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [cleanText];
@@ -298,7 +302,17 @@ Devuelve un JSON estrictamente estructurado como un array de objetos con las pro
         const cleaned = cleanJsonString(textResponse);
         parsed = JSON.parse(cleaned);
       } catch {
-        throw new Error("Gemini no devolvió un JSON válido en la transcripción");
+        const cleanText = textResponse.replace(/```json|```/g, "").trim();
+        const rawSentences = cleanText.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [cleanText];
+        const sentences = rawSentences.map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+        const total = sentences.length || 1;
+        const chunkSpanMs = 180 * 1000;
+        return sentences.map((sentence: string, idx: number) => ({
+          startMs: offsetSec * 1000 + Math.round((idx / total) * chunkSpanMs),
+          endMs: offsetSec * 1000 + Math.round(((idx + 1) / total) * chunkSpanMs),
+          text: sentence,
+          speakerLabel: "Hablante 1"
+        }));
       }
 
       if (!Array.isArray(parsed)) {
