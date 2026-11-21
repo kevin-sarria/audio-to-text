@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const SCAN_SECTIONS = [
   { key: "proposito", title: "Qué hace el sistema y para quién" },
+  { key: "trampas", title: "Trampas: lo que un desarrollador nuevo rompería" },
   { key: "repositorios", title: "Repositorios" },
   { key: "tecnologias", title: "Tecnologías y versiones" },
   { key: "capas_estructura", title: "Capas y estructura de carpetas" },
@@ -23,6 +24,7 @@ export type ScanSectionKey = (typeof SCAN_SECTIONS)[number]["key"];
 
 export const DATA_SECTION_KEYS = [
   "proposito",
+  "trampas",
   "repositorios",
   "tecnologias",
   "capas_estructura",
@@ -106,6 +108,7 @@ export type Contradiction = z.infer<typeof ContradictionSchema>;
 export const ScanSectionsObjectSchema = z
   .object({
     proposito: z.array(ScanItemSchema).default([]),
+    trampas: z.array(ScanItemSchema).default([]),
     repositorios: z.array(ScanItemSchema).default([]),
     tecnologias: z.array(ScanItemSchema).default([]),
     capas_estructura: z.array(ScanItemSchema).default([]),
@@ -132,6 +135,7 @@ export const ScanResponseSchema = z
       .array(
         z.enum([
           "proposito",
+          "trampas",
           "repositorios",
           "tecnologias",
           "capas_estructura",

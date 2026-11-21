@@ -96,19 +96,28 @@ export interface DeploymentFileInfo {
   repo: string;
   kind: DeploymentKind;
   facts: string[];
+  /** Resumen en una línea (workflows de CI): disparadores, entorno, acciones y comandos. */
+  summary?: string;
 }
 
 export type DocumentCategory =
   | "agent-instructions"
+  | "repo-rules"
   | "business-docs"
+  | "readme"
   | "templates"
-  | "config-templates";
+  | "other-docs"
+  | "config-templates"
+  | "historical";
+
+/** 1 = se lee primero. 5 = histórico (planes, specs, documentos con fecha). */
+export type DocumentPriority = 1 | 2 | 3 | 4 | 5;
 
 export interface DocumentRef {
   path: string;
   repo: string;
   category: DocumentCategory;
-  priority: 1 | 2 | 3 | 4;
+  priority: DocumentPriority;
   sizeBytes: number;
   lastModified: string;
   dateSource: DateSource;
@@ -145,6 +154,8 @@ export interface ProjectInventory {
   tree: string[];
   domain: DomainNames;
   documents: DocumentRef[];
+  /** Grupos de documentos idénticos byte a byte (2 o más rutas por grupo). */
+  identicalDocuments: string[][];
   files: Record<string, InventoryFileInfo>;
   skipped: SkippedFile[];
 }

@@ -8,6 +8,7 @@ import {
 import { DocumentContent, ReadLogEntry } from "./DocumentReader.js";
 import { ScanSectionKey, SCAN_SECTIONS } from "./ContextScanSchema.js";
 import { redactSecrets } from "./SecretRedactor.js";
+import { WarningHint } from "./WarningHints.js";
 
 export const SUMMARY_SYSTEM_PROMPT = `Eres un extractor de hechos técnicos y reglas de negocio de documentación de software.
 Tu tarea es resumir secciones de documentos extrayendo ÚNICAMENTE hechos presentes de forma explícita en el texto.
@@ -61,6 +62,7 @@ REGLAS CRÍTICAS DE ANÁLISIS:
 
 QUÉ RESPUESTA CONCRETA PIDE CADA SECCIÓN:
 - proposito: qué hace el sistema, para quién y con qué clientes (web, móvil, terceros).
+- trampas: lo que un desarrollador nuevo rompería. Cada trampa dice QUÉ pasa y CUÁNDO te afecta, con su cita. Busca: advertencias en los documentos ("ojo", "cuidado", "nunca", "no tocar", "importante", "en producción", ⚠); configuración local que apunta a recursos compartidos o remotos; sesión única por usuario, límites de intentos, bloqueo de cuentas, datos que se gastan al probarlos; clientes distintos (web, móvil, terceros) sobre el mismo backend con reglas de acceso distintas; almacenamiento que cambia según el entorno (disco o nube); requisitos que condicionan todo (funcionar sin conexión, varios clientes en la misma base, zona horaria, idioma). Revisa una por una las POSIBLES TRAMPAS que trae el bloque de pistas.
 - repositorios: qué contiene cada repo activo y cómo se relacionan.
 - tecnologias: nombre y versión exacta.
 - capas_estructura: carpetas reales y qué va en cada una.
@@ -79,6 +81,7 @@ ESQUEMA DE RESPUESTA REQUERIDO (JSON puro, en español). Cada hecho:
 {
   "secciones": {
     "proposito": [ HECHO ],
+    "trampas": [ HECHO ],
     "repositorios": [ HECHO ],
     "tecnologias": [ HECHO ],
     "capas_estructura": [ HECHO ],
@@ -126,7 +129,8 @@ RESPONDE EXCLUSIVAMENTE CON EL OBJETO JSON VÁLIDO.
 export function buildScanUserPrompt(
   inventory: ProjectInventory,
   contents: DocumentContent[],
-  readLog: ReadLogEntry[]
+  readLog: ReadLogEntry[],
+  hints: WarningHint[] = []
 ): string {
   // Construir inventario compacto enriquecido con fechas
   const enrichedManifests = inventory.manifests.map((m) => ({
@@ -167,6 +171,7 @@ export function buildScanUserPrompt(
     deployment: enrichedDeployment,
     tree: inventory.tree,
     domain: inventory.domain,
+    identicalDocuments: inventory.identicalDocuments,
     documents: enrichedDocuments
   };
 
@@ -180,8 +185,15 @@ export function buildScanUserPrompt(
     const { text: cleanDocText } = redactSecrets(c.text);
     const modeLabel =
       c.mode === "full" ? "completo" : "resumen por secciones";
-    docsText += `--- ARCHIVO: ${c.ref.path} | ${c.ref.category} | última modificación: ${c.ref.lastModified} (${c.ref.dateSource}) | ${modeLabel} ---\n${cleanDocText}\n\n`;
+    const historical = c.ref.priority === 5 ? " | HISTÓRICO: no es fuente de lo vigente si hay algo más nuevo" : "";
+    const identical = c.duplicates?.length ? ` | idéntico en: ${c.duplicates.join(", ")}` : "";
+    docsText += `--- ARCHIVO: ${c.ref.path} | ${c.ref.category} | última modificación: ${c.ref.lastModified} (${c.ref.dateSource}) | ${modeLabel}${identical}${historical} ---\n${cleanDocText}\n\n`;
   }
+
+  const hintsText =
+    hints.length === 0
+      ? "Ninguna."
+      : hints.map((h) => `- ${h.path}:${h.line} [${h.kind}] ${h.text}`).join("\n");
 
   // Archivos no leídos completos
   const notFullyRead = readLog.filter((l) => l.status !== "complete");
@@ -204,6 +216,9 @@ ${inventoryJson}
 ${docsText}
 === ARCHIVOS NO LEÍDOS COMPLETOS ===
 ${notReadText}
+
+=== POSIBLES TRAMPAS (frases de advertencia y configuración remota encontradas por código; confírmalas con su cita) ===
+${hintsText}
 
 RECORDATORIO FINAL DE REGLAS:
 - Regla 0: Cada "valor" da el dato concreto, no el tema; con su "cita" literal.

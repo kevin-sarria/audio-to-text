@@ -1,44 +1,63 @@
 import path from "node:path";
-import { DocumentCategory, DocumentRef } from "./types.js";
+import { DocumentCategory, DocumentPriority, DocumentRef } from "./types.js";
 
-const AGENT_NAMES = ["claude.md", "agents.md", "gemini.md", ".cursorrules", ".windsurfrules"];
+/**
+ * Decide qué archivos se leen como documentos y en qué orden:
+ * 1. instrucciones para agentes y reglas del repo;
+ * 2. documentos de reglas de negocio, del dominio o de la API;
+ * 3. README, guía de contribución, plantillas de issue/PR y CODEOWNERS;
+ * 4. el resto de documentos vigentes y plantillas de configuración;
+ * 5. planes, specs, propuestas y documentos con fecha: históricos, se leen al final
+ *    y nunca sirven como fuente de lo vigente si hay algo más nuevo.
+ */
+
+const AGENT_NAMES = ["claude.md", "agents.md", "gemini.md", ".cursorrules", ".windsurfrules", "copilot-instructions.md"];
+const EXCLUDED_DOCS = new Set(["license.md", "licence.md", "code_of_conduct.md", "third_party_notices.md"]);
+
+const REPO_RULES_RE = /(?:^|[-_.])(guidelines|conventions|convenciones|coding[-_]?standards|estandares|lineamientos)(?:[-_.]|$)/i;
+const DOMAIN_RE =
+  /regla|negocio|business|domain|dominio|glosario|glossary|roles?(?:[-_.]|$)|permis|arquitect|architecture|modelo[-_]?de[-_]?datos|data[-_]?model|entidad|api(?:[-_.]|$)|endpoints?/i;
+const HISTORICAL_RE =
+  /(?:^|[\/_.-])(plans?|planes|planificacion|specs?|especificacion|propuestas?|proposals?|rfcs?|roadmap|drafts?|borrador(?:es)?|changelog|historial|minutas?|retro|postmortem)(?:[\/_.-]|$)/i;
+const DATE_RE = /(?:^|[^\d])(20\d{2})[-_.]?(0[1-9]|1[0-2])[-_.]?(0[1-9]|[12]\d|3[01])(?:[^\d]|$)/;
 
 function docRef(
   relPath: string,
   repo: string,
   sizeBytes: number,
   category: DocumentCategory,
-  priority: 1 | 2 | 3 | 4
+  priority: DocumentPriority
 ): DocumentRef {
   return { path: relPath, repo, category, priority, sizeBytes, lastModified: "", dateSource: "mtime" };
 }
 
-/** Decide si un archivo es un documento que se lee y con qué prioridad. */
 export function classifyDocument(relPath: string, repo: string, sizeBytes: number): DocumentRef | null {
   const norm = relPath.replace(/\\/g, "/");
   const lowerNorm = norm.toLowerCase();
   const lowerName = path.posix.basename(norm).toLowerCase();
+  const relToRepo = repo === "." ? lowerNorm : lowerNorm.slice(repo.length + 1);
+  const depthInRepo = relToRepo.split("/").length - 1;
+  const isMarkdown = /\.(md|mdx|txt|rst|adoc)$/.test(lowerName);
+  const inDocsFolder = /(^|\/)(docs?|adr|documentacion|documentation|wiki)\//.test(relToRepo);
 
-  // 1. Instrucciones para agentes
   if (
     AGENT_NAMES.includes(lowerName) ||
     norm.includes("/.cursor/rules/") ||
-    norm.startsWith(".cursor/rules/") ||
-    lowerName === "copilot-instructions.md"
+    norm.startsWith(".cursor/rules/")
   ) {
     return docRef(relPath, repo, sizeBytes, "agent-instructions", 1);
   }
 
-  // 3. Plantillas (antes que business-docs para las de .github)
+  // Plantillas de issue/PR y dueños del código: dicen cómo se escribe y quién aprueba.
   if (
     lowerName === "pull_request_template.md" ||
     lowerNorm.includes(".github/pull_request_template") ||
-    lowerNorm.includes(".github/issue_template/")
+    lowerNorm.includes(".github/issue_template/") ||
+    lowerName === "codeowners"
   ) {
     return docRef(relPath, repo, sizeBytes, "templates", 3);
   }
 
-  // 4. Plantillas de configuración
   if (
     lowerName === ".env.example" ||
     lowerName === ".env.sample" ||
@@ -50,21 +69,22 @@ export function classifyDocument(relPath: string, repo: string, sizeBytes: numbe
     return docRef(relPath, repo, sizeBytes, "config-templates", 4);
   }
 
-  // 2. Documentos del negocio
-  if (
-    ((lowerName.endsWith(".md") || lowerName.endsWith(".txt")) &&
-      (lowerNorm.startsWith("docs/") ||
-        lowerNorm.includes("/docs/") ||
-        lowerNorm.startsWith("doc/") ||
-        lowerNorm.includes("/doc/") ||
-        lowerNorm.startsWith("adr/") ||
-        lowerNorm.includes("/adr/"))) ||
-    lowerName === "contributing.md" ||
-    lowerName === "readme.md" ||
-    lowerName === "architecture.md"
-  ) {
+  if (!isMarkdown || EXCLUDED_DOCS.has(lowerName)) return null;
+  // Fuera de una carpeta de documentación solo se leen los .md de la raíz del repo o del primer nivel.
+  if (!inDocsFolder && depthInRepo > 1) return null;
+
+  const stem = lowerName.replace(/\.[^.]+$/, "");
+  if (HISTORICAL_RE.test(relToRepo) || DATE_RE.test(relToRepo)) {
+    return docRef(relPath, repo, sizeBytes, "historical", 5);
+  }
+  if (!inDocsFolder && depthInRepo === 0 && REPO_RULES_RE.test(stem)) {
+    return docRef(relPath, repo, sizeBytes, "repo-rules", 1);
+  }
+  if (DOMAIN_RE.test(stem)) {
     return docRef(relPath, repo, sizeBytes, "business-docs", 2);
   }
-
-  return null;
+  if (lowerName === "readme.md" || lowerName === "contributing.md") {
+    return docRef(relPath, repo, sizeBytes, "readme", 3);
+  }
+  return docRef(relPath, repo, sizeBytes, "other-docs", 4);
 }

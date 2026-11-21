@@ -44,7 +44,10 @@ export const UpdateProjectFolderSchema = CreateProjectFolderSchema.partial();
 export interface ProjectContextScanReportDto {
   generatedAt: string;
   providerLabel: string;
+  /** Modelo que se usó de verdad. */
   model: string;
+  /** Modelo que se pidió, solo si el proveedor usó otro. */
+  requestedModel?: string;
   layout: "single-repo" | "multi-repo" | "monorepo" | "no-git";
   repositories: Array<{
     path: string;
@@ -62,7 +65,7 @@ export interface ProjectContextScanReportDto {
     lastModified: string | null;
     notes: string[];
   }>;
-  readLog: Array<{ path: string; status: "complete" | "sections" | "omitted"; sections?: number; reason?: string }>;
+  readLog: Array<{ path: string; status: "complete" | "sections" | "omitted" | "duplicate"; sections?: number; reason?: string }>;
   notFullyRead: string[];
   verification: {
     verified: number;

@@ -10,6 +10,7 @@ export const DEFAULT_MODEL_INPUT_CHARS: Array<{ match: string; maxInputChars: nu
   { match: "gpt-4.1", maxInputChars: 400000 },
   { match: "gpt-4o", maxInputChars: 200000 },
   { match: "gpt-5", maxInputChars: 400000 },
+  { match: "gpt-oss", maxInputChars: 300000 },
   { match: "deepseek", maxInputChars: 120000 },
   { match: "qwen", maxInputChars: 120000 },
   { match: "llama", maxInputChars: 40000 },

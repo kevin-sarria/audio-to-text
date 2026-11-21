@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import crypto from "node:crypto";
 import path from "node:path";
 import { IGNORED_DIRS, isSecretFile, isBinaryFile, GitignoreMatcher } from "./ScanIgnore.js";
 import { classifyFolders, annotateNoGitFolders } from "./inventory/folderClassifier.js";
@@ -225,6 +226,17 @@ export function buildInventory(rootPath: string, options?: InventoryOptions): Pr
   // 5. Lo que digan los documentos de los repos activos sobre las carpetas sin git
   annotateNoGitFolders(rootPath, otherFolders, documents);
 
+  // 6. Documentos idénticos (se leen una sola vez; que estén sincronizados también es un dato)
+  const byHash = new Map<string, string[]>();
+  for (const doc of documents) {
+    if (doc.sizeBytes === 0) continue;
+    try {
+      const hash = crypto.createHash("sha256").update(fs.readFileSync(path.join(rootPath, doc.path))).digest("hex");
+      byHash.set(hash, [...(byHash.get(hash) ?? []), doc.path]);
+    } catch {}
+  }
+  const identicalDocuments = [...byHash.values()].filter((group) => group.length > 1);
+
   return {
     rootPath,
     generatedAt: new Date().toISOString(),
@@ -238,6 +250,7 @@ export function buildInventory(rootPath: string, options?: InventoryOptions): Pr
     tree,
     domain,
     documents,
+    identicalDocuments,
     files,
     skipped
   };

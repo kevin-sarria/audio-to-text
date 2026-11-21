@@ -9,6 +9,27 @@ function cleanLlmModelId(raw?: string): string {
   return raw.replace(/^models\//i, "").trim();
 }
 
+const KNOWN_AGY_MODELS = [
+  "gemini-3.8-flash-high",
+  "gemini-3.8-flash-medium",
+  "gemini-3.8-flash-low",
+  "claude-sonnet-4-6",
+  "claude-opus-4-6-thinking",
+  "gpt-oss-120b-medium"
+];
+export const DEFAULT_AGY_MODEL = "gemini-3.8-flash-low";
+
+/**
+ * Modelo que Antigravity usa DE VERDAD para lo que se pidió. «flash-high» y los
+ * modelos desconocidos se reemplazan por el predeterminado: quien muestre el modelo
+ * (encabezado del contexto, reporte) tiene que mostrar este, no el pedido.
+ */
+export function resolveAgyModel(requested?: string): string {
+  const target = cleanLlmModelId(requested);
+  if (target && KNOWN_AGY_MODELS.includes(target) && target !== "gemini-3.8-flash-high") return target;
+  return DEFAULT_AGY_MODEL;
+}
+
 export class LlmProviderClients {
   public static async callGoogleAccount(
     agyPath: string,
@@ -27,20 +48,7 @@ export class LlmProviderClients {
         "--print-timeout",
         "180s"
       ];
-      const knownAgyModels = [
-        "gemini-3.8-flash-high",
-        "gemini-3.8-flash-medium",
-        "gemini-3.8-flash-low",
-        "claude-sonnet-4-6",
-        "claude-opus-4-6-thinking",
-        "gpt-oss-120b-medium"
-      ];
-      const targetModel = cleanLlmModelId(model);
-      if (targetModel && knownAgyModels.includes(targetModel) && targetModel !== "gemini-3.8-flash-high") {
-        args.push("--model", targetModel);
-      } else {
-        args.push("--model", "gemini-3.8-flash-low");
-      }
+      args.push("--model", resolveAgyModel(model));
       args.push("-p=");
 
       const child = spawn(agyPath, args, {

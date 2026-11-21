@@ -27,15 +27,32 @@ export function formatLayoutSpanish(layout: ProjectContextScanReportDto["layout"
 }
 
 export function buildScanSummaryText(report: ProjectContextScanReportDto): string {
-  const repoCount = report.repositories.length;
+  const repoCount = report.repositories.filter((r) => r.kind !== "submodulo").length;
   const layoutStr = formatLayoutSpanish(report.layout);
-  const ver = report.verification.verified;
-  const unc = report.verification.unconfirmed;
-  const disc = report.verification.discarded;
-  const calls = report.llmCalls;
-
-  return `${repoCount} repositorio(s) · ${layoutStr} · ${ver} datos verificados · ${unc} sin confirmar · ${disc} descartados por falta de evidencia · ${calls} llamadas a la IA`;
+  const { verified, unconfirmed, discarded, deduced } = report.verification;
+  const parts = [
+    `${repoCount} repositorio(s)`,
+    layoutStr,
+    `${verified} confirmados con cita`,
+    deduced ? `${deduced} deducidos` : null,
+    `${unconfirmed} sin confirmar`,
+    `${discarded} descartados por falta de evidencia`,
+    `${report.llmCalls} llamadas a la IA (${report.model})`
+  ];
+  return parts.filter(Boolean).join(" · ");
 }
+
+function readStatusText(log: ProjectContextScanReportDto["readLog"][number]): string {
+  if (log.status === "sections") return `por secciones (${log.sections || 0} partes)`;
+  if (log.status === "duplicate") return `${log.reason ?? "idéntico a otro documento"} (se leyó una vez)`;
+  return `omitido${log.reason ? ` — ${log.reason}` : ""}`;
+}
+
+const FOLDER_KIND_TEXT: Record<string, string> = {
+  "copia-de-trabajo": "copia de trabajo",
+  "clon-duplicado": "clon duplicado",
+  "sin-git": "carpeta sin git"
+};
 
 interface ContextScanReportProps {
   report: ProjectContextScanReportDto;
@@ -45,6 +62,8 @@ export const ContextScanReport: React.FC<ContextScanReportProps> = ({ report }) 
   const [accordionOpen, setAccordionOpen] = useState(false);
 
   const hasIssues = report.notFullyRead.length > 0 || report.verification.discarded > 0;
+  const nonCompleteReads = report.readLog.filter((log) => log.status !== "complete");
+  const otherFolders = report.otherFolders ?? [];
   const alertSeverity = hasIssues ? "warning" : "success";
   const summaryText = buildScanSummaryText(report);
 
@@ -56,6 +75,14 @@ export const ContextScanReport: React.FC<ContextScanReportProps> = ({ report }) 
         </Typography>
       </Alert>
 
+      {report.requestedModel && (
+        <Alert severity="info" sx={{ py: 0.5 }}>
+          <Typography variant="caption">
+            Se pidió {report.requestedModel}, pero el proveedor usó {report.model}.
+          </Typography>
+        </Alert>
+      )}
+
       {report.redactions > 0 && (
         <Alert severity="info" sx={{ py: 0.5 }}>
           <Typography variant="caption">
@@ -64,28 +91,38 @@ export const ContextScanReport: React.FC<ContextScanReportProps> = ({ report }) 
         </Alert>
       )}
 
-      {report.notFullyRead.length > 0 && (
+      {nonCompleteReads.length > 0 && (
         <Box sx={{ p: 1.5, bgcolor: "action.hover", borderRadius: 1 }}>
           <Typography variant="caption" sx={{ fontWeight: 600, color: "warning.main", display: "block", mb: 0.5 }}>
-            Estos archivos no se leyeron completos:
+            Documentos que no se leyeron completos o que eran idénticos a otro:
           </Typography>
           <List dense disablePadding>
-            {report.readLog
-              .filter((log) => log.status !== "complete")
-              .map((log) => {
-                const statusStr =
-                  log.status === "sections"
-                    ? `por secciones (${log.sections || 0} partes)`
-                    : `omitido${log.reason ? ` — ${log.reason}` : ""}`;
-                return (
-                  <ListItem key={log.path} disableGutters sx={{ py: 0.25 }}>
-                    <ListItemText
-                      primaryTypographyProps={{ variant: "caption", fontFamily: "monospace" }}
-                      primary={`${log.path}: ${statusStr}`}
-                    />
-                  </ListItem>
-                );
-              })}
+            {nonCompleteReads.map((log) => (
+              <ListItem key={log.path} disableGutters sx={{ py: 0.25 }}>
+                <ListItemText
+                  primaryTypographyProps={{ variant: "caption", fontFamily: "monospace" }}
+                  primary={`${log.path}: ${readStatusText(log)}`}
+                />
+              </ListItem>
+            ))}
+          </List>
+        </Box>
+      )}
+
+      {otherFolders.length > 0 && (
+        <Box sx={{ p: 1.5, bgcolor: "action.hover", borderRadius: 1 }}>
+          <Typography variant="caption" sx={{ fontWeight: 600, display: "block", mb: 0.5 }}>
+            Carpetas que no se analizaron (no aportan tecnologías, comandos ni reglas):
+          </Typography>
+          <List dense disablePadding>
+            {otherFolders.map((f) => (
+              <ListItem key={f.path} disableGutters sx={{ py: 0.25 }}>
+                <ListItemText
+                  primaryTypographyProps={{ variant: "caption", fontFamily: "monospace" }}
+                  primary={`${f.path}: ${FOLDER_KIND_TEXT[f.kind] ?? f.kind}${f.ownerPath ? ` de ${f.ownerPath}` : ""}${f.branch ? ` (rama ${f.branch})` : ""}${f.notes.length ? ` — ${f.notes.join("; ")}` : ""}`}
+                />
+              </ListItem>
+            ))}
           </List>
         </Box>
       )}

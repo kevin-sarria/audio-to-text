@@ -24,6 +24,7 @@ import { verifyScanResponse } from "./SourceVerifier.js";
 import { refineTopics } from "./TopicRefiner.js";
 import { renderTechnicalContext } from "./ContextScanRenderer.js";
 import { redactSecrets } from "./SecretRedactor.js";
+import { extractWarningHints } from "./WarningHints.js";
 
 export type LlmCallFn = (
   systemPrompt: string,
@@ -34,6 +35,8 @@ export interface ContextScanRunOptions {
   budget: ScanBudget;
   providerLabel: string;
   model: string;
+  /** Modelo que se pidió, si el proveedor usó otro (se muestra en el encabezado). */
+  requestedModel?: string;
   useGit?: boolean;
 }
 
@@ -82,12 +85,16 @@ export async function runContextScan(
     rootPath,
     inventory.documents,
     options.budget,
-    summarizeFn
+    summarizeFn,
+    inventory.identicalDocuments
   );
+
+  // Pistas deterministas para la sección «Trampas»
+  const hints = extractWarningHints(rootPath, inventory.documents);
 
   // 3. Prompt principal
   const systemPrompt = buildScanSystemPrompt();
-  const userPrompt = buildScanUserPrompt(inventory, contents, readLog);
+  const userPrompt = buildScanUserPrompt(inventory, contents, readLog, hints);
 
   // Secretos ocultos: los de los documentos (contados antes de redactar) más los del inventario.
   accumulatedRedactions += docRedactions;
@@ -198,6 +205,7 @@ ${missingPrompt}`);
     generatedAt: inventory.generatedAt,
     providerLabel: options.providerLabel,
     model: options.model,
+    requestedModel: options.requestedModel,
     layout: inventory.layout,
     repositories: inventory.repositories.map((r) => ({
       path: r.path,
@@ -215,7 +223,7 @@ ${missingPrompt}`);
       notes: f.notes
     })),
     readLog,
-    notFullyRead: readLog.filter((l) => l.status !== "complete").map((l) => l.path),
+    notFullyRead: readLog.filter((l) => l.status === "sections" || l.status === "omitted").map((l) => l.path),
     verification: {
       verified: stats.verified,
       deduced: stats.deduced,
@@ -241,7 +249,7 @@ ${missingPrompt}`);
 
   // 8. Renderizado final a Markdown
   // El contexto se guarda y se envía al proveedor en cada generación de issues: también se redacta.
-  const technicalContext = redactSecrets(renderTechnicalContext(verifiedData, inventory, report)).text;
+  const technicalContext = redactSecrets(renderTechnicalContext(verifiedData, inventory, report, hints)).text;
 
   return {
     technicalContext,

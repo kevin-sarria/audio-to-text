@@ -4,7 +4,8 @@ import { DocumentRef } from "./ProjectInventory.js";
 import { ScanBudget } from "./ScanBudget.js";
 import { redactSecrets } from "./SecretRedactor.js";
 
-export type ReadStatus = "complete" | "sections" | "omitted";
+/** duplicate: idéntico a otro documento ya leído; no se vuelve a enviar. */
+export type ReadStatus = "complete" | "sections" | "omitted" | "duplicate";
 
 export interface ReadLogEntry {
   path: string;
@@ -17,6 +18,8 @@ export interface DocumentContent {
   ref: DocumentRef;
   mode: "full" | "summary";
   text: string;
+  /** Otros documentos idénticos a este (no se envían de nuevo). */
+  duplicates?: string[];
 }
 
 export type SummarizeFn = (
@@ -185,129 +188,144 @@ export function chunkSections(
   return result.length > 0 ? result : [{ title: "Documento", text: "" }];
 }
 
+/** Peso de cada prioridad al repartir el presupuesto entre documentos. */
+const PRIORITY_WEIGHT: Record<number, number> = { 1: 5, 2: 4, 3: 2, 4: 1, 5: 0.5 };
+
+/**
+ * Reparte el presupuesto entre los documentos según su prioridad («llenado por agua»):
+ * los que caben en su parte se leen completos y lo que sobra se reparte entre el resto.
+ * Así un documento enorme se resume por secciones sin dejar sin lectura a los demás.
+ */
+export function allocateQuotas(
+  docs: Array<{ path: string; size: number; priority: number }>,
+  total: number
+): Map<string, number> {
+  const quota = new Map<string, number>();
+  let remaining = Math.max(0, total);
+  let pending = [...docs];
+  const weight = (p: number) => PRIORITY_WEIGHT[p] ?? 1;
+
+  while (pending.length > 0) {
+    const totalWeight = pending.reduce((acc, d) => acc + weight(d.priority), 0);
+    const fits = pending.filter((d) => d.size <= (remaining * weight(d.priority)) / totalWeight);
+    if (fits.length === 0) {
+      for (const d of pending) quota.set(d.path, Math.floor((remaining * weight(d.priority)) / totalWeight));
+      break;
+    }
+    for (const d of fits) {
+      quota.set(d.path, d.size);
+      remaining -= d.size;
+    }
+    const fitSet = new Set(fits);
+    pending = pending.filter((d) => !fitSet.has(d));
+  }
+  return quota;
+}
+
 export async function readDocuments(
   rootPath: string,
   docs: DocumentRef[],
   budget: ScanBudget,
-  summarize: SummarizeFn
+  summarize: SummarizeFn,
+  identicalGroups: string[][] = []
 ): Promise<{
   contents: DocumentContent[];
   readLog: ReadLogEntry[];
   summaryCalls: number;
   redactions: number;
 }> {
-  let docBudget = Math.floor(budget.maxInputChars * 0.55);
   const contents: DocumentContent[] = [];
   const readLog: ReadLogEntry[] = [];
   let totalSummaryCalls = 0;
   let totalRedactions = 0;
 
+  // Idénticos: se lee el primero (en orden de prioridad) y los demás se anotan.
+  const representativeOf = new Map<string, string>();
+  const duplicatesOf = new Map<string, string[]>();
+  const order = new Map(docs.map((d, i) => [d.path, i]));
+  for (const group of identicalGroups) {
+    const sorted = group.filter((p) => order.has(p)).sort((a, b) => order.get(a)! - order.get(b)!);
+    const [rep, ...rest] = sorted;
+    if (!rep || rest.length === 0) continue;
+    duplicatesOf.set(rep, rest);
+    for (const p of rest) representativeOf.set(p, rep);
+  }
+
+  // Leer y redactar todo primero para conocer los tamaños reales.
+  const texts = new Map<string, string>();
   for (const doc of docs) {
-    const fullPath = path.join(rootPath, doc.path);
-    let rawText = "";
+    if (representativeOf.has(doc.path)) continue;
     try {
-      rawText = fs.readFileSync(fullPath, "utf-8");
-    } catch {
-      readLog.push({
-        path: doc.path,
-        status: "omitted",
-        reason: "no se pudo leer el archivo de disco"
-      });
+      const raw = fs.readFileSync(path.join(rootPath, doc.path), "utf-8");
+      const { text, redactions } = redactSecrets(raw);
+      totalRedactions += redactions;
+      texts.set(doc.path, text);
+    } catch {}
+  }
+
+  const quotas = allocateQuotas(
+    docs.filter((d) => texts.has(d.path)).map((d) => ({ path: d.path, size: texts.get(d.path)!.length, priority: d.priority })),
+    Math.floor(budget.maxInputChars * 0.55)
+  );
+
+  for (const doc of docs) {
+    const rep = representativeOf.get(doc.path);
+    if (rep) {
+      readLog.push({ path: doc.path, status: "duplicate", reason: `idéntico a ${rep}` });
+      continue;
+    }
+    const redactedText = texts.get(doc.path);
+    if (redactedText === undefined) {
+      readLog.push({ path: doc.path, status: "omitted", reason: "no se pudo leer el archivo de disco" });
+      continue;
+    }
+    const duplicates = duplicatesOf.get(doc.path);
+    const quota = quotas.get(doc.path) ?? 0;
+
+    // Caso 1: cabe completo en su cupo
+    if (redactedText.length <= quota) {
+      contents.push({ ref: doc, mode: "full", text: redactedText, duplicates });
+      readLog.push({ path: doc.path, status: "complete" });
       continue;
     }
 
-    const { text: redactedText, redactions } = redactSecrets(rawText);
-    totalRedactions += redactions;
-
-    // Caso 1: Cabe completo en lo que queda del presupuesto
-    if (redactedText.length <= docBudget && docBudget > 0) {
-      contents.push({
-        ref: doc,
-        mode: "full",
-        text: redactedText
-      });
-      readLog.push({
-        path: doc.path,
-        status: "complete"
-      });
-      docBudget -= redactedText.length;
-      continue;
-    }
-
-    // Caso 2: No cabe completo
-    // Si ya no quedan llamadas de resumen o no hay presupuesto
+    // Caso 2: no cabe completo → resumen por secciones, si quedan llamadas
     if (totalSummaryCalls >= budget.maxSummaryCalls) {
-      readLog.push({
-        path: doc.path,
-        status: "omitted",
-        reason: "límite de llamadas de resumen"
-      });
+      readLog.push({ path: doc.path, status: "omitted", reason: "límite de llamadas de resumen" });
+      continue;
+    }
+    if (quota <= 0) {
+      readLog.push({ path: doc.path, status: "omitted", reason: "sin presupuesto del modelo" });
       continue;
     }
 
-    if (docBudget <= 0) {
-      readLog.push({
-        path: doc.path,
-        status: "omitted",
-        reason: "sin presupuesto del modelo"
-      });
-      continue;
-    }
-
-    // Partir en secciones y agrupar en chunks
-    const rawSections = splitMarkdownSections(redactedText);
-    const chunks = chunkSections(rawSections, budget.chunkChars);
-
-    // Resumir cada chunk
+    const chunks = chunkSections(splitMarkdownSections(redactedText), budget.chunkChars);
     const summaryParts: string[] = [];
-    let summaryFailed = false;
     let failReason = "";
 
     for (const chunk of chunks) {
       if (totalSummaryCalls >= budget.maxSummaryCalls) {
-        summaryFailed = true;
         failReason = "límite de llamadas de resumen";
         break;
       }
-
       try {
         totalSummaryCalls++;
         const summary = await summarize(doc.path, chunk.title, chunk.text);
         summaryParts.push(`### ${chunk.title}\n${summary.trim()}`);
       } catch (err: any) {
-        summaryFailed = true;
         failReason = `falló el resumen: ${err?.message || String(err)}`;
         break;
       }
     }
 
-    if (summaryFailed) {
-      readLog.push({
-        path: doc.path,
-        status: "omitted",
-        reason: failReason
-      });
+    if (failReason) {
+      readLog.push({ path: doc.path, status: "omitted", reason: failReason });
       continue;
     }
 
-    const combinedSummary = summaryParts.join("\n\n");
-    contents.push({
-      ref: doc,
-      mode: "summary",
-      text: combinedSummary
-    });
-    readLog.push({
-      path: doc.path,
-      status: "sections",
-      sections: chunks.length
-    });
-    docBudget -= combinedSummary.length;
+    contents.push({ ref: doc, mode: "summary", text: summaryParts.join("\n\n"), duplicates });
+    readLog.push({ path: doc.path, status: "sections", sections: chunks.length });
   }
 
-  return {
-    contents,
-    readLog,
-    summaryCalls: totalSummaryCalls,
-    redactions: totalRedactions
-  };
+  return { contents, readLog, summaryCalls: totalSummaryCalls, redactions: totalRedactions };
 }

@@ -98,7 +98,7 @@ describe("ContextScanOrchestrator: reintentos, re-pedido de secciones y secretos
     expect(repedido).toContain('"glosario"');
     expect(repedido).not.toContain('"proposito",');
     expect(repedido).toContain("=== INVENTARIO");
-    expect(result.technicalContext).toMatch(/## 5\. Glosario[^\n]*\n+No encontrado\./);
+    expect(result.technicalContext).toMatch(/## 6\. Glosario[^\n]*\n+No encontrado\./);
   });
 
   it("re-pide una vez las líneas que son temas, usa los reemplazos con dato y descarta lo que siga siendo tema", async () => {

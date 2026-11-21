@@ -20,7 +20,7 @@ import { TranscriptCoverageDetector } from "./TranscriptCoverageDetector.js";
 import { runContextScan } from "./contextScan/ContextScanOrchestrator.js";
 import { resolveScanBudget } from "./contextScan/ScanBudget.js";
 import { ExtractionPointNormalizer } from "./ExtractionPointNormalizer.js";
-import { LlmProviderClients } from "./LlmProviderClients.js";
+import { LlmProviderClients, resolveAgyModel } from "./LlmProviderClients.js";
 import { detectMatrixItems, MatrixItem } from "./validators/MeetingAnalysisV9Validators.js";
 import { ProjectProfile } from "./profiles/ProjectProfile.js";
 import { ProfileRegistry } from "./profiles/ProfileRegistry.js";
@@ -315,7 +315,9 @@ export class LlmMeetingAnalysisService implements IMeetingAnalysisService {
       throw new Error(`La ruta especificada no es una carpeta válida: ${repoPath}`);
     }
 
-    const { provider, apiKey, model, baseUrl, providerLabel } = await this.resolveProviderAndKey(options);
+    const { provider, apiKey, model: requestedModel, baseUrl, providerLabel } = await this.resolveProviderAndKey(options);
+    // Antigravity puede reemplazar el modelo pedido: el presupuesto y el encabezado usan el real.
+    const model = provider === "google-account" ? resolveAgyModel(requestedModel) : requestedModel;
 
     const userSettings = this.deps?.settingsStore?.getSettings();
     const budget = resolveScanBudget(
@@ -329,7 +331,8 @@ export class LlmMeetingAnalysisService implements IMeetingAnalysisService {
     return runContextScan(repoPath, llm, {
       budget,
       providerLabel,
-      model
+      model,
+      requestedModel: requestedModel && requestedModel !== model ? requestedModel : undefined
     });
   }
 
