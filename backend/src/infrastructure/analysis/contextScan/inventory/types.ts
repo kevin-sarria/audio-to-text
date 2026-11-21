@@ -132,7 +132,17 @@ export interface DomainNames {
   i18n: string[];
 }
 
-export type RepoLayout = "single-repo" | "multi-repo" | "monorepo" | "no-git";
+/** Archivo de código (o de textos de pantalla) que leen los extractores de `code/`. */
+export interface CodeFileRef {
+  path: string;
+  repo: string;
+  sizeBytes: number;
+  /** Orden de lectura (menor = antes): acceso, arranque, endpoints y datos primero. */
+  priority: number;
+  isTest: boolean;
+}
+
+export type RepoLayout ="single-repo" | "multi-repo" | "monorepo" | "no-git";
 
 export interface SkippedFile {
   path: string;
@@ -156,7 +166,9 @@ export interface ProjectInventory {
   documents: DocumentRef[];
   /** Grupos de documentos idénticos byte a byte (2 o más rutas por grupo). */
   identicalDocuments: string[][];
-  files: Record<string, InventoryFileInfo>;
+  /** Archivos de código de los repos activos, en orden de lectura. */
+  codeFiles: CodeFileRef[];
+  files:Record<string, InventoryFileInfo>;
   skipped: SkippedFile[];
 }
 

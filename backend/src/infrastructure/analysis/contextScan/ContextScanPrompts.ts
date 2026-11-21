@@ -51,7 +51,7 @@ REGLA 0 — CADA LÍNEA RESPONDE LA PREGUNTA, NO LA NOMBRA:
 Si no encuentras el dato concreto, no escribas la línea: pon la sección en "no_encontrado" o la duda en "preguntas_abiertas".
 
 REGLAS CRÍTICAS DE ANÁLISIS:
-1. SOLO HECHOS VERIFICABLES: Basa tus afirmaciones únicamente en el INVENTARIO o en los DOCUMENTOS entregados. Queda TERMINANTEMENTE PROHIBIDO completar con lo típico del framework (capas, patrones, carpetas, comandos o puertos que no aparezcan). Si no hay evidencia clara para una sección, colócala en "no_encontrado".
+1. SOLO HECHOS VERIFICABLES: Basa tus afirmaciones únicamente en el INVENTARIO, en los DOCUMENTOS o en el bloque CÓDIGO. Para un dato del CÓDIGO, "fuente" es el archivo:línea que trae la línea y "cita" es un fragmento literal de esa línea de código o de su comentario (por ejemplo "MaxFailedAccessAttempts = 5"). Queda TERMINANTEMENTE PROHIBIDO completar con lo típico del framework (capas, patrones, carpetas, comandos o puertos que no aparezcan). Si no hay evidencia clara para una sección, colócala en "no_encontrado".
 2. CITA Y FUENTE: Cada dato lleva "cita" (texto copiado literalmente de la fuente, máximo 200 caracteres, sin reescribirlo) y "fuente" (ruta relativa exacta del archivo, o "inventario" si sale del inventario). Si el dato no está escrito tal cual y lo deduces de varias fuentes, deja "cita" en null y pon esas rutas en "deducido_de". Usa "impacto" (opcional) para decir en una frase por qué importa al redactar un issue.
 3. REPOSITORIOS Y LAYOUT: Copia con exactitud la cantidad, nombres y tipo de repositorios del inventario ("layout" y "repositories"). Las carpetas ya vienen clasificadas: "repositories" son los repos activos del proyecto; "otherFolders" son copias de trabajo de git, clones duplicados y carpetas sin git, y NO forman parte del proyecto activo. No les atribuyas tecnologías, comandos, reglas ni flujos. Su clasificación ya explica qué son: no especules sobre su propósito (por ejemplo, forks o marcas blancas) ni hagas preguntas sobre ellas.
 4. COMANDOS ESTRICTOS: Solo puedes citar comandos que aparezcan explícitamente en "inventario.commands" (campo "runAs") y asignados al repositorio correcto. Si un repositorio no tiene script de pruebas, dilo explícitamente.
@@ -61,16 +61,16 @@ REGLAS CRÍTICAS DE ANÁLISIS:
    - Orden para decidir quién gana: (1) marcas explícitas: un texto marcado "OBSOLETA", "ya no aplica" o "reemplazado" nunca gana; uno marcado "obligatorio", "aprobado el/por" o "desde <fecha>" gana sobre texto sin marcas más viejo; (2) la sección con fecha más reciente; (3) para lo que se afirme sobre el proceso (ramas, PR, quién aprueba, despliegue), la EVIDENCIA DE GIT es de primer nivel: lo que muestra el historial (merges "Merge pull request #N", squash "(#N)", commits directos, ramas remotas, CODEOWNERS) decide; (4) si un documento afirma que algo existe o no existe y el inventario o el código muestran lo contrario, gana el inventario y el documento está desactualizado.
    - Registra cada contradicción con "descripcion", "fuentes", qué versión "gana" y "motivo": "marca_explicita", "seccion_mas_reciente", "evidencia_git", "documento_desactualizado", "codigo_sobre_documento" o "sin_resolver". Solo usa "sin_resolver" si agotaste fechas por sección, marcas, código y git.
    - En las secciones de datos escribe solo lo VIGENTE (lo que gana). Los documentos marcados HISTÓRICO no son fuente de lo vigente si hay algo más nuevo.
-6. GLOSARIO DE NEGOCIO Y CÓDIGO: En "glosario", "termino_reunion" es la palabra o frase que usan las personas o la UI/i18n (ej. "Sede"), y "nombre_codigo" es la entidad, modelo o tabla real presente en el código o inventario (ej. "CostCenter"). Pon dos palabras como sinónimos solo si una fuente las equipara. Si un término general agrupa varios tipos, escribe "nombre_codigo" como "A o B" y no pongas los tipos como sinónimos del general. NO inventes entradas.
+6. GLOSARIO DE NEGOCIO Y CÓDIGO: En "glosario", "termino_reunion" es la palabra o frase que usan las personas o la UI/i18n (ej. "Sede"), y "nombre_codigo" es la entidad, modelo o tabla real presente en el código o inventario (ej. "CostCenter"). Cruza los "Textos de pantalla" del bloque CÓDIGO (clave i18n, texto visible y nombre del archivo de la pantalla) con las "Entidades y enumeraciones": cuando la clave, la pantalla o el texto nombran lo mismo que una entidad (aunque esté en otro idioma), esa es una entrada; cita el texto de pantalla. Pon dos palabras como sinónimos solo si una fuente las equipara. Si un término general agrupa varios tipos, escribe "nombre_codigo" como "A o B" y no pongas los tipos como sinónimos del general. NO inventes entradas.
 
 QUÉ RESPUESTA CONCRETA PIDE CADA SECCIÓN:
 - proposito: qué hace el sistema, para quién y con qué clientes (web, móvil, terceros).
-- trampas: lo que un desarrollador nuevo rompería. Cada trampa dice QUÉ pasa y CUÁNDO te afecta, con su cita. Busca: advertencias en los documentos ("ojo", "cuidado", "nunca", "no tocar", "importante", "en producción", ⚠); configuración local que apunta a recursos compartidos o remotos; sesión única por usuario, límites de intentos, bloqueo de cuentas, datos que se gastan al probarlos; clientes distintos (web, móvil, terceros) sobre el mismo backend con reglas de acceso distintas; almacenamiento que cambia según el entorno (disco o nube); requisitos que condicionan todo (funcionar sin conexión, varios clientes en la misma base, zona horaria, idioma). Revisa una por una las POSIBLES TRAMPAS que trae el bloque de pistas.
+- trampas: lo que un desarrollador nuevo rompería. Cada trampa dice QUÉ pasa y CUÁNDO te afecta, con su cita. Busca: advertencias en los documentos ("ojo", "cuidado", "nunca", "no tocar", "importante", "en producción", ⚠); configuración local que apunta a recursos compartidos o remotos; sesión única por usuario, límites de intentos, bloqueo de cuentas, datos que se gastan al probarlos; clientes distintos (web, móvil, terceros) sobre el mismo backend con reglas de acceso distintas; almacenamiento que cambia según el entorno (disco o nube); requisitos que condicionan todo (funcionar sin conexión, varios clientes en la misma base, zona horaria, idioma). Revisa una por una las POSIBLES TRAMPAS que trae el bloque de pistas, también las del código ([seguridad], [entorno], [permisos-distintos], [sin-autorizacion], [decision]). No hay un máximo de trampas: las del código se suman a las de los documentos, no las reemplazan; una regla de negocio que condiciona lo que se programa (sesión única, trabajo sin conexión, datos compartidos) también va aquí aunque ya esté en otra sección.
 - repositorios: qué contiene cada repo activo y cómo se relacionan.
 - tecnologias: nombre y versión exacta.
 - capas_estructura: carpetas reales y qué va en cada una.
-- roles_permisos: nombres exactos de los roles y a qué cliente o pantalla entra cada uno; cómo se comprueban.
-- flujos: pasos concretos del usuario, con nombres de pantallas, entidades o endpoints.
+- roles_permisos: nombres exactos de los roles y a qué cliente o pantalla entra cada uno; cómo se comprueban. Usa "Roles y acceso" y los endpoints con sus roles del bloque CÓDIGO; si el código y un documento difieren, gana el código (motivo "codigo_sobre_documento").
+- flujos: pasos concretos del usuario, con nombres de pantallas, entidades o endpoints (los del bloque CÓDIGO).
 - reglas_negocio_ubicacion: archivos exactos de las reglas y formato de su código (ej. RN-01).
 - reglas_inquebrantables: la regla misma, con su código si tiene.
 - cambios_base_datos: el mecanismo exacto (migraciones, scripts en una ruta, creación automática) y los pasos.
@@ -119,7 +119,7 @@ Si una sección no tiene evidencia en los archivos, añade su clave a "no_encont
 ==================================================
 RECORDATORIO DE REGLAS CRÍTICAS:
 0. Cada "valor" responde la pregunta (nombres, rutas, comandos, cantidades); nunca solo el tema.
-1. NUNCA inventes tecnologías, capas, comandos ni reglas que no estén en los textos.
+1. NUNCA inventes tecnologías, capas, comandos ni reglas que no estén en los textos o en el bloque CÓDIGO.
 2. Cada dato lleva su "cita" literal y su "fuente" exacta; si lo deduces, "cita": null y "deducido_de".
 3. Copia layout y repositorios exactamente del inventario; "otherFolders" no son parte del proyecto activo.
 4. Solo usa comandos de verificación listados en el inventario.
@@ -135,7 +135,8 @@ export function buildScanUserPrompt(
   contents: DocumentContent[],
   readLog: ReadLogEntry[],
   hints: WarningHint[] = [],
-  gitEvidence: RepoGitEvidence[] = []
+  gitEvidence: RepoGitEvidence[] = [],
+  codeText = ""
 ): string {
   // Construir inventario compacto enriquecido con fechas
   const enrichedManifests = inventory.manifests.map((m) => ({
@@ -223,15 +224,18 @@ ${docsText}
 === ARCHIVOS NO LEÍDOS COMPLETOS ===
 ${notReadText}
 
+=== CÓDIGO (extraído por código, sin IA: roles, autorización, endpoints, entidades, esquema, textos de pantalla, configuración y pruebas; cada línea trae archivo:línea) ===
+${codeText ? redactSecrets(codeText).text : "No se encontró código que leer."}
+
 === EVIDENCIA DE GIT (primer nivel para lo que se afirme sobre ramas, PR, aprobación y despliegue) ===
 ${gitEvidence.length ? gitEvidence.map(describeGitEvidence).join("\n") : "Sin historial de git disponible."}
 
-=== POSIBLES TRAMPAS (frases de advertencia y configuración remota encontradas por código; confírmalas con su cita) ===
+=== POSIBLES TRAMPAS (advertencias de los documentos, configuración remota y trampas del código; confírmalas con su cita) ===
 ${hintsText}
 
 RECORDATORIO FINAL DE REGLAS:
 - Regla 0: Cada "valor" da el dato concreto, no el tema; con su "cita" literal.
-- Regla 1: Solo hechos del inventario o de los documentos entregados; sin inventar.
+- Regla 1: Solo hechos del inventario, de los documentos o del bloque CÓDIGO; sin inventar.
 - Regla 3: Respeta el layout y los repositorios del inventario.
 - Regla 4: Solo comandos reales de "commands" del inventario.
 - Regla 5: Gana lo vigente: marcas explícitas, sección más reciente, evidencia de git; respeta las reglas de precedencia del propio proyecto.

@@ -28,6 +28,8 @@ import { extractWarningHints } from "./WarningHints.js";
 import { annotateContentsWithVigencia } from "./vigencia/annotateContents.js";
 import { collectGitEvidence } from "./vigencia/gitEvidence.js";
 import { applyQuestionsPolicy } from "./vigencia/questionsPolicy.js";
+import { collectCodeFacts } from "./code/collectCodeFacts.js";
+import { describeCodeForPrompt, codeTrapsAsHints, codeEvidence, codeNames } from "./code/describeCode.js";
 
 export type LlmCallFn = (
   systemPrompt: string,
@@ -84,16 +86,22 @@ export async function runContextScan(
     return raw;
   };
 
+  // 2a. Código: roles, endpoints, entidades, esquema, i18n, pruebas y trampas (sin IA).
+  // Su bloque se descuenta del presupuesto de los documentos.
+  const codeFacts = collectCodeFacts(rootPath, inventory);
+  const codeText = describeCodeForPrompt(codeFacts, Math.min(30000, Math.round(options.budget.maxInputChars * 0.12)));
+  const docBudget = { ...options.budget, maxInputChars: Math.max(4000, options.budget.maxInputChars - codeText.length) };
+
   const { contents, readLog, redactions: docRedactions } = await readDocuments(
     rootPath,
     inventory.documents,
-    options.budget,
+    docBudget,
     summarizeFn,
     inventory.identicalDocuments
   );
 
-  // Pistas deterministas para la sección «Trampas»
-  const hints = extractWarningHints(rootPath, inventory.documents);
+  // Pistas deterministas para la sección «Trampas»: documentos y código
+  const hints = [...extractWarningHints(rootPath, inventory.documents), ...codeTrapsAsHints(codeFacts)];
 
   // Vigencia: fecha y marcas por sección, y lo que muestra git sobre el proceso
   const useGit = options.useGit ?? true;
@@ -102,7 +110,7 @@ export async function runContextScan(
 
   // 3. Prompt principal
   const systemPrompt = buildScanSystemPrompt();
-  const userPrompt = buildScanUserPrompt(inventory, contents, readLog, hints, gitEvidence);
+  const userPrompt = buildScanUserPrompt(inventory, contents, readLog, hints, gitEvidence, codeText);
 
   // Secretos ocultos: los de los documentos (contados antes de redactar) más los del inventario.
   accumulatedRedactions += docRedactions;
@@ -190,12 +198,15 @@ ${missingPrompt}`);
   }
 
   // 6. Temas: las líneas que nombran el tema sin dar el dato se re-piden una vez
-  const refinement = await refineTopics(scanData, inventory, rootPath, llm, systemPrompt, userPrompt);
+  // Los hechos del código confirman las citas copiadas del bloque CÓDIGO y los nombres del glosario.
+  const verifyOptions = { codeEvidence: codeEvidence(codeFacts), codeNames: codeNames(codeFacts) };
+  const refinement = await refineTopics(scanData, inventory, rootPath, llm, systemPrompt, userPrompt, verifyOptions);
   if (refinement.called) llmCallsCount++;
   scanData = refinement.data;
 
   // 7. Verificación final por cita; lo que siga siendo tema se descarta
   const { data: verifiedRaw, stats, discarded } = verifyScanResponse(scanData, inventory, rootPath, {
+    ...verifyOptions,
     discardTopics: true
   });
   // Contradicciones sin resolver → preguntas; fuera las preguntas especulativas
@@ -259,7 +270,7 @@ ${missingPrompt}`);
 
   // 8. Renderizado final a Markdown
   // El contexto se guarda y se envía al proveedor en cada generación de issues: también se redacta.
-  const technicalContext = redactSecrets(renderTechnicalContext(verifiedData, inventory, report, { hints, gitEvidence })).text;
+  const technicalContext = redactSecrets(renderTechnicalContext(verifiedData, inventory, report, { hints, gitEvidence, codeFacts })).text;
 
   return {
     technicalContext,

@@ -12,7 +12,7 @@ export interface ContextSection {
   title: string;
   /** Todas las líneas del cuerpo de la sección. */
   lines: string[];
-  /** Líneas escritas por el modelo (sin el bloque «Del inventario»). */
+  /** Líneas escritas por el modelo (sin los bloques «Del inventario», «Del código», git ni advertencias). */
   modelLines: string[];
 }
 
@@ -57,6 +57,9 @@ function slugify(title: string): string {
     .replace(/^_+|_+$/g, "");
 }
 
+/** Bloques que escribe el escáner sin IA: no cuentan como líneas del modelo. */
+const DETERMINISTIC_BLOCK_RE = /^\*\*(?:Del inventario|Del código|Del historial de git|Advertencias encontradas)/;
+
 /** Parte el contexto por encabezados «## N. Título» o «## Título». */
 export function parseContextSections(markdown: string): ContextSection[] {
   const sections: ContextSection[] = [];
@@ -76,7 +79,7 @@ export function parseContextSections(markdown: string): ContextSection[] {
     if (!current) continue;
 
     current.lines.push(line);
-    if (line.trim().startsWith("**Del inventario")) {
+    if (DETERMINISTIC_BLOCK_RE.test(line.trim())) {
       inInventoryBlock = true;
       continue;
     }

@@ -14,7 +14,8 @@ export interface WarningHint {
   path: string;
   line: number;
   text: string;
-  kind: "advertencia" | "config-remota";
+  /** «codigo»: trampas que salen del código (ver code/describeCode.ts). */
+  kind: "advertencia" | "config-remota" | "codigo";
 }
 
 const WARNING_RE =

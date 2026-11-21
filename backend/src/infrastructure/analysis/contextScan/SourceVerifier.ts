@@ -10,6 +10,7 @@ import {
 } from "./ContextScanSchema.js";
 import { isConcrete, isPathToken } from "./FactConcreteness.js";
 import { SourceContext, ResolvedSource, splitSources } from "./verification/sourceResolver.js";
+import { normalizeForCite } from "./verification/citeMatcher.js";
 
 /**
  * Verificador determinista. Un dato queda:
@@ -38,10 +39,26 @@ export interface VerificationStats {
   topics: number;
 }
 
+/** Un hecho que el lector de código sacó de un archivo (código/describeCode.ts). */
+export interface CodeEvidence {
+  path: string;
+  line: number;
+  text: string;
+}
+
 export interface VerifyOptions {
   /** Descarta los temas. En la primera pasada se marcan para re-pedirlos al modelo. */
   discardTopics?: boolean;
+  /**
+   * Hechos extraídos del código: una cita copiada del bloque CÓDIGO no es literal del
+   * archivo, pero sí de un hecho determinista de ese archivo, y cuenta como confirmada.
+   */
+  codeEvidence?: CodeEvidence[];
+  /** Entidades, enums y roles del código: confirman el «nombre_codigo» del glosario. */
+  codeNames?: string[];
 }
+
+const MIN_EVIDENCE_MATCH = 8;
 
 const COMMAND_RE = /\b((?:npm|pnpm|yarn|dotnet|make|mvn|\.\/gradlew|composer)\s+[^\s,;`]+(?:\s+[^\s,;`-][^\s,;`]*)?)/i;
 
@@ -80,6 +97,8 @@ export function verifyScanResponse(
   const scopeNames = scopeNamesOf(inventory);
   const discarded: DiscardedItem[] = [];
   const stats: VerificationStats = { verified: 0, deduced: 0, unconfirmed: 0, discarded: 0, topics: 0 };
+  const codeEvidence = options.codeEvidence ?? [];
+  const codeNames = new Set((options.codeNames ?? []).map((n) => n.toLowerCase()));
 
   const count = (status: Evidence["status"]) => {
     if (status === "confirmado") stats.verified++;
@@ -105,6 +124,16 @@ export function verifyScanResponse(
       if (sources.some((s) => s.kind === "inventory") && ctx.inventoryText.toLowerCase().includes(text.toLowerCase())) {
         return { status: "confirmado", fuente: "inventario" };
       }
+    }
+    // Hechos del código del mismo archivo (la cita salió del bloque CÓDIGO).
+    if (codeEvidence.length && cita) {
+      const want = normalizeForCite(cita);
+      const rels = new Set(files.map((f) => f.rel));
+      const hit =
+        want.length >= MIN_EVIDENCE_MATCH
+          ? codeEvidence.find((e) => rels.has(e.path) && normalizeForCite(e.text).includes(want))
+          : undefined;
+      if (hit) return { status: "confirmado", fuente: `${hit.path}:${hit.line}` };
     }
     // Solo una cita explícita se busca en los demás archivos conocidos (un valor corto
     // como «React 19» podría coincidir por casualidad en cualquier parte).
@@ -208,13 +237,17 @@ export function verifyScanResponse(
       });
       continue;
     }
-    const codeNames = item.nombre_codigo.split(/\s+(?:o|y|u|or|and)\s+|[,/]/).map((n) => n.replace(/[`'"]/g, "").trim()).filter(Boolean);
+    const names = item.nombre_codigo.split(/\s+(?:o|y|u|or|and)\s+|[,/]/).map((n) => n.replace(/[`'"]/g, "").trim()).filter(Boolean);
     const content = valid.rel && valid.kind === "file" ? (ctx.read(valid.rel) ?? "") : "";
     const haystack = `${valid.rel ?? ""}\n${content}\n${valid.kind === "inventory" ? ctx.inventoryText : ""}`.toLowerCase();
-    const nameFound = codeNames.length > 0 && codeNames.every((n) => haystack.includes(n.toLowerCase()));
+    const nameFound = names.length > 0 && names.every((n) => haystack.includes(n.toLowerCase()));
     const citeLine = item.cita && valid.rel ? (ctx.index(valid.rel)?.find(item.cita) ?? null) : null;
+    // La fuente suele ser el texto de pantalla (i18n) y el nombre, una entidad de otro
+    // archivo: vale si el término está en la fuente y el nombre existe en el código.
+    const termInSource = normalizeForCite(content).includes(normalizeForCite(item.termino_reunion));
+    const nameIsCode = names.length > 0 && names.every((n) => codeNames.has(n.toLowerCase()));
 
-    item.estado = nameFound || citeLine !== null ? "confirmado" : "sin_confirmar";
+    item.estado = nameFound || citeLine !== null || (termInSource && nameIsCode) ? "confirmado" : "sin_confirmar";
     item.fuente = citeLine !== null ? `${valid.rel}:${citeLine}` : (valid.rel ?? "inventario");
     count(item.estado);
     keptGlossary.push(item);

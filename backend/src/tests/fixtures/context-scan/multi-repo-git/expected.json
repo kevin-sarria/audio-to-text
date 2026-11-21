@@ -258,7 +258,7 @@
     "seccion": "trampas",
     "pregunta": "¿Cuántos intentos de login hay antes del bloqueo?",
     "respuesta": [
-      "5",
+      "5|cinco",
       "intento*|bloque*"
     ]
   },
@@ -326,6 +326,40 @@
     "respuesta": [
       "campo-api",
       "entraron por PR"
+    ]
+  },
+  {
+    "id": "q-endpoint-movil",
+    "tipo": "pregunta",
+    "fase": 5,
+    "seccion": "roles_permisos",
+    "pregunta": "¿Qué ruta de la API usa la app móvil y qué roles entran?",
+    "respuesta": [
+      "api/movil/incidencias",
+      "Supervisor"
+    ]
+  },
+  {
+    "id": "q-entidades-api",
+    "tipo": "pregunta",
+    "fase": 5,
+    "seccion": "capas_estructura",
+    "pregunta": "¿Qué entidades tiene la API?",
+    "respuesta": [
+      "Reclamo",
+      "Novedad",
+      "Usuario"
+    ]
+  },
+  {
+    "id": "q-pruebas-api-escritas",
+    "tipo": "pregunta",
+    "fase": 5,
+    "seccion": "verificacion",
+    "pregunta": "¿La API tiene pruebas escritas?",
+    "respuesta": [
+      "xunit",
+      "0 archivo*"
     ]
   }
 ]

@@ -11,7 +11,9 @@ import { buildCiteIndex, CiteIndex } from "./citeMatcher.js";
  * en el proyecto hay uno solo con ese nombre entre los archivos conocidos.
  */
 
-export type SourceKind = "file" | "dir" | "inventory" | "missing" | "outside" | "secret";
+const MAX_CODE_FILES_FOR_CITES = 600;
+
+export type SourceKind ="file" | "dir" | "inventory" | "missing" | "outside" | "secret";
 
 export interface ResolvedSource {
   kind: SourceKind;
@@ -62,7 +64,13 @@ export class SourceContext {
       ...new Set([
         ...inventory.documents.map((d) => d.path),
         ...inventory.manifests.map((m) => m.path),
-        ...inventory.deployment.map((d) => d.path)
+        ...inventory.deployment.map((d) => d.path),
+        // Código (Fase 5): la cita de un dato del código se busca también aquí. Con tope,
+        // en el orden de prioridad del inventario, para no leer miles de archivos por cita.
+        ...(inventory.codeFiles ?? [])
+          .filter((f) => !f.isTest)
+          .slice(0, MAX_CODE_FILES_FOR_CITES)
+          .map((f) => f.path)
       ])
     ];
     this.repoPaths = inventory.repositories.map((r) => r.path).filter((p) => p !== ".");

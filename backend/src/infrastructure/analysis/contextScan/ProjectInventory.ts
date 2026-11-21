@@ -8,7 +8,9 @@ import { parseDeploymentFile } from "./inventory/deploymentParser.js";
 import { classifyDocument } from "./inventory/documentClassifier.js";
 import { collectDomainNames, emptyDomain } from "./inventory/domainNames.js";
 import { dateFiles } from "./inventory/gitDates.js";
+import { isCodeScanFile, codeFilePriority, isTestFile, MAX_CODE_FILES } from "./inventory/codeFiles.js";
 import {
+  CodeFileRef,
   CommandInfo,
   DeploymentFileInfo,
   DocumentRef,
@@ -95,6 +97,7 @@ export function buildInventory(rootPath: string, options?: InventoryOptions): Pr
   const documents: DocumentRef[] = [];
   const skipped: SkippedFile[] = [];
   const workspaceManifests: string[] = [];
+  const codeFiles: CodeFileRef[] = [];
   let treeTruncated = 0;
 
   const addTreeLine = (line: string, depth: number) => {
@@ -191,6 +194,16 @@ export function buildInventory(rootPath: string, options?: InventoryOptions): Pr
       const deployInfo = parseDeploymentFile(entryRel, fullPath, repo);
       if (deployInfo) deployment.push(deployInfo);
 
+      if (isCodeScanFile(entryRel, stat.size) && codeFiles.length < MAX_CODE_FILES) {
+        codeFiles.push({
+          path: entryRel,
+          repo,
+          sizeBytes: stat.size,
+          priority: codeFilePriority(entryRel),
+          isTest: isTestFile(entryRel)
+        });
+      }
+
       const docRef = classifyDocument(entryRel, repo, stat.size);
       if (docRef) {
         if (stat.size > 2 * 1024 * 1024) skipped.push({ path: entryRel, reason: "too-large" });
@@ -237,6 +250,8 @@ export function buildInventory(rootPath: string, options?: InventoryOptions): Pr
   }
   const identicalDocuments = [...byHash.values()].filter((group) => group.length > 1);
 
+  codeFiles.sort((a, b) => (a.priority !== b.priority ? a.priority - b.priority : a.path.localeCompare(b.path)));
+
   return {
     rootPath,
     generatedAt: new Date().toISOString(),
@@ -251,6 +266,7 @@ export function buildInventory(rootPath: string, options?: InventoryOptions): Pr
     domain,
     documents,
     identicalDocuments,
+    codeFiles,
     files,
     skipped
   };

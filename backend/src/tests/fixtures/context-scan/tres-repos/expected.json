@@ -62,7 +62,7 @@
     "seccion": "glosario",
     "pregunta": "¿Cómo se llama una Sede en el código?",
     "respuesta": [
-      "Sede",
+      "Sede*",
       "CostCenter"
     ]
   },
@@ -132,6 +132,16 @@
     "respuesta": [
       "PM2",
       "Nginx"
+    ]
+  },
+  {
+    "id": "q-endpoint-sedes",
+    "tipo": "pregunta",
+    "fase": 5,
+    "seccion": "capas_estructura",
+    "pregunta": "¿Qué endpoint expone CostCenter?",
+    "respuesta": [
+      "api/CostCenters"
     ]
   }
 ]

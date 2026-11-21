@@ -1,6 +1,6 @@
 import { ProjectInventory } from "./ProjectInventory.js";
 import { DATA_SECTION_KEYS, ScanItem, ScanResponse, parseScanResponse } from "./ContextScanSchema.js";
-import { verifyScanResponse } from "./SourceVerifier.js";
+import { verifyScanResponse, VerifyOptions } from "./SourceVerifier.js";
 import { buildTopicsPrompt } from "./ContextScanPrompts.js";
 
 export type LlmCall = (systemPrompt: string, userPrompt: string) => Promise<string>;
@@ -28,9 +28,10 @@ export async function refineTopics(
   rootPath: string,
   llm: LlmCall,
   systemPrompt: string,
-  userPrompt: string
+  userPrompt: string,
+  verifyOptions: VerifyOptions = {}
 ): Promise<TopicRefinement> {
-  const pre = verifyScanResponse(scanData, inventory, rootPath);
+  const pre = verifyScanResponse(scanData, inventory, rootPath, { ...verifyOptions, discardTopics: false });
   const topics: Array<{ section: string; valor: string; fuente: string }> = [];
   let firstAnswerFacts = 0;
 

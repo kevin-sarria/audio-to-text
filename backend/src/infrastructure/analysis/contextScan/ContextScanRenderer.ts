@@ -14,6 +14,8 @@ import {
   dropRepoContradictions
 } from "./render/inventoryBlocks.js";
 import { trimByImportance, RenderedSection } from "./render/contextTrimmer.js";
+import { CodeFacts } from "./code/types.js";
+import { codeBlockFor, subtypesOf } from "./code/describeCode.js";
 
 export { formatLayoutSpanish } from "./render/inventoryBlocks.js";
 
@@ -36,6 +38,7 @@ export function renderFact(it: ScanItem): string {
 export interface RenderExtras {
   hints?: WarningHint[];
   gitEvidence?: RepoGitEvidence[];
+  codeFacts?: CodeFacts;
 }
 
 function inventoryBlockFor(
@@ -91,6 +94,7 @@ export function renderTechnicalContext(
     `# Contexto técnico — ${rootDirName}`,
     `Generado el ${isoShort} · commit(s): ${commits.length ? commits.join(", ") : "sin git"} · ${report.providerLabel} / ${modelStr}`,
     readTotals(report),
+    ...(extras.codeFacts ? [`Código: ${extras.codeFacts.filesRead} archivos leídos${extras.codeFacts.filesNotRead ? `, ${extras.codeFacts.filesNotRead} sin leer por tamaño` : ""}.`] : []),
     ""
   ];
 
@@ -101,6 +105,8 @@ export function renderTechnicalContext(
     const lines: string[] = [`## ${idx + 1}. ${sec.title}`];
     const block = inventoryBlockFor(sec.key, inventory, extras);
     if (block && block.lines.length) lines.push(block.title, ...block.lines, "");
+    const fromCode = codeBlockFor(sec.key, extras.codeFacts);
+    if (fromCode.length) lines.push("**Del código:**", ...fromCode, "");
 
     if (sec.key === "glosario") {
       const glossary = data.secciones.glosario || [];
@@ -110,7 +116,11 @@ export function renderTechnicalContext(
         lines.push("| Cómo se dice en las reuniones | Sinónimos | Nombre en el código | Fuente |", "| --- | --- | --- | --- |");
         for (const g of glossary) {
           const unconfirmed = g.estado === "sin_confirmar" ? " _(sin confirmar)_" : "";
-          lines.push(`| ${g.termino_reunion} | ${(g.sinonimos || []).join(", ")} | \`${g.nombre_codigo}\` | ${g.fuente}${unconfirmed} |`);
+          // Si el nombre es una entidad con subtipos en el código, se dicen (un issue sobre
+          // «la Incidencia» puede tocar cualquiera de ellos).
+          const subtypes = subtypesOf(g.nombre_codigo, extras.codeFacts);
+          const types = subtypes.length ? ` (tipos: ${subtypes.map((s) => `\`${s}\``).join(", ")})` : "";
+          lines.push(`| ${g.termino_reunion} | ${(g.sinonimos || []).join(", ")} | \`${g.nombre_codigo}\`${types} | ${g.fuente}${unconfirmed} |`);
         }
       }
     } else if (sec.key === "contradicciones") {
@@ -130,7 +140,7 @@ export function renderTechnicalContext(
 
       if (sec.key === "trampas") {
         const extra = uncoveredHintsBlock(hints, items);
-        if (extra.length) lines.push("", "**Advertencias encontradas en los documentos (la IA no las procesó):**", ...extra);
+        if (extra.length) lines.push("", "**Advertencias encontradas en los documentos y el código (la IA no las procesó):**", ...extra);
       }
       const hasContent = items.length > 0 || lines.length > 1;
       if (!hasContent && notFound.has(sec.key)) lines.push("No encontrado.");
