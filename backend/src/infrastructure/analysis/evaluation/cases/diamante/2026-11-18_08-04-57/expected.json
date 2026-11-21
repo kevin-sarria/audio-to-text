@@ -1,0 +1,155 @@
+{
+  "caseId": "diamante/2026-11-18_08-04-57",
+  "description": "Caso de referencia DIAMANTE 1 (v10) - reunión de hallazgos y requerimientos (transcripción congelada)",
+  "expectedIssuesCount": 9,
+  "expectedTotalHours": 58,
+  "expectedRepoBreakdown": {
+    "backend": 4,
+    "panel": 5,
+    "app": 0
+  },
+  "expectedRepoHours": {
+    "backend": 32,
+    "panel": 26,
+    "app": 0,
+    "total": 58
+  },
+  "expectedBacklogCount": 3,
+  "requiredInProgress": [
+    {
+      "label": "CRM no devuelve el personal requerido (Cubrimientos Cali)",
+      "keywords": [
+        "crm"
+      ],
+      "timestamps": [
+        "17:45",
+        "21:59"
+      ]
+    },
+    {
+      "label": "Tres ítems por validar",
+      "keywords": [
+        "tres items"
+      ],
+      "timestamps": [
+        "05:27"
+      ]
+    },
+    {
+      "label": "Observación de Juan Esteban",
+      "keywords": [
+        "observacion de juan esteban"
+      ],
+      "timestamps": [
+        "06:23"
+      ]
+    }
+  ],
+  "requiredDecisions": [
+    {
+      "label": "Oficina Regional Cali, no Cubrimientos Cali",
+      "keywords": [
+        "oficina regional"
+      ],
+      "timestamps": [
+        "20:36"
+      ]
+    },
+    {
+      "label": "Estados de novedad solo para novedades del servicio",
+      "keywords": [
+        "novedades del servicio"
+      ],
+      "timestamps": [
+        "30:58"
+      ]
+    },
+    {
+      "label": "Turnos solo diurno/nocturno con corte parametrizable",
+      "keywords": [
+        "diurno"
+      ],
+      "timestamps": [
+        "22:23"
+      ]
+    },
+    {
+      "label": "\"máquina descripción\" es la misma matriz con una columna nueva",
+      "keywords": [
+        "maquina descripcion"
+      ],
+      "timestamps": [
+        "09:33"
+      ]
+    }
+  ],
+  "preservedNouns": [
+    "actividades de las rutinas"
+  ],
+  "forbiddenIssueTopics": [
+    "turno",
+    "qr",
+    "qa",
+    "estados de novedad",
+    "usuarios pendientes",
+    "crm",
+    "cámara",
+    "camara",
+    "centraliz"
+  ],
+  "forbiddenQuestionTopics": [
+    "aislamiento",
+    "roles",
+    "permisos",
+    "límite",
+    "limite",
+    "REGLAS_DE_NEGOCIO"
+  ],
+  "forbiddenResponsibles": [
+    "Alexis"
+  ],
+  "forbiddenFixedValues": [
+    "19:00",
+    "7:00 p.m.",
+    "7:00 a.m.",
+    "entre 06:00 y 19:00"
+  ],
+  "alreadyResolved": [
+    "Web y móvil responsive [05:44]",
+    "Dashboard diario y reportes parametrizables [06:38]",
+    "Parámetros por sector con licitaciones [07:06]",
+    "Filtro en cascada de llamados [28:02]",
+    "Aislamientos opcional [29:19, cierre 32:58]"
+  ],
+  "inProgress": [
+    "Tres ítems por validar [05:27]",
+    "Observación de Juan Esteban [06:23]",
+    "Metas e indicadores, Cristian [10:05]",
+    "Certificaciones con Diego Meléndez (externa) [11:15]",
+    "Formularios, Juan Esteban [12:17]",
+    "Turnos diurno/nocturno y 31 de 32 registros sin turno, Cristian [21:26]",
+    "CRM no devuelve el personal requerido, Cubrimientos Cali (externa) [17:45, 21:59]",
+    "QR en la app, Hospital San Vicente Fundación [23:32]",
+    "QA según producción [24:35]",
+    "Usuarios pendientes, pedir a Lady (externa) [27:17]",
+    "Estados de novedad, ya en PR [34:11]"
+  ],
+  "keyDecisions": [
+    "Estados de novedad solo para novedades del servicio [30:58]",
+    "Turnos solo diurno/nocturno con corte parametrizable [22:23]",
+    "Oficina Regional Cali, no Cubrimientos Cali [20:36]",
+    "\"máquina descripción\" es la misma matriz con una columna nueva [09:33]",
+    "Pedir a Lady activos y pendientes [27:17]"
+  ],
+  "backlog": [
+    "Logueo automático NFC/QR sin parametrizar [29:43, 38:47]",
+    "Planes de acción y adjuntos en novedades [33:33]",
+    "Solicitud por QR para externos [39:35, 43:40]"
+  ],
+  "globalOpenQuestions": [
+    "[NO BLOQUEANTE] Corte de turnos (\"a partir de las 7\", sin a. m./p. m.)",
+    "[NO BLOQUEANTE] Nombre actual y nuevo de \"asignación automática\"",
+    "[NO BLOQUEANTE] Canal de la reprogramación",
+    "[NO BLOQUEANTE] Alcance de dimensionamiento"
+  ]
+}

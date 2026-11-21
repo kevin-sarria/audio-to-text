@@ -1,4 +1,4 @@
-import { DevIssueDto, RepoHoursTotals } from "@audio-to-text/shared";
+import { DevIssueDto, RepoHoursTotals, AnalysisGenerationMetaDto } from "@audio-to-text/shared";
 
 export interface MeetingAnalysisProps {
   id: string;
@@ -14,6 +14,7 @@ export interface MeetingAnalysisProps {
   globalOpenQuestions?: string[] | null;
   backlog?: string[] | null;
   repoHoursTotals?: RepoHoursTotals | null;
+  generationMeta?: AnalysisGenerationMetaDto | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -73,6 +74,10 @@ export class MeetingAnalysis {
     return this.props.repoHoursTotals;
   }
 
+  public get generationMeta(): AnalysisGenerationMetaDto | null | undefined {
+    return this.props.generationMeta;
+  }
+
   public get createdAt(): Date {
     return this.props.createdAt;
   }
@@ -93,6 +98,7 @@ export class MeetingAnalysis {
     if (props.globalOpenQuestions !== undefined) this.props.globalOpenQuestions = props.globalOpenQuestions;
     if (props.backlog !== undefined) this.props.backlog = props.backlog;
     if (props.repoHoursTotals !== undefined) this.props.repoHoursTotals = props.repoHoursTotals;
+    if (props.generationMeta !== undefined) this.props.generationMeta = props.generationMeta;
     this.props.updatedAt = new Date();
   }
 }

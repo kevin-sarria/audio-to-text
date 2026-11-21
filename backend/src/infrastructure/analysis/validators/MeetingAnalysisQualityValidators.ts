@@ -1,41 +1,34 @@
 import { GeneratedMeetingData } from "../../../domain/services/IMeetingAnalysisService.js";
 import { ExtractionPointDto } from "../MeetingAnalysisResponseParser.js";
-import { GLOSSARY_TERMS } from "../glossary/ProjectGlossary.js";
 import { MeetingAnalysisV8Validators } from "./MeetingAnalysisV8Validators.js";
 import { MeetingAnalysisV9Validators } from "./MeetingAnalysisV9Validators.js";
-import { ExtractionPointNormalizer } from "../ExtractionPointNormalizer.js";
-import { normalizeText } from "../TranscriptIndex.js";
+import { MeetingAnalysisV10Validators } from "./MeetingAnalysisV10Validators.js";
 import { MeetingAnalysisCoverageValidators } from "./MeetingAnalysisCoverageValidators.js";
+import { ExtractionPointNormalizer } from "../ExtractionPointNormalizer.js";
 import { TranscriptCoverageDetector } from "../TranscriptCoverageDetector.js";
+import { normalizeText } from "../TranscriptIndex.js";
+import { ProjectProfile } from "../profiles/ProjectProfile.js";
+import { DIAMANTE_PROFILE } from "../profiles/diamanteProfile.js";
 
-export const REFERENCE_HOURS_TABLE: Record<string, number> = {
-  "cambio de texto": 2,
-  "etiqueta": 2,
-  "select con búsqueda": 4,
-  "select": 4,
-  "exportación a excel": 8,
-  "exportacion a excel": 8,
-  "botón de exportación": 4,
-  "boton de exportacion": 4,
-  "borrado masivo": 8,
-  "reprogramación": 8,
-  "reprogramacion": 8,
-  // v9: por defecto solo inyectar la matriz y ajustar el prompt (8 h backend, PROPUESTO).
-  "dimensionamiento": 8
-};
+export const REFERENCE_HOURS_TABLE: Record<string, number> = {};
+for (const entry of DIAMANTE_PROFILE.referenceHours) {
+  for (const k of entry.keys) {
+    REFERENCE_HOURS_TABLE[k] = entry.hours;
+  }
+}
 
 export class MeetingAnalysisQualityValidators {
   public static validateWarnings(
     data: GeneratedMeetingData,
     transcript?: string,
-    extractionPoints?: ExtractionPointDto[]
+    extractionPoints?: ExtractionPointDto[],
+    profile: ProjectProfile = DIAMANTE_PROFILE
   ): string[] {
     const warnings: string[] = [];
 
     // 15. Un issue NO BLOQUEADO que contiene la frase de detención sin parte pendiente sin default
-    // Antes se consideraba "bloqueado" todo issue de prioridad alta, lo que ocultaba el aviso.
     const stopPhraseRegex = /\bdetente\b/i;
-    for (const issue of data.issues) {
+    for (const issue of data.issues || []) {
       const isBlocked =
         issue.title.toLowerCase().includes("bloquead") ||
         (issue.openQuestions || []).some((q) => q.includes("[BLOQUEANTE]"));
@@ -47,7 +40,7 @@ export class MeetingAnalysisQualityValidators {
     }
 
     // 16. Más del 40 % de los issues están BLOQUEADOS
-    if (data.issues.length > 0) {
+    if (data.issues && data.issues.length > 0) {
       const blockedCount = data.issues.filter(
         (i) => i.title.toLowerCase().includes("bloquead") || (i.openQuestions && i.openQuestions.some((q) => q.includes("[BLOQUEANTE]")))
       ).length;
@@ -61,14 +54,15 @@ export class MeetingAnalysisQualityValidators {
     // 17. Término entre comillas que no está literal en transcripción ni glosario, y sin [Interpretación]
     if (transcript && transcript.trim().length > 0) {
       const quotedRegex = /"([^"\n]{4,30})"/g;
-      for (const issue of data.issues) {
+      const glossary = profile.glossaryTerms || [];
+      for (const issue of data.issues || []) {
         const text = `${issue.title || ""} ${issue.description || ""}`;
         let qMatch: RegExpExecArray | null;
         while ((qMatch = quotedRegex.exec(text)) !== null) {
           if (!qMatch[1]) continue;
           const term = qMatch[1].trim();
           const inTranscript = transcript.toLowerCase().includes(term.toLowerCase());
-          const inGlossary = GLOSSARY_TERMS.some((g) => g.toLowerCase().includes(term.toLowerCase()));
+          const inGlossary = glossary.some((g) => g.toLowerCase().includes(term.toLowerCase()));
           const hasInterpretation = text.includes("[Interpretación") || text.includes("PROPUESTO");
           if (!inTranscript && !inGlossary && !hasInterpretation) {
             warnings.push(
@@ -80,20 +74,27 @@ export class MeetingAnalysisQualityValidators {
     }
 
     // 18. Estimación que se desvía más de 50 % de la tabla de referencia sin justificación de una línea
-    for (const issue of data.issues) {
-      const titleLower = issue.title.toLowerCase();
-      for (const [key, refHours] of Object.entries(REFERENCE_HOURS_TABLE)) {
-        if (titleLower.includes(key)) {
-          const estimated = Number(issue.estimation?.totalHours) || 0;
-          if (estimated > 0) {
-            const diff = Math.abs(estimated - refHours) / refHours;
-            if (diff > 0.5 && !issue.description?.toLowerCase().includes("justifica") && !issue.agentPrompt?.toLowerCase().includes("justifica")) {
-              warnings.push(
-                `La estimación del issue [${issue.id}] (${estimated}h) se desvía más del 50 % de la referencia (${refHours}h para "${key}") sin justificación explícita.`
-              );
+    if (profile.referenceHours && profile.referenceHours.length > 0) {
+      for (const issue of data.issues || []) {
+        const titleLower = (issue.title || "").toLowerCase();
+        for (const entry of profile.referenceHours) {
+          const matchedKey = entry.keys.find((k) => titleLower.includes(k.toLowerCase()));
+          if (matchedKey) {
+            const estimated = Number(issue.estimation?.totalHours) || 0;
+            if (estimated > 0) {
+              const diff = Math.abs(estimated - entry.hours) / entry.hours;
+              if (
+                diff > 0.5 &&
+                !issue.description?.toLowerCase().includes("justifica") &&
+                !issue.agentPrompt?.toLowerCase().includes("justifica")
+              ) {
+                warnings.push(
+                  `La estimación del issue [${issue.id}] (${estimated}h) se desvía más del 50 % de la referencia (${entry.hours}h para "${matchedKey}") sin justificación explícita.`
+                );
+              }
             }
+            break;
           }
-          break;
         }
       }
     }
@@ -113,26 +114,30 @@ export class MeetingAnalysisQualityValidators {
       }
     }
 
-    // 20. Siglas que no están en la transcripción ni en el glosario (sustituye la regla fija LRP→ERP,
-    //     que ahora es una corrección del glosario y por tanto válida).
-    MeetingAnalysisV8Validators.validateWarnings(data, transcript, warnings);
+    // 20. Siglas que no están en la transcripción ni en el glosario
+    MeetingAnalysisV8Validators.validateWarnings(data, transcript, warnings, profile);
 
     // 21. Avisos de cobertura de transcripción (citas < 30s de tramos sin audio)
     MeetingAnalysisCoverageValidators.validateCoverageWarnings(data, transcript, warnings);
 
     // 22. Avisos v9: entradas resueltas sin marcas citadas, nombres inventados
-    MeetingAnalysisV9Validators.validateWarnings(data, transcript, warnings, extractionPoints);
+    MeetingAnalysisV9Validators.validateWarnings(data, transcript, warnings, extractionPoints, profile);
+
+    // 23. Avisos v10: sustantivo del requerimiento cambiado
+    MeetingAnalysisV10Validators.validateWarnings(data, transcript, warnings, profile, extractionPoints);
 
     return warnings;
   }
 
-  public static sanitizeAndAutocorrect(data: GeneratedMeetingData, transcript?: string): GeneratedMeetingData {
+  public static sanitizeAndAutocorrect(
+    data: GeneratedMeetingData,
+    transcript?: string,
+    profile: ProjectProfile = DIAMANTE_PROFILE
+  ): GeneratedMeetingData {
     let bSum = 0;
     let pSum = 0;
     let aSum = 0;
 
-    // Solo cuentan las BLOQUEANTE válidas (con "si me equivoco"); las demás se degradan más abajo
-    // y por tanto no justifican la frase de detención en ningún issue.
     const blockingQuestions = (data.globalOpenQuestions || []).filter(
       (q) => q.includes("[BLOQUEANTE]") && /si me equivoco/i.test(q)
     );
@@ -249,7 +254,7 @@ export class MeetingAnalysisQualityValidators {
     // Autocorrección de preguntas (reglas 3, 21 y 22)
     const transcriptNorm = normalizeText(transcript || "");
     const inventedTerms = [/\broles?\b/, /\bpermisos?\b/, /\blimites?\b/].filter((re) => transcript && !re.test(transcriptNorm));
-    const closedTopics = transcript ? ExtractionPointNormalizer.closedTopics(transcript) : [];
+    const closedTopics = transcript ? ExtractionPointNormalizer.closedTopics(transcript, profile) : [];
     const existingIds = new Set(finalIssues.map((i) => i.id.toUpperCase()));
 
     const cleanedQuestions = (data.globalOpenQuestions || [])

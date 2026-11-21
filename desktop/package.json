@@ -1,6 +1,6 @@
 {
   "name": "@audio-to-text/desktop",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "main": "dist/main.cjs",
   "description": "Aplicación de escritorio instalable de Audio-to-Text",

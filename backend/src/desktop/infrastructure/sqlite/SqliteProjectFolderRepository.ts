@@ -27,8 +27,8 @@ export class SqliteProjectFolderRepository implements IProjectFolderRepository {
     const stmt = this.db.prepare(`
       INSERT INTO project_folders (
         id, user_id, name, description, technical_context,
-        default_provider, default_model, custom_api_key, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        default_provider, default_model, custom_api_key, profile_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -40,6 +40,7 @@ export class SqliteProjectFolderRepository implements IProjectFolderRepository {
       folder.defaultProvider ?? null,
       folder.defaultModel ?? null,
       folder.customApiKey ?? null,
+      folder.profileId ?? null,
       folder.createdAt.toISOString(),
       folder.updatedAt.toISOString()
     );
@@ -56,6 +57,7 @@ export class SqliteProjectFolderRepository implements IProjectFolderRepository {
         default_provider = ?,
         default_model = ?,
         custom_api_key = ?,
+        profile_id = ?,
         updated_at = ?
       WHERE id = ?
     `);
@@ -67,6 +69,7 @@ export class SqliteProjectFolderRepository implements IProjectFolderRepository {
       folder.defaultProvider ?? null,
       folder.defaultModel ?? null,
       folder.customApiKey ?? null,
+      folder.profileId ?? null,
       folder.updatedAt.toISOString(),
       folder.id
     );
@@ -88,6 +91,7 @@ export class SqliteProjectFolderRepository implements IProjectFolderRepository {
       defaultProvider: raw.default_provider ?? null,
       defaultModel: raw.default_model ?? null,
       customApiKey: raw.custom_api_key ?? null,
+      profileId: raw.profile_id ?? null,
       createdAt: new Date(raw.created_at),
       updatedAt: new Date(raw.updated_at)
     });

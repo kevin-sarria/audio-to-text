@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { GeneratedMeetingData } from "../../domain/services/IMeetingAnalysisService.js";
 import { DevIssueDto } from "@audio-to-text/shared";
+import { ProjectProfile } from "./profiles/ProjectProfile.js";
+import { DIAMANTE_PROFILE } from "./profiles/diamanteProfile.js";
 import { MeetingAnalysisValidators } from "./MeetingAnalysisValidators.js";
 
 export const ExtractionPointSchema = z.object({
@@ -34,8 +36,22 @@ export const ExtractionPointSchema = z.object({
   }, z.enum(["backend", "panel", "app", "varios", "ninguno"]).default("ninguno")),
   quien_lo_lleva: z.preprocess((val) => (typeof val === "string" && val.trim() && val.trim().toLowerCase() !== "null" ? val : null), z.string().nullable()).default(null),
   cierre_posterior: z.preprocess(
-    (val) => (val && typeof val === "object" && typeof (val as any).cita === "string" ? val : null),
+    (val: any) => {
+      if (!val || typeof val !== "object") return null;
+      const text = typeof val.cita === "string" ? val.cita : typeof val.frase === "string" ? val.frase : null;
+      if (!text) return null;
+      return { cita: text, timestamp: typeof val.timestamp === "string" ? val.timestamp : undefined };
+    },
     z.object({ cita: z.string(), timestamp: z.string().optional() }).nullable()
+  ).optional(),
+  cierre: z.preprocess(
+    (val: any) => {
+      if (!val || typeof val !== "object") return null;
+      const text = typeof val.frase === "string" ? val.frase : typeof val.cita === "string" ? val.cita : null;
+      if (!text) return null;
+      return { frase: text, timestamp: typeof val.timestamp === "string" ? val.timestamp : undefined };
+    },
+    z.object({ frase: z.string(), timestamp: z.string().optional() }).nullable()
   ).optional(),
   tipo: z.string().default("mejora"),
   interpretaciones: z.preprocess((val) => (Array.isArray(val) ? val : []), z.array(z.any())).default([]),
@@ -183,6 +199,17 @@ export class MeetingAnalysisResponseParser {
     let parsed: any;
     try {
       parsed = JSON.parse(clean);
+      if (parsed && Array.isArray(parsed.puntos)) {
+        for (const pt of parsed.puntos) {
+          if (pt && typeof pt === "object") {
+            if (pt.cierre && !pt.cierre_posterior) {
+              pt.cierre_posterior = { cita: pt.cierre.frase || pt.cierre.cita, timestamp: pt.cierre.timestamp };
+            } else if (pt.cierre_posterior && !pt.cierre) {
+              pt.cierre = { frase: pt.cierre_posterior.cita || pt.cierre_posterior.frase, timestamp: pt.cierre_posterior.timestamp };
+            }
+          }
+        }
+      }
     } catch (parseError: any) {
       throw new Error(
         `Error al parsear JSON de extracción de Etapa 1: ${parseError.message}`
@@ -231,12 +258,24 @@ export class MeetingAnalysisResponseParser {
   public static parseAndValidate(
     raw: string,
     transcript?: string,
-    extractionPoints?: ExtractionPointDto[]
+    extractionPoints?: ExtractionPointDto[],
+    profile: ProjectProfile = DIAMANTE_PROFILE
   ): GeneratedMeetingData {
     const clean = this.cleanJsonString(raw);
     let parsed: any;
     try {
       parsed = JSON.parse(clean);
+      if (parsed && Array.isArray(parsed.puntos)) {
+        for (const pt of parsed.puntos) {
+          if (pt && typeof pt === "object") {
+            if (pt.cierre && !pt.cierre_posterior) {
+              pt.cierre_posterior = { cita: pt.cierre.frase || pt.cierre.cita, timestamp: pt.cierre.timestamp };
+            } else if (pt.cierre_posterior && !pt.cierre) {
+              pt.cierre = { frase: pt.cierre_posterior.cita || pt.cierre_posterior.frase, timestamp: pt.cierre_posterior.timestamp };
+            }
+          }
+        }
+      }
     } catch (parseError: any) {
       throw new Error(
         `El modelo de IA devolvió una respuesta no válida o incompleta (JSON inválido): ${parseError.message}`
@@ -276,10 +315,10 @@ export class MeetingAnalysisResponseParser {
 
     // Saneamiento y autocorrección determinista
     // Se pasa la transcripción para que también apliquen la cobertura y las reglas 21–22.
-    const sanitizedResult = MeetingAnalysisValidators.sanitizeAndAutocorrect(initialResult, transcript);
+    const sanitizedResult = MeetingAnalysisValidators.sanitizeAndAutocorrect(initialResult, transcript, profile);
 
     // Validaciones deterministas
-    const validation = MeetingAnalysisValidators.validate(sanitizedResult, transcript, extractionPoints);
+    const validation = MeetingAnalysisValidators.validate(sanitizedResult, transcript, extractionPoints, profile);
     if (!validation.isValid) {
       console.warn(
         `[MeetingAnalysisResponseParser] Validaciones deterministas con errores: ${validation.errors.join("; ")}`

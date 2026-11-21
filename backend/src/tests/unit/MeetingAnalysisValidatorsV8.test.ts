@@ -10,10 +10,11 @@ import { ExtractionPointNormalizer } from "../../infrastructure/analysis/Extract
 import { ExtractionPointSchema } from "../../infrastructure/analysis/MeetingAnalysisResponseParser.js";
 import { MeetingAnalysisPrompts } from "../../infrastructure/analysis/MeetingAnalysisPrompts.js";
 import { EvaluationRunner } from "../../infrastructure/analysis/evaluation/EvaluationRunner.js";
+import { DIAMANTE_PROFILE } from "../../infrastructure/analysis/profiles/diamanteProfile.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const transcript = fs.readFileSync(
-  path.join(here, "../../infrastructure/analysis/evaluation/cases/2026-11-18_08-04-57/transcript.txt"),
+  path.join(here, "../../infrastructure/analysis/evaluation/cases/diamante/2026-11-18_08-04-57/transcript.txt"),
   "utf-8"
 );
 
@@ -174,7 +175,7 @@ describe("ExtractionPointNormalizer (v8, antes de la etapa 2)", () => {
 describe("MeetingAnalysisValidators v8 sobre la transcripción de referencia", () => {
   it("una salida limpia no produce errores v8", () => {
     const result = MeetingAnalysisValidators.validate(analysis([goodBackend]), transcript);
-    const v8 = result.errors.filter((e) => e.includes("Regla 21") || e.includes("Regla 22"));
+    const v8 = result.errors.filter((e) => e.includes("Regla A5") || e.includes("Regla 22"));
     expect(v8).toEqual([]);
   });
 
@@ -184,7 +185,7 @@ describe("MeetingAnalysisValidators v8 sobre la transcripción de referencia", (
       { globalOpenQuestions: ["[BLOQUEANTE] El término aislamientos es ambiguo"] }
     );
     const result = MeetingAnalysisValidators.validate(data, transcript);
-    expect(result.errors.filter((e) => e.includes("Regla 21")).length).toBeGreaterThanOrEqual(2);
+    expect(result.errors.filter((e) => e.includes("Regla A5")).length).toBeGreaterThanOrEqual(2);
   });
 
   it("rechaza a Alexis como responsable y un responsable que no aparece en el segmento", () => {
@@ -254,21 +255,20 @@ describe("MeetingAnalysisValidators v8 sobre la transcripción de referencia", (
   });
 });
 
-describe("Prompt desplegado (v8/v9)", () => {
-  const step1 = MeetingAnalysisPrompts.buildStep1Prompt();
-  const step2 = MeetingAnalysisPrompts.buildStep2Prompt();
-  const single = MeetingAnalysisPrompts.buildSingleStepPrompt();
+describe("Prompt desplegado (v10: Parte A + perfil DIAMANTE)", () => {
+  const step1 = MeetingAnalysisPrompts.buildStep1Prompt(undefined, DIAMANTE_PROFILE);
+  const step2 = MeetingAnalysisPrompts.buildStep2Prompt(undefined, DIAMANTE_PROFILE);
+  const single = MeetingAnalysisPrompts.buildSingleStepPrompt(undefined, DIAMANTE_PROFILE);
 
-  it("contiene las reglas 1–23 y el glosario con Alexis no responsable y Lady externa en las tres variantes", () => {
+  it("contiene las reglas A1–A15 y el glosario con Alexis no responsable y Lady externa en las tres variantes", () => {
     for (const p of [step1, step2, single]) {
-      for (let n = 1; n <= 23; n++) expect(p).toContain(`== ${n}. `);
+      for (let n = 1; n <= 15; n++) expect(p).toContain(`== A${n}. `);
       expect(p).toContain("Alexis (usuario de QA, no responsable)");
       expect(p).toContain("Lady (fuente de usuarios; externa)");
       expect(p).toContain("aislamientos");
-      expect(p).toContain("DECISIONES DE ALCANCE (por defecto)");
+      expect(p).toContain("== B4. DECISIÓN PENDIENTE");
     }
-    expect(single).toContain("23 reglas");
-    expect(step1).toContain("cierre_posterior");
+    expect(step1).toContain('"cierre"');
   });
 });
 
@@ -292,11 +292,11 @@ describe("EvaluationRunner con el caso de referencia (v8)", () => {
       });
     return analysis(
       [
-        mk("BACKEND-1", "backend", "[Backend] Dimensionamiento con la columna de rendimiento", "Inyectar la matriz con rendimiento en dimensionamiento [09:21].", 7),
-        mk("BACKEND-2", "backend", "[Backend] Endpoint de reprogramación (PROPUESTO)", "Reprogramar actividades de las rutinas [30:29].", 8),
-        mk("BACKEND-3", "backend", "[Backend] Endpoint de borrado masivo de ubicaciones (PROPUESTO)", "Eliminar múltiples registros [31:24].", 8),
-        mk("BACKEND-4", "backend", "[Backend] Endpoint de exportación a Excel (PROPUESTO)", "Exportar al Excel las solicitudes [31:50].", 8),
-        mk("PANEL-1", "panel", "[Panel] Renombrar asignación automática → PROPUESTO (por confirmar)", "Cambiar el nombre [29:06].", 2),
+        mk("BACKEND-1", "backend", "[Backend] Dimensionamiento con la columna de rendimiento", "Inyectar la matriz con rendimiento en dimensionamiento [09:21].", 8),
+        mk("BACKEND-2", "backend", "[Backend] Endpoint de reprogramación", "Reprogramar actividades de las rutinas [30:29].", 8),
+        mk("BACKEND-3", "backend", "[Backend] Endpoint de borrado masivo de ubicaciones", "Eliminar múltiples registros [31:24].", 8),
+        mk("BACKEND-4", "backend", "[Backend] Endpoint de exportación a Excel", "Exportar al Excel las solicitudes [31:50].", 8),
+        mk("PANEL-1", "panel", "[Panel] Renombrar asignación automática en llamados", "Cambiar el nombre [29:06].", 2),
         mk("PANEL-2", "panel", "[Panel] Selects con búsqueda", "Que se vaya filtrando [30:09].", 4),
         mk("PANEL-3", "panel", "[Panel] Reprogramación de actividades", "Botón para reprogramar [30:29].", 8),
         mk("PANEL-4", "panel", "[Panel] Selección múltiple y borrado masivo", "Selección múltiple [31:24].", 8),
@@ -305,11 +305,19 @@ describe("EvaluationRunner con el caso de referencia (v8)", () => {
       {
         alreadyResolved: ["Aislamientos opcional sin NA [29:19]"],
         inProgress: [
+          "Tres ítems por validar [05:27]",
+          "Observación de Juan Esteban [06:23]",
           "Formularios, Juan Esteban [12:17]",
           "Agrupación diurno/nocturno y turnos, Cristian [16:05, 22:07]",
+          "CRM no devuelve el personal requerido, Cubrimientos Cali (gestión externa) [17:45]",
           "Actualización de QA según producción [24:35]"
         ],
-        keyDecisions: ["Turnos solo diurno y nocturno [22:23]"],
+        keyDecisions: [
+          "Turnos solo diurno y nocturno [22:23]",
+          "Rutinas asociadas a Oficina Regional Cali, no a Cubrimientos Cali [20:36]",
+          "Estados de novedad solo para novedades del servicio [30:58]",
+          "\"máquina descripción\" es la misma matriz con una columna nueva [09:33]"
+        ],
         globalOpenQuestions: ['[NO BLOQUEANTE] Corte diurno/nocturno ("a partir de las 7": ¿a.m. o p.m.?)'],
         backlog: ["Logueo automático NFC/QR [29:43]", "Planes de acción y adjuntos en novedades [34:00]", "QR externo para llamados e insumos [42:56]"]
       }
@@ -317,7 +325,7 @@ describe("EvaluationRunner con el caso de referencia (v8)", () => {
   };
 
   it("una salida igual al resultado esperado pasa todas las verificaciones", () => {
-    const evalCase = EvaluationRunner.loadCase(casesDir, "2026-11-18_08-04-57");
+    const evalCase = EvaluationRunner.loadCase(casesDir, "diamante/2026-11-18_08-04-57");
     const report = EvaluationRunner.evaluate(evalCase, golden());
     expect(report.details).toEqual([]);
     expect(report.validation.errors).toEqual([]);
@@ -325,7 +333,7 @@ describe("EvaluationRunner con el caso de referencia (v8)", () => {
   });
 
   it("una salida tipo Gemini v8 (aislamientos bloqueante, Alexis responsable, pregunta de roles) no pasa", () => {
-    const evalCase = EvaluationRunner.loadCase(casesDir, "2026-11-18_08-04-57");
+    const evalCase = EvaluationRunner.loadCase(casesDir, "diamante/2026-11-18_08-04-57");
     const bad = golden();
     bad.globalOpenQuestions = ["[BLOQUEANTE] ¿Qué roles pueden borrar y aislamientos es obligatorio? Bloquea PANEL-4. Si me equivoco: se rehace."];
     bad.inProgress = ["Dashboard, responsable: Alexis [06:38]"];

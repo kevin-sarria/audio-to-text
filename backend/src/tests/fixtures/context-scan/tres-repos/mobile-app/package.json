@@ -1,0 +1,12 @@
+{
+  "name": "mobile-app",
+  "version": "1.0.0",
+  "dependencies": {
+    "expo": "~51.0.0",
+    "react-native": "0.74.1"
+  },
+  "scripts": {
+    "start": "expo start",
+    "test": "jest"
+  }
+}

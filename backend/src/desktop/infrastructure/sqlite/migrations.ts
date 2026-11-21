@@ -130,6 +130,12 @@ const MIGRATIONS: string[] = [
   ALTER TABLE meeting_analyses ADD COLUMN global_open_questions TEXT;
   ALTER TABLE meeting_analyses ADD COLUMN backlog TEXT;
   ALTER TABLE meeting_analyses ADD COLUMN repo_hours_totals TEXT;
+  `,
+  // Migración 5: profileId en project_folders y generation_meta en meeting_analyses
+  `
+  ALTER TABLE meeting_analyses ADD COLUMN generation_meta TEXT;
+  ALTER TABLE project_folders ADD COLUMN profile_id TEXT;
+  UPDATE project_folders SET profile_id = 'diamante' WHERE lower(technical_context) LIKE '%diamante%' OR lower(name) LIKE '%diamante%';
   `
 ];
 

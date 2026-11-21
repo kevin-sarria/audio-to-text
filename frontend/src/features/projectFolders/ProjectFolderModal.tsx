@@ -22,9 +22,10 @@ import {
   AutoAwesome as AutoAwesomeIcon,
   FolderOpen as BrowseFolderIcon
 } from "@mui/icons-material";
-import { ProjectFolderDto, CustomAiProviderDto } from "@audio-to-text/shared";
+import { ProjectFolderDto, CustomAiProviderDto, ProjectProfileSummaryDto, ProjectContextScanReportDto } from "@audio-to-text/shared";
 import { api } from "../../lib/api.js";
 import { LlmModelSelector } from "../customAi/LlmModelSelector.js";
+import { ContextScanReport } from "./ContextScanReport.js";
 
 interface ProjectFolderModalProps {
   open: boolean;
@@ -55,8 +56,11 @@ export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
   const [defaultProvider, setDefaultProvider] = useState("google-account");
   const [defaultModel, setDefaultModel] = useState("");
   const [customApiKey, setCustomApiKey] = useState("");
+  const [profileId, setProfileId] = useState("generic");
 
   const [customProviders, setCustomProviders] = useState<CustomAiProviderDto[]>([]);
+  const [projectProfiles, setProjectProfiles] = useState<ProjectProfileSummaryDto[]>([]);
+  const [profilesError, setProfilesError] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -64,6 +68,7 @@ export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
   const [repoPath, setRepoPath] = useState("");
   const [isScanning, setIsScanning] = useState(false);
   const [scanStatusMsg, setScanStatusMsg] = useState<{ type: "success" | "warning" | "error"; text: string } | null>(null);
+  const [scanReport, setScanReport] = useState<ProjectContextScanReportDto | null>(null);
 
   const handleBrowseFolder = async () => {
     if (window.desktop?.selectProjectFolder) {
@@ -93,10 +98,11 @@ export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
 
     setIsScanning(true);
     setScanStatusMsg(null);
+    setScanReport(null);
     setErrorMsg(null);
 
     try {
-      const res = await api.post<{ success: boolean; data?: { technicalContext: string }; error?: string }>(
+      const res = await api.post<{ success: boolean; data?: { technicalContext: string; report?: ProjectContextScanReportDto }; error?: string }>(
         "/project-folders/scan-context",
         {
           folderPath: repoPath.trim(),
@@ -108,10 +114,10 @@ export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
 
       if (res && res.success && res.data?.technicalContext) {
         setTechnicalContext(res.data.technicalContext);
-        setScanStatusMsg({
-          type: "success",
-          text: "¡Contexto técnico generado e inyectado con éxito a partir de los archivos del repositorio!"
-        });
+        if (res.data.report) {
+          setScanReport(res.data.report);
+        }
+        setScanStatusMsg(null);
       } else {
         throw new Error(res.error || "No se pudo extraer el contexto del repositorio.");
       }
@@ -135,6 +141,22 @@ export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
         }
       })
       .catch(() => {});
+
+    // Cargar perfiles de reglas de proyecto
+    api
+      .get<{ success: boolean; data: ProjectProfileSummaryDto[] }>("/project-profiles")
+      .then((res) => {
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          setProjectProfiles(res.data);
+          setProfilesError(false);
+        } else {
+          setProjectProfiles([{ id: "generic", name: "Genérico (sin reglas de negocio)", description: "" }]);
+        }
+      })
+      .catch(() => {
+        setProfilesError(true);
+        setProjectProfiles([{ id: "generic", name: "Genérico (sin reglas de negocio)", description: "" }]);
+      });
   }, [open]);
 
   useEffect(() => {
@@ -144,6 +166,7 @@ export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
       setTechnicalContext(folder.technicalContext);
       setDefaultProvider(folder.defaultProvider || "google-account");
       setDefaultModel(folder.defaultModel || "");
+      setProfileId(folder.profileId || "generic");
       setCustomApiKey("");
     } else {
       setName("");
@@ -151,9 +174,11 @@ export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
       setTechnicalContext(TEMPLATE_CONTEXT);
       setDefaultProvider("google-account");
       setDefaultModel("");
+      setProfileId("generic");
       setCustomApiKey("");
     }
     setErrorMsg(null);
+    setScanReport(null);
   }, [folder, open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -177,7 +202,8 @@ export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
         technicalContext: technicalContext.trim(),
         defaultProvider: defaultProvider.trim() || undefined,
         defaultModel: defaultModel.trim() || undefined,
-        customApiKey: customApiKey.trim() || undefined
+        customApiKey: customApiKey.trim() || undefined,
+        profileId: profileId.trim() || undefined
       };
 
       let res: any;
@@ -258,11 +284,26 @@ export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
             </Box>
 
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-              Selecciona la carpeta local de tu proyecto. La IA leerá la estructura de directorios, manifiestos (<code>package.json</code>, <code>csproj</code>...), markdowns y archivos de arquitectura para redactar automáticamente el contexto técnico.
+              Selecciona la carpeta local de tu proyecto. El escáner ejecuta un inventario determinístico del código, lee la documentación por orden de prioridad resumiendo archivos extensos, y valida cada dato contra las fuentes antes de generar el contexto técnico.
             </Typography>
 
-            <Alert severity="warning" sx={{ mb: 2, fontSize: "0.85rem", py: 0.5 }}>
-              <strong>Aviso de facturación y consumo de tokens:</strong> Este análisis automático inspecciona la estructura y contenidos clave de tu código. Si utilizas un proveedor con API Key de pago (OpenAI, DeepSeek, etc.), esta operación <strong>consumirá tokens adicionales en tu facturación</strong>. Con <em>Cuenta de Google (Gemini Pro - Sin API Key)</em> no genera costos adicionales.
+            <Alert severity="warning" sx={{ mb: 1.5, fontSize: "0.85rem", py: 0.5 }}>
+              <strong>Aviso de facturación y consumo de tokens:</strong> Este análisis automático inspecciona la estructura y contenidos clave de tu código. Los documentos largos se resumen por partes y eso hace varias llamadas. Si utilizas un proveedor con API Key de pago (OpenAI, DeepSeek, etc.), esta operación <strong>consumirá tokens adicionales en tu facturación</strong>. Con <em>Cuenta de Google (Gemini Pro - Sin API Key)</em> no genera costos adicionales.
+            </Alert>
+
+            <Alert severity="info" sx={{ mb: 2, fontSize: "0.85rem", py: 0.5 }}>
+              El contenido de los archivos (sin .env, llaves ni secretos detectados) se envía al proveedor elegido:{" "}
+              <strong>
+                {defaultProvider === "google-account"
+                  ? "Cuenta de Google (Antigravity)"
+                  : defaultProvider === "gemini"
+                  ? "Google Gemini API"
+                  : defaultProvider === "groq"
+                  ? "Groq"
+                  : defaultProvider === "openai"
+                  ? "OpenAI"
+                  : customProviders.find((p) => p.id === defaultProvider)?.name || defaultProvider}
+              </strong>.
             </Alert>
 
             <Box sx={{ display: "flex", gap: 1, mb: 1.5, alignItems: "center" }}>
@@ -308,6 +349,8 @@ export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
                 {scanStatusMsg.text}
               </Alert>
             )}
+
+            {scanReport && <ContextScanReport report={scanReport} />}
           </Paper>
 
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
@@ -326,17 +369,44 @@ export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
           <TextField
             fullWidth
             multiline
-            rows={7}
+            rows={14}
             value={technicalContext}
             onChange={(e) => setTechnicalContext(e.target.value)}
             placeholder="Describe aquí las tecnologías, arquitectura y convenciones de este proyecto..."
-            helperText="La IA utilizará este contexto para deducir nombres de archivos, sugerir rutas exactas y redactar prompts listos para agentes como Cursor, Antigravity o Claude Code."
+            helperText={`${technicalContext.length} / 40000 caracteres`}
             sx={{ mb: 3 }}
           />
 
           <Typography variant="subtitle2" fontWeight={600} gutterBottom>
             Configuración de IA para esta Carpeta (Opcional)
           </Typography>
+
+          <Box sx={{ mb: 2 }}>
+            <FormControl fullWidth size="small">
+              <InputLabel id="folder-profile-select">Perfil de reglas del proyecto</InputLabel>
+              <Select
+                labelId="folder-profile-select"
+                label="Perfil de reglas del proyecto"
+                value={profileId}
+                onChange={(e) => setProfileId(e.target.value)}
+              >
+                {projectProfiles.length > 0 ? (
+                  projectProfiles.map((p) => (
+                    <MenuItem key={p.id} value={p.id}>
+                      {p.name}
+                    </MenuItem>
+                  ))
+                ) : (
+                  <MenuItem value="generic">Genérico (sin reglas de negocio)</MenuItem>
+                )}
+              </Select>
+            </FormControl>
+            {profilesError && (
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                No se pudo cargar la lista de perfiles
+              </Typography>
+            )}
+          </Box>
 
           <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", mb: 2 }}>
             <FormControl sx={{ minWidth: 260, flex: 1 }}>

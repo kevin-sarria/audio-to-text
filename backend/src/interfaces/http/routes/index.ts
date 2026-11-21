@@ -11,6 +11,7 @@ import { createSessionRoutes } from "./sessions.routes.js";
 import { createExportRoutes } from "./export.routes.js";
 import { createEventsRoutes } from "./events.routes.js";
 import { createProjectFolderRoutes } from "./projectFolder.routes.js";
+import { ProfileRegistry } from "../../../infrastructure/analysis/profiles/ProfileRegistry.js";
 
 export interface ApiRoutesDependencies {
   authController?: AuthController;
@@ -38,6 +39,11 @@ export function createApiRouter(deps: ApiRoutesDependencies): Router {
   if (deps.projectFolderController) {
     router.use("/project-folders", createProjectFolderRoutes(deps.projectFolderController, deps.tokenService));
   }
+
+  // Perfiles de reglas de negocio disponibles (Parte B del prompt). Lista estática, sin datos del usuario.
+  router.get("/project-profiles", (_req, res) => {
+    res.json({ success: true, data: ProfileRegistry.listProfiles() });
+  });
 
   router.get("/health", (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });

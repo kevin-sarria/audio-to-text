@@ -22,7 +22,7 @@ export class SqliteMeetingAnalysisRepository implements IMeetingAnalysisReposito
         UPDATE meeting_analyses
         SET title = ?, project_context = ?, summary = ?, key_decisions = ?, topics_discussed = ?, issues = ?,
             already_resolved = ?, in_progress = ?, global_open_questions = ?, backlog = ?, repo_hours_totals = ?,
-            updated_at = ?
+            generation_meta = ?, updated_at = ?
         WHERE session_id = ?
       `);
 
@@ -38,6 +38,7 @@ export class SqliteMeetingAnalysisRepository implements IMeetingAnalysisReposito
         JSON.stringify(analysis.globalOpenQuestions),
         JSON.stringify(analysis.backlog),
         analysis.repoHoursTotals ? JSON.stringify(analysis.repoHoursTotals) : null,
+        analysis.generationMeta ? JSON.stringify(analysis.generationMeta) : null,
         analysis.updatedAt.toISOString(),
         analysis.sessionId
       );
@@ -46,9 +47,9 @@ export class SqliteMeetingAnalysisRepository implements IMeetingAnalysisReposito
         INSERT INTO meeting_analyses (
           id, session_id, title, project_context, summary, key_decisions, topics_discussed, issues,
           already_resolved, in_progress, global_open_questions, backlog, repo_hours_totals,
-          created_at, updated_at
+          generation_meta, created_at, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       stmt.run(
@@ -65,6 +66,7 @@ export class SqliteMeetingAnalysisRepository implements IMeetingAnalysisReposito
         JSON.stringify(analysis.globalOpenQuestions),
         JSON.stringify(analysis.backlog),
         analysis.repoHoursTotals ? JSON.stringify(analysis.repoHoursTotals) : null,
+        analysis.generationMeta ? JSON.stringify(analysis.generationMeta) : null,
         analysis.createdAt.toISOString(),
         analysis.updatedAt.toISOString()
       );
@@ -87,6 +89,7 @@ export class SqliteMeetingAnalysisRepository implements IMeetingAnalysisReposito
     let globalOpenQuestions: string[] = [];
     let backlog: string[] = [];
     let repoHoursTotals = null;
+    let generationMeta = null;
 
     try {
       keyDecisions = typeof raw.key_decisions === "string" ? JSON.parse(raw.key_decisions) : raw.key_decisions || [];
@@ -130,6 +133,12 @@ export class SqliteMeetingAnalysisRepository implements IMeetingAnalysisReposito
       }
     } catch {}
 
+    try {
+      if (raw.generation_meta) {
+        generationMeta = typeof raw.generation_meta === "string" ? JSON.parse(raw.generation_meta) : raw.generation_meta;
+      }
+    } catch {}
+
     return new MeetingAnalysis({
       id: raw.id,
       sessionId: raw.session_id,
@@ -144,6 +153,7 @@ export class SqliteMeetingAnalysisRepository implements IMeetingAnalysisReposito
       globalOpenQuestions,
       backlog,
       repoHoursTotals,
+      generationMeta,
       createdAt: new Date(raw.created_at),
       updatedAt: new Date(raw.updated_at)
     });

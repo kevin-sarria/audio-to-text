@@ -29,7 +29,9 @@ export const SettingsSchema = z
     issuesDefaultProvider: z.string().default("google-account"),
     issuesDefaultModel: z.string().default("gemini-3.8-flash-low"),
     autoGenerateIssues: z.boolean().default(true),
-    customProviders: z.array(CustomAiProviderItemSchema).default([])
+    customProviders: z.array(CustomAiProviderItemSchema).default([]),
+    contextScanModelLimits: z.record(z.string(), z.number().int().min(4000).max(2000000)).default({}),
+    contextScanMaxSummaryCalls: z.number().int().min(0).max(60).default(12)
   })
   .strict();
 

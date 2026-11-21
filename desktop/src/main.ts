@@ -69,7 +69,9 @@ async function bootstrap() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      webSecurity: true
+      webSecurity: true,
+      // El preload (sandbox) no puede leer package.json: la versión real llega como argumento
+      additionalArguments: [`--app-version=${app.getVersion()}`]
     }
   });
 

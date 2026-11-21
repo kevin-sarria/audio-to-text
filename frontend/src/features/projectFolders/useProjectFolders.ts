@@ -33,6 +33,7 @@ export function useProjectFolders() {
     defaultProvider?: string;
     defaultModel?: string;
     customApiKey?: string;
+    profileId?: string;
   }) => {
     const res = await api.post<{ success: boolean; data: ProjectFolderDto }>("/project-folders", data);
     if (res.success) {
@@ -51,6 +52,7 @@ export function useProjectFolders() {
       defaultProvider?: string;
       defaultModel?: string;
       customApiKey?: string;
+      profileId?: string;
     }
   ) => {
     const res = await api.put<{ success: boolean; data: ProjectFolderDto }>(`/project-folders/${id}`, data);

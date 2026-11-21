@@ -11,13 +11,28 @@ interface AnalysisTabsNavProps {
   activeTab: number;
   onChangeTab: (newTab: number) => void;
   issuesCount: number;
+  statusCount?: number;
   questionsCount?: number;
 }
+
+const tabSx = {
+  textTransform: "none",
+  fontWeight: 600,
+  fontSize: "0.88rem",
+  borderRadius: "8px",
+  minHeight: 40,
+  "&.Mui-selected": {
+    backgroundColor: "background.paper",
+    color: "primary.main",
+    boxShadow: "0 2px 6px rgba(0,0,0,0.06)"
+  }
+};
 
 export const AnalysisTabsNav: React.FC<AnalysisTabsNavProps> = ({
   activeTab,
   onChangeTab,
   issuesCount,
+  statusCount = 0,
   questionsCount = 0
 }) => {
   return (
@@ -45,72 +60,28 @@ export const AnalysisTabsNav: React.FC<AnalysisTabsNavProps> = ({
           icon={<CodeIcon fontSize="small" />}
           iconPosition="start"
           label={`Issues (${issuesCount})`}
-          sx={{
-            textTransform: "none",
-            fontWeight: 600,
-            fontSize: "0.88rem",
-            borderRadius: "8px",
-            minHeight: 40,
-            "&.Mui-selected": {
-              backgroundColor: "background.paper",
-              color: "primary.main",
-              boxShadow: "0 2px 6px rgba(0,0,0,0.06)"
-            }
-          }}
+          sx={tabSx}
         />
         <Tab
           disableRipple
           icon={<SummaryIcon fontSize="small" />}
           iconPosition="start"
-          label="Resumen Ejecutivo"
-          sx={{
-            textTransform: "none",
-            fontWeight: 600,
-            fontSize: "0.88rem",
-            borderRadius: "8px",
-            minHeight: 40,
-            "&.Mui-selected": {
-              backgroundColor: "background.paper",
-              color: "primary.main",
-              boxShadow: "0 2px 6px rgba(0,0,0,0.06)"
-            }
-          }}
+          label="Resumen"
+          sx={tabSx}
         />
         <Tab
           disableRipple
           icon={<StatusIcon fontSize="small" />}
           iconPosition="start"
-          label="Estado de Reunión"
-          sx={{
-            textTransform: "none",
-            fontWeight: 600,
-            fontSize: "0.88rem",
-            borderRadius: "8px",
-            minHeight: 40,
-            "&.Mui-selected": {
-              backgroundColor: "background.paper",
-              color: "primary.main",
-              boxShadow: "0 2px 6px rgba(0,0,0,0.06)"
-            }
-          }}
+          label={`Estado (${statusCount})`}
+          sx={tabSx}
         />
         <Tab
           disableRipple
           icon={<QuestionIcon fontSize="small" />}
           iconPosition="start"
           label={questionsCount ? `Preguntas (${questionsCount})` : "Preguntas"}
-          sx={{
-            textTransform: "none",
-            fontWeight: 600,
-            fontSize: "0.88rem",
-            borderRadius: "8px",
-            minHeight: 40,
-            "&.Mui-selected": {
-              backgroundColor: "background.paper",
-              color: "primary.main",
-              boxShadow: "0 2px 6px rgba(0,0,0,0.06)"
-            }
-          }}
+          sx={tabSx}
         />
       </Tabs>
     </Box>

@@ -5,7 +5,7 @@ import {
   GenerateAnalysisOptions,
   GeneratedMeetingData
 } from "../../domain/services/IMeetingAnalysisService.js";
-import { DevIssueDto, MeetingAnalysisProvider } from "@audio-to-text/shared";
+import { DevIssueDto, MeetingAnalysisProvider, AnalysisGenerationMetaDto, ProjectContextScanResultDto } from "@audio-to-text/shared";
 import { ISecretVault } from "../../desktop/infrastructure/settings/ISecretVault.js";
 import { SettingsStore } from "../../desktop/infrastructure/settings/SettingsStore.js";
 import { MeetingAnalysisPrompts } from "./MeetingAnalysisPrompts.js";
@@ -17,10 +17,14 @@ import {
 import { MeetingAnalysisValidators } from "./MeetingAnalysisValidators.js";
 import { TranscriptSanitizer } from "./TranscriptSanitizer.js";
 import { TranscriptCoverageDetector } from "./TranscriptCoverageDetector.js";
-import { RepoContextScanner } from "./RepoContextScanner.js";
+import { runContextScan } from "./contextScan/ContextScanOrchestrator.js";
+import { resolveScanBudget } from "./contextScan/ScanBudget.js";
 import { ExtractionPointNormalizer } from "./ExtractionPointNormalizer.js";
 import { LlmProviderClients } from "./LlmProviderClients.js";
 import { detectMatrixItems, MatrixItem } from "./validators/MeetingAnalysisV9Validators.js";
+import { ProjectProfile } from "./profiles/ProjectProfile.js";
+import { ProfileRegistry } from "./profiles/ProfileRegistry.js";
+import { DIAMANTE_PROFILE } from "./profiles/diamanteProfile.js";
 
 export interface LlmMeetingAnalysisServiceDeps {
   secretVault?: ISecretVault;
@@ -35,12 +39,46 @@ export class LlmMeetingAnalysisService implements IMeetingAnalysisService {
     projectContext?: string,
     options?: GenerateAnalysisOptions
   ): Promise<GeneratedMeetingData> {
+    const startTime = Date.now();
     const sanitizedTranscript = TranscriptSanitizer.sanitize(transcript);
+    const profile = ProfileRegistry.getProfile(options?.profileId);
 
     // Validador de cobertura v7 (el código decide, no el modelo): si la cobertura es < 90%, no se generan issues
     const coverage = TranscriptCoverageDetector.analyze(sanitizedTranscript);
     if (coverage.coveragePct < 90 && coverage.gaps.length > 0) {
       const gapsStr = coverage.gaps.map((g) => g.label).join(", ");
+      const durationMs = Date.now() - startTime;
+
+      let provId = options?.provider || "google-account";
+      let provLabel = "Cuenta de Google (Antigravity)";
+      let effModel = options?.model || "";
+
+      try {
+        const resolved = await this.resolveProviderAndKey(options);
+        provId = resolved.providerId;
+        provLabel = resolved.providerLabel;
+        effModel = resolved.model;
+      } catch {
+        if (options?.provider === "gemini") provLabel = "Google Gemini API";
+        else if (options?.provider === "groq") provLabel = "Groq";
+        else if (options?.provider === "openai") provLabel = "OpenAI";
+      }
+
+      const generationMeta: AnalysisGenerationMetaDto = {
+        provider: provId,
+        providerLabel: provLabel,
+        model: effModel,
+        profileId: profile.id,
+        profileName: profile.name,
+        generatedAt: new Date().toISOString(),
+        durationMs,
+        attempts: 0,
+        usedFallback: false,
+        partialAnalysis: true,
+        validationErrors: [],
+        validationWarnings: []
+      };
+
       return {
         summary: `Análisis parcial: transcripción incompleta, reintentar. Faltan [${gapsStr}] (~${coverage.missingPct}% de la reunión sin audio). Cobertura del ${coverage.coveragePct}% es inferior al 90% requerido.`,
         alreadyResolved: [],
@@ -52,28 +90,29 @@ export class LlmMeetingAnalysisService implements IMeetingAnalysisService {
         ],
         issues: [],
         backlog: [],
-        repoHoursTotals: { backend: 0, panel: 0, app: 0, total: 0 }
+        repoHoursTotals: { backend: 0, panel: 0, app: 0, total: 0 },
+        generationMeta
       };
     }
 
-    const { provider, apiKey, model, baseUrl } = await this.resolveProviderAndKey(options);
+    const { provider, providerId, providerLabel, apiKey, model, baseUrl } = await this.resolveProviderAndKey(options);
 
-    const step1SystemPrompt = this.buildStep1Prompt(projectContext);
+    const step1SystemPrompt = this.buildStep1Prompt(projectContext, profile);
     const step1UserPrompt = `A continuación se presenta la transcripción completa de la reunión de desarrollo:\n\n${sanitizedTranscript}\n\nPor favor, extrae el resumen ejecutivo, identifica las decisiones clave, formula las preguntas abiertas globales (máximo 8, clasificadas en BLOQUEANTE o NO BLOQUEANTE, sin incluir ruido evidente) y clasifica rigurosamente cada punto tratado en la estructura de puntos JSON con su clase ('cerrado' | 'en_curso' | 'nuevo' | 'backlog') y su acción ('codigo' | 'gestion_externa' | 'decision' | 'seguimiento') con su marca [mm:ss], siguiendo estrictamente las REGLAS DE GENERACIÓN DE ISSUES.`;
+
+    let attemptsCount = 0;
 
     try {
       // ETAPA 1: Extracción estructurada y clasificación rigurosa
       let rawStep1 = await this.executeLlmCall(step1SystemPrompt, step1UserPrompt, provider, apiKey, model, baseUrl);
       let step1Data = MeetingAnalysisResponseParser.parseStep1Extraction(rawStep1);
 
-      // Reglas 6, 7, 21 y 22 aplicadas por código antes de redactar: cierres posteriores,
-      // terceros → gestion_externa, responsables no nombrados, app sin evidencia, BLOQUEANTE inválidas.
-      let normalization = ExtractionPointNormalizer.normalize(step1Data.puntos || [], sanitizedTranscript);
+      // Reglas aplicadas por código antes de redactar
+      let normalization = ExtractionPointNormalizer.normalize(step1Data.puntos || [], sanitizedTranscript, profile);
       step1Data.puntos = normalization.points;
 
-      // Reintento de etapa 1 por cobertura (v9):
-      // Calcular los ítems de la matriz detectados SOLO por la transcripción que no tienen ningún punto de extracción en su tramo.
-      const matrixItemsOnlyTranscript = detectMatrixItems(sanitizedTranscript);
+      // Reintento de etapa 1 por cobertura (v9)
+      const matrixItemsOnlyTranscript = detectMatrixItems(sanitizedTranscript, undefined, profile);
       const isItemCovered = (item: MatrixItem, points: ExtractionPointDto[]) =>
         points.some((p) => {
           const sec = TranscriptCoverageDetector.parseSeconds(p.timestamp || "");
@@ -101,7 +140,8 @@ export class LlmMeetingAnalysisService implements IMeetingAnalysisService {
           const retryStep1Data = MeetingAnalysisResponseParser.parseStep1Extraction(rawStep1Retry);
           const retryNormalization = ExtractionPointNormalizer.normalize(
             retryStep1Data.puntos || [],
-            sanitizedTranscript
+            sanitizedTranscript,
+            profile
           );
           retryStep1Data.puntos = retryNormalization.points;
 
@@ -143,7 +183,7 @@ export class LlmMeetingAnalysisService implements IMeetingAnalysisService {
       );
 
       // ETAPA 2: Redacción estructurada de issues ÚNICAMENTE a partir de los puntos nuevo/codigo
-      const step2SystemPrompt = this.buildStep2Prompt(projectContext);
+      const step2SystemPrompt = this.buildStep2Prompt(projectContext, profile);
       let step2UserPrompt = `A continuación se presentan ÚNICAMENTE los puntos con clase = nuevo y accion = codigo extraídos de la reunión:\n\n${JSON.stringify(
         {
           puntosNuevoCodigo: validCodePoints,
@@ -162,15 +202,17 @@ export class LlmMeetingAnalysisService implements IMeetingAnalysisService {
       // Ejecución de Etapa 2 con hasta 2 auto-reintentos si hay errores de validación
       const maxRetries = 2;
       let finalMergedData: GeneratedMeetingData | null = null;
+      let lastValidationErrors: string[] = [];
+      let lastValidationWarnings: string[] = [];
 
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        attemptsCount = attempt + 1;
         const rawStep2 = await this.executeLlmCall(step2SystemPrompt, step2UserPrompt, provider, apiKey, model, baseUrl);
         const step2Clean = this.cleanJsonString(rawStep2);
         let parsedStep2: any;
         try {
           parsedStep2 = JSON.parse(step2Clean);
         } catch (parseErr: any) {
-          // Antes un JSON inválido se convertía en "0 issues" y pasaba como resultado válido.
           if (attempt < maxRetries && validCodePoints.length > 0) {
             console.info(`[LlmMeetingAnalysisService] JSON inválido en Etapa 2 (intento ${attempt + 1}); reintentando.`);
             step2UserPrompt += `\n\n[ERROR CRÍTICO EN TU RESPUESTA PREVIA]: no era JSON válido (${parseErr.message}). Devuelve exclusivamente el objeto JSON con "issues" y "repoHoursTotals".`;
@@ -198,10 +240,12 @@ export class LlmMeetingAnalysisService implements IMeetingAnalysisService {
           repoHoursTotals: step2Hours || { backend: 0, panel: 0, app: 0, total: 0 }
         };
 
-        const sanitized = MeetingAnalysisValidators.sanitizeAndAutocorrect(candidateMerged, sanitizedTranscript);
-        const validation = MeetingAnalysisValidators.validate(sanitized, sanitizedTranscript, step1Data.puntos);
+        const sanitized = MeetingAnalysisValidators.sanitizeAndAutocorrect(candidateMerged, sanitizedTranscript, profile);
+        const validation = MeetingAnalysisValidators.validate(sanitized, sanitizedTranscript, step1Data.puntos, profile);
 
         finalMergedData = sanitized;
+        lastValidationErrors = validation.errors;
+        lastValidationWarnings = validation.warnings;
 
         if (validation.isValid || attempt === maxRetries) {
           if (!validation.isValid) {
@@ -214,19 +258,55 @@ export class LlmMeetingAnalysisService implements IMeetingAnalysisService {
         step2UserPrompt += `\n\n[ERRORES CRÍTICOS DETECTADOS EN TU RESPUESTA PREVIA - CORREGIR DE FORMA OBLIGATORIA]:\n${validation.errors.map((e) => `- ${e}`).join("\n")}`;
       }
 
+      const durationMs = Date.now() - startTime;
+      finalMergedData!.generationMeta = {
+        provider: providerId,
+        providerLabel,
+        model,
+        profileId: profile.id,
+        profileName: profile.name,
+        generatedAt: new Date().toISOString(),
+        durationMs,
+        attempts: attemptsCount,
+        usedFallback: false,
+        partialAnalysis: coverage.isPartial,
+        validationErrors: lastValidationErrors,
+        validationWarnings: lastValidationWarnings
+      };
+
       return finalMergedData!;
     } catch (stepErr: any) {
       console.warn("[LlmMeetingAnalysisService] Fallback a análisis de paso único debido a:", stepErr.message);
-      const fallbackPrompt = this.buildSingleStepPrompt(projectContext);
+      const fallbackPrompt = this.buildSingleStepPrompt(projectContext, profile);
       const rawFallback = await this.executeLlmCall(fallbackPrompt, step1UserPrompt, provider, apiKey, model, baseUrl);
-      return this.parseAndValidateResponse(rawFallback, sanitizedTranscript);
+      const fallbackData = this.parseAndValidateResponse(rawFallback, sanitizedTranscript, profile);
+
+      const durationMs = Date.now() - startTime;
+      const fallbackVal = MeetingAnalysisValidators.validate(fallbackData, sanitizedTranscript, undefined, profile);
+
+      fallbackData.generationMeta = {
+        provider: providerId,
+        providerLabel,
+        model,
+        profileId: profile.id,
+        profileName: profile.name,
+        generatedAt: new Date().toISOString(),
+        durationMs,
+        attempts: attemptsCount || 1,
+        usedFallback: true,
+        partialAnalysis: coverage.isPartial,
+        validationErrors: fallbackVal.errors,
+        validationWarnings: fallbackVal.warnings
+      };
+
+      return fallbackData;
     }
   }
 
   public async generateContextFromRepo(
     repoPath: string,
     options?: GenerateAnalysisOptions
-  ): Promise<string> {
+  ): Promise<ProjectContextScanResultDto> {
     if (!fs.existsSync(repoPath)) {
       throw new Error(`La ruta de la carpeta no existe: ${repoPath}`);
     }
@@ -235,32 +315,28 @@ export class LlmMeetingAnalysisService implements IMeetingAnalysisService {
       throw new Error(`La ruta especificada no es una carpeta válida: ${repoPath}`);
     }
 
-    const scanSummary = this.scanRepositoryStructure(repoPath);
+    const { provider, apiKey, model, baseUrl, providerLabel } = await this.resolveProviderAndKey(options);
 
-    const systemPrompt = `Eres un arquitecto de software de élite y experto en IA. Tu tarea es analizar los archivos, documentación y estructura de un repositorio de código para redactar un "Contexto Técnico del Proyecto" completo, conciso y profesional.
-Este contexto servirá como arnés de contexto técnico para que agentes de IA de desarrollo (Cursor, Claude Code, Antigravity, GitHub Copilot) entiendan perfectamente las tecnologías, arquitectura y reglas del proyecto al convertir reuniones de equipo en issues y tareas de desarrollo.`;
+    const userSettings = this.deps?.settingsStore?.getSettings();
+    const budget = resolveScanBudget(
+      model,
+      userSettings?.contextScanModelLimits,
+      userSettings?.contextScanMaxSummaryCalls
+    );
 
-    const userPrompt = `A continuación se presenta la estructura de directorios y los archivos clave (README, manifiestos de paquetes, configuraciones y documentación) del repositorio:\n\nRuta del repositorio: ${repoPath}\n\n${scanSummary}\n\nPor favor, genera el Contexto Técnico del Proyecto estructurado en formato Markdown con las siguientes 4 secciones:\n1. 📌 PROYECTO & OBJETIVO (Nombre, qué hace y qué problema soluciona)\n2. 💻 STACK TECNOLÓGICO Y VERSIONES (Lenguajes, frameworks backend/frontend, bases de datos, ORMs y herramientas clave)\n3. 🏗️ ARQUITECTURA Y MÓDULOS (Patrones arquitectónicos como Clean Architecture, Monorepo o Microservicios, directorios clave y responsabilidades)\n4. 📋 CONVENCIONES Y REGLAS DE NEGOCIO (Estándares de codificación, nombrado, testing, flujo de datos y reglas de dominio deducidas)\n\nDevuelve exclusivamente el texto en Markdown listo para ser usado como contexto.`;
+    const llm = (s: string, u: string) => this.executeLlmCall(s, u, provider, apiKey, model, baseUrl);
 
-    const { provider, apiKey, model, baseUrl } = await this.resolveProviderAndKey(options);
-
-    const rawResponse = await this.executeLlmCall(systemPrompt, userPrompt, provider, apiKey, model, baseUrl);
-
-    let clean = rawResponse.trim();
-    if (clean.startsWith("```markdown")) {
-      clean = clean.replace(/^```markdown\s*/, "").replace(/\s*```$/, "");
-    } else if (clean.startsWith("```md")) {
-      clean = clean.replace(/^```md\s*/, "").replace(/\s*```$/, "");
-    }
-    return clean;
-  }
-
-  private scanRepositoryStructure(repoPath: string): string {
-    return RepoContextScanner.scanRepositoryStructure(repoPath);
+    return runContextScan(repoPath, llm, {
+      budget,
+      providerLabel,
+      model
+    });
   }
 
   private async resolveProviderAndKey(options?: GenerateAnalysisOptions): Promise<{
     provider: MeetingAnalysisProvider;
+    providerId: string;
+    providerLabel: string;
     apiKey: string;
     model: string;
     baseUrl?: string;
@@ -277,6 +353,8 @@ Este contexto servirá como arnés de contexto técnico para que agentes de IA d
       }
       return {
         provider: "google-account",
+        providerId: "google-account",
+        providerLabel: "Cuenta de Google (Antigravity)",
         apiKey: "",
         model: options?.model || userSettings?.issuesDefaultModel || ""
       };
@@ -313,6 +391,8 @@ Este contexto servirá como arnés de contexto técnico para que agentes de IA d
 
       return {
         provider: "custom",
+        providerId: customConfig.id,
+        providerLabel: customConfig.name,
         apiKey,
         model: chosenModel,
         baseUrl: options?.baseUrl || customConfig.baseUrl
@@ -327,7 +407,22 @@ Este contexto servirá como arnés de contexto técnico para que agentes de IA d
           ? "custom"
           : "gemini";
       const model = options.model || this.getDefaultModel(provider);
-      return { provider, apiKey: options.apiKey || "", model, baseUrl: options.baseUrl };
+      const label =
+        provider === "gemini"
+          ? "Google Gemini API"
+          : provider === "groq"
+          ? "Groq"
+          : provider === "openai"
+          ? "OpenAI"
+          : provider;
+      return {
+        provider,
+        providerId: provider,
+        providerLabel: label,
+        apiKey: options.apiKey || "",
+        model,
+        baseUrl: options.baseUrl
+      };
     }
 
     if (targetProvider) {
@@ -343,6 +438,8 @@ Este contexto servirá como arnés de contexto técnico para que agentes de IA d
       if (!key && provider === "gemini" && this.resolveAgyPath()) {
         return {
           provider: "google-account",
+          providerId: "google-account",
+          providerLabel: "Cuenta de Google (Antigravity)",
           apiKey: "",
           model: ""
         };
@@ -353,8 +450,18 @@ Este contexto servirá como arnés de contexto técnico para que agentes de IA d
           `No se encontró clave de API para el proveedor '${provider}'. Por favor configúrala en Ajustes o selecciona 'Cuenta de Google (Sin API Key)'.`
         );
       }
+      const label =
+        provider === "gemini"
+          ? "Google Gemini API"
+          : provider === "groq"
+          ? "Groq"
+          : provider === "openai"
+          ? "OpenAI"
+          : provider;
       return {
         provider,
+        providerId: provider,
+        providerLabel: label,
         apiKey: key || "dummy-key",
         model: options?.model || this.getDefaultModel(provider),
         baseUrl: options?.baseUrl
@@ -364,22 +471,46 @@ Este contexto servirá como arnés de contexto técnico para que agentes de IA d
     let geminiKey = this.deps?.secretVault ? await this.deps.secretVault.get("gemini") : null;
     if (!geminiKey) geminiKey = process.env["GEMINI_API_KEY"] || null;
     if (geminiKey) {
-      return { provider: "gemini", apiKey: geminiKey, model: options?.model || "gemini-2.5-flash" };
+      return {
+        provider: "gemini",
+        providerId: "gemini",
+        providerLabel: "Google Gemini API",
+        apiKey: geminiKey,
+        model: options?.model || "gemini-2.5-flash"
+      };
     }
 
     let groqKey = this.deps?.secretVault ? await this.deps.secretVault.get("groq") : null;
     if (!groqKey) groqKey = process.env["GROQ_API_KEY"] || null;
     if (groqKey) {
-      return { provider: "groq", apiKey: groqKey, model: options?.model || "llama-3.3-70b-versatile" };
+      return {
+        provider: "groq",
+        providerId: "groq",
+        providerLabel: "Groq",
+        apiKey: groqKey,
+        model: options?.model || "llama-3.3-70b-versatile"
+      };
     }
 
     const openaiKey = process.env["OPENAI_API_KEY"] || null;
     if (openaiKey) {
-      return { provider: "openai", apiKey: openaiKey, model: options?.model || "gpt-4o-mini" };
+      return {
+        provider: "openai",
+        providerId: "openai",
+        providerLabel: "OpenAI",
+        apiKey: openaiKey,
+        model: options?.model || "gpt-4o-mini"
+      };
     }
 
     if (this.resolveAgyPath()) {
-      return { provider: "google-account", apiKey: "", model: options?.model || "" };
+      return {
+        provider: "google-account",
+        providerId: "google-account",
+        providerLabel: "Cuenta de Google (Antigravity)",
+        apiKey: "",
+        model: options?.model || ""
+      };
     }
 
     throw new Error(
@@ -446,11 +577,6 @@ Este contexto servirá como arnés de contexto técnico para que agentes de IA d
     }
   }
 
-  /**
-   * Mantiene las secciones del resumen coherentes con los puntos reclasificados por código:
-   * un punto pasado a "cerrado" va a Ya resuelto y uno pasado a gestión externa va a En curso
-   * (si la sección aún no cita su marca de tiempo).
-   */
   private syncSectionsWithPoints(step1Data: Step1ExtractionDto, changedIds: string[]): void {
     const changed = new Set(changedIds);
     const cites = (list: string[], ts: string) => list.some((item) => ts && item.includes(ts));
@@ -465,23 +591,23 @@ Este contexto servirá como arnés de contexto técnico para que agentes de IA d
     }
   }
 
-  private buildStep1Prompt(projectContext?: string): string {
-    return MeetingAnalysisPrompts.buildStep1Prompt(projectContext);
+  private buildStep1Prompt(projectContext?: string, profile?: ProjectProfile): string {
+    return MeetingAnalysisPrompts.buildStep1Prompt(projectContext, profile);
   }
 
-  private buildStep2Prompt(projectContext?: string): string {
-    return MeetingAnalysisPrompts.buildStep2Prompt(projectContext);
+  private buildStep2Prompt(projectContext?: string, profile?: ProjectProfile): string {
+    return MeetingAnalysisPrompts.buildStep2Prompt(projectContext, profile);
   }
 
-  private buildSingleStepPrompt(projectContext?: string): string {
-    return MeetingAnalysisPrompts.buildSingleStepPrompt(projectContext);
+  private buildSingleStepPrompt(projectContext?: string, profile?: ProjectProfile): string {
+    return MeetingAnalysisPrompts.buildSingleStepPrompt(projectContext, profile);
   }
 
   private cleanJsonString(raw: string): string {
     return MeetingAnalysisResponseParser.cleanJsonString(raw);
   }
 
-  private parseAndValidateResponse(rawJson: string, transcript?: string): GeneratedMeetingData {
-    return MeetingAnalysisResponseParser.parseAndValidate(rawJson, transcript);
+  private parseAndValidateResponse(rawJson: string, transcript?: string, profile?: ProjectProfile): GeneratedMeetingData {
+    return MeetingAnalysisResponseParser.parseAndValidate(rawJson, transcript, undefined, profile);
   }
 }

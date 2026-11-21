@@ -1,0 +1,30 @@
+[
+  {
+    "id": "sin-git-layout",
+    "descripcion": "El layout detectado debe ser no-git",
+    "tipo": "inventory",
+    "path": "layout",
+    "valor": "no-git"
+  },
+  {
+    "id": "sin-git-cmd-test",
+    "descripcion": "El comando make test debe figurar en los comandos detectados",
+    "tipo": "inventory",
+    "path": "commands[0].runAs",
+    "valor": "make test"
+  },
+  {
+    "id": "sin-git-cmd-lint",
+    "descripcion": "El comando make lint debe figurar en los comandos detectados",
+    "tipo": "inventory",
+    "path": "commands[1].runAs",
+    "valor": "make lint"
+  },
+  {
+    "id": "sin-git-deploy-fact",
+    "descripcion": "El despliegue debe detectar EXPOSE 8000",
+    "tipo": "inventory",
+    "path": "deployment[0].facts[0]",
+    "valor": "EXPOSE 8000"
+  }
+]

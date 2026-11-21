@@ -1,203 +1,126 @@
-import { renderGlossaryLayer } from "./glossary/ProjectGlossary.js";
+import { ProjectProfile } from "./profiles/ProjectProfile.js";
+import { GENERIC_PROFILE } from "./profiles/genericProfile.js";
+import { ProfileRegistry } from "./profiles/ProfileRegistry.js";
 
 export class MeetingAnalysisPrompts {
-  public static getUniversalRulesPrompt(): string {
-    return `[CAPA 1 — REGLAS UNIVERSALES DE GENERACIÓN DE ISSUES (OBLIGATORIAS)]
+  public static getGeneralRulesPrompt(): string {
+    return `REGLAS GENERALES DE GENERACIÓN DE ISSUES (obligatorias)
 
-REGLAS DE GENERACIÓN DE ISSUES (obligatorias)
+== A1. FIDELIDAD Y EVIDENCIA ==
+- Afirma como hecho solo lo que se dijo explícitamente en la transcripción.
+- Lee toda la reunión antes de concluir que algo "no se dijo": una duda puede estar respondida minutos después.
+- No inventes nombres de campos, tablas, rutas, clientes, estados, reglas de validación, documentos, roles, permisos ni límites. Si los necesitas y no están en la transcripción ni en el perfil del proyecto, escríbelos como "PROPUESTO (por confirmar)".
+- Todo criterio que deduzcas tú se marca [Supuesto]. Toda cita lleva su marca de tiempo [mm:ss].
+- Usa solo estas etiquetas: [Supuesto], [Interpretación: transcrito → probable], [Derivado de ISSUE-N], PROPUESTO (por confirmar).
 
-== 1. FIDELIDAD A LA TRANSCRIPCIÓN ==
-- Solo afirmes como hecho lo que se dijo explícitamente en la transcripción.
-- Lee toda la reunión antes de concluir que algo "no se dijo": una duda planteada en un minuto puede estar respondida minutos después.
-- NO inventes nombres de campos, tablas, rutas de endpoints, nombres de clientes, estados, transiciones ni reglas de validación. Si los necesitas y no están en la transcripción ni en el contexto del proyecto, escríbelos como "PROPUESTO (por confirmar)".
-- Todo criterio de aceptación que deduzcas tú y no se dijo en la reunión se marca con [Supuesto].
-- Cita la marca de tiempo [mm:ss] de la transcripción que respalda cada requerimiento.
+== A2. RUIDO, NOMBRES, VALORES Y HABLANTES ==
+- La transcripción es automática: puede tener errores fonéticos y las etiquetas "Hablante N" NO son identidad (cambian entre corridas).
+- Corrige términos con el glosario del perfil. Si dudas entre dos lecturas, cita lo transcrito, propón la más probable con [Interpretación] y continúa. La duda de vocabulario nunca es una pregunta global.
+- Corregir cómo suena una palabra está permitido; añadir contenido que no se dijo no lo está.
+- Nunca fijes una hora, cifra, rango o umbral que la fuente dice de forma ambigua o sin unidad. Cita el fragmento tal cual, déjalo como parámetro y registra una pregunta NO BLOQUEANTE.
+- Un nombre nuevo que no se dijo es "por definir"; si lo propones, va marcado PROPUESTO (por confirmar) y nunca como hecho.
 
-== 2. RUIDO DE TRANSCRIPCIÓN, NOMBRES, VALORES Y HABLANTES ==
-- La transcripción es automática: puede tener errores fonéticos, y las etiquetas "Hablante N" NO son identidad (cambian entre transcripciones de la misma reunión).
-- No atribuyas una afirmación a una persona a menos que su nombre se diga en esa misma frase o en la intervención inmediatamente anterior que le da la palabra.
-- Usa el GLOSARIO para corregir. Corrige en silencio los nombres y términos cuando el glosario o el contexto lo respaldan con alta confianza.
-- Si dudas entre dos o más lecturas, cita lo transcrito, propón la más probable con [Interpretación: transcrito → probable] y continúa. La duda de vocabulario NUNCA es una pregunta global.
-- Corregir cómo suena una palabra está permitido. Añadir contenido que no se dijo (condiciones, campos, criterios) NO lo está.
-- Nunca fijes una hora, cifra o rango que la fuente menciona de forma ambigua (ej.: "a partir de las 7" sin a.m./p.m.). No lo conviertas a otro formato (19:00, 7:00 p.m.). Cita el fragmento tal cual, marca [Interpretación] si propones una lectura y deja una pregunta NO BLOQUEANTE si el valor se puede cambiar después (parámetro).
+== A3. RESPONSABLES Y ORIGEN ==
+- Nombra un responsable solo si se dijo explícitamente en ese segmento ("a cargo de", "le toca a", "lo tiene X"). Que alguien sea interpelado o mencionado no lo hace responsable. Si no, "sin identificar".
+- Un ítem cuya acción depende de un tercero (otro equipo, proveedor, cliente, sistema externo) es gestion_externa o seguimiento: nunca issue de código ni pregunta BLOQUEANTE.
 
-== 3. PREGUNTAS ABIERTAS ==
-- Úsalas SOLO para decisiones de negocio o alcance que la reunión no resolvió. No las uses para ruido ni vocabulario (regla 2).
-- Una pregunta es BLOQUEANTE solo si cumple las tres condiciones: (a) bloquea un issue concreto que nombras, (b) no existe un valor por defecto razonable, (c) puedes escribir una línea "Si me equivoco: <qué trabajo se rehace>".
-- Si no cumple las tres, es NO BLOQUEANTE: propón el valor por defecto con [Supuesto] y el issue sale normal.
-- Una pregunta sobre algo que está En curso, o que depende de un tercero, nunca es BLOQUEANTE.
-- Máximo 8 preguntas globales. Cada pregunta indica: qué falta, a quién preguntar (si se mencionó) y qué haría el agente mientras tanto (lo mínimo, sin inventar).
-
-== 4. NO CONSTRUYAS SOBRE LO AMBIGUO ==
-- Un issue es BLOQUEADO solo si su pregunta BLOQUEANTE (regla 3) toca el núcleo del issue. Un issue BLOQUEADO no lleva script SQL, ni criterios inventados, ni estimación definitiva.
-- Un issue BLOQUEADO no debe pedir al agente "preparar" o "documentar" sin entregar nada: si lo único que puede hacerse es documentar, el punto es una pregunta, no un issue.
-- Si hay valor por defecto razonable, no bloquees: usa [Supuesto] (regla 3).
-
-== 5. NO INVENTES ESTRUCTURA NI TECNOLOGÍA ==
-- Usa solo estas carpetas conocidas:
-  - backend: Controllers/, Controllers/Mobile/, Logic/, Logic/Mobile/, Models/DTOs/Mobile/, db_changes/ (scripts AAAAMMDD_0NN). Flujo: Controller → Logic → ApplicationDbContext (no hay Services).
-  - panel: componente → hook → servicio → httpClient → API (más adaptadores).
-  - app: expo-router, SQLite + cola de sincronización.
-- PROHIBIDO inventar nombres de proyectos o namespaces (ej.: Diamante.API, Diamante.Core, Diamante.Data).
-- En "Archivos sugeridos" describe carpetas o módulos, no rutas de archivo concretas, y rotúlalos "(verificar en el repo)".
-- Stack cerrado: backend = xUnit; panel = pruebas unitarias + Playwright; app = Jest + tsc. No nombres librerías (FluentValidation, Yup, Zod, ClosedXML, EPPlus, TanStack, etc.) salvo como "verificar en el repo".
-- Borrado lógico: DeletedAt + IsActive.
-- Nombres de documentos: usa solo los de la lista exacta del contexto (AI_CONTEXT.md, CLAUDE.md, CONTEXTO.md, BITACORA.md, docs/REGLAS_DE_NEGOCIO.md). No escribas otros.
-- Un "archivito" o "matriz" de la carpeta compartida es un archivo, no una tabla de base de datos, salvo que se diga lo contrario.
-
-== 6. CLASIFICA ANTES DE CREAR ISSUES ==
-Cada punto de la reunión recibe una clase Y un tipo de acción.
+== A4. CLASIFICA Y DA UNA SOLA SALIDA A CADA ÍTEM ==
+Cada ítem leído (frase "se requiere…", "se identificó…", fila leída en voz alta) recibe una clase y una acción, y termina en exactamente UNA salida.
 Clase:
-- CERRADO: solo si la transcripción dice explícitamente cerrado/listo/se cerró. NO crees issue; va a "Ya resuelto". Si falta un paso administrativo (ej.: pasarlo a "Validar Diamante"), dilo.
-- EN CURSO: SOLO si alguien dice que ya lo está haciendo ("ya lo estoy trabajando", "ya estamos terminando de validar", "ya va en la PR") o que quedan pendientes por cerrar. NO crees issue. Si crees que queda un remanente, el issue debe decir qué parte NO cubre el trabajo en curso e indicar quién lo lleva.
-- NUEVO: crea el issue. Si alguien pide algo al equipo ("por favor puedan hacer X"), es NUEVO aunque el contexto diga que hay algo "en corrección" sobre el tema.
-- BACKLOG: se dijo que no es bloqueante, que va para una etapa de mejoras o que se deja "de último en las propuestas". Una entrada por requerimiento, sin prompt de implementación. No uses "se desestima" si no se dijo que se descarta. Un cambio de proceso (ej.: "se abrirá un archivo para el backlog") no es un requerimiento.
-Tipo de acción:
-- codigo: hay que cambiar código del repo. Solo estos puntos generan issue.
-- gestion_externa: depende de que un tercero cambie un dato, dé un acceso o responda (ej.: pedirle a Lady que envíe también usuarios pendientes; acceso a la API de un tercero; el CRM no devuelve un dato). Va a "En curso / Gestión externa". Crea issue de código solo si la reunión dijo que el código del repo filtra, transforma o descarta ese dato.
-- decision: se tomó una decisión sin trabajo asociado. Va a "Decisiones clave".
-- seguimiento: validar, revisar o cerrar algo. Va a "En curso".
-- Cada punto termina en una sola clase. No omitas trabajo real: si requiere acción de código y no está cerrado ni en curso, es NUEVO (ej.: dimensionamiento).
+- CERRADO: la transcripción dice explícitamente cerrado/listo/resuelto. Va a "Ya resuelto"; sin issue. Si falta un paso administrativo, dilo.
+- EN CURSO: alguien dice que ya lo está haciendo o que quedan pendientes por cerrar. Sin issue. Si crees que queda un remanente, di qué parte no cubre el trabajo en curso y quién lo lleva.
+- NUEVO: se pide algo al equipo y no está cerrado ni en curso. Crea issue.
+- BACKLOG: se dijo que no es bloqueante, que va a una etapa posterior o "de último". Una entrada por requerimiento, sin prompt. No uses "se descarta" si no se dijo. Un cambio de proceso (abrir un archivo, crear una reunión) no es un requerimiento.
+Acción:
+- codigo → único tipo que genera issue. gestion_externa / seguimiento → "En curso". decision → "Decisiones clave".
+Cobertura: ningún ítem queda sin salida ni en dos salidas a la vez. Un pedido de código leído genera issue salvo cierre explícito; si tiene backend y panel, genera ambos.
 
-== 7. ENDPOINTS FALTANTES Y DEPENDENCIAS ==
-- Crea UN issue por repositorio afectado (backend / panel / app); nunca mezcles repos en un issue.
-- Si el panel necesita un endpoint (borrado masivo, exportación, reprogramación, etc.) y la transcripción no dice que exista, crea también el issue de backend marcado PROPUESTO y enlázalo con "Depende de ISSUE-N". No dejes horas de panel sin su backend.
-- No crees issue de app si la transcripción no habla de la app, del operario o del supervisor móvil para ese punto. Si hay duda del canal, pregunta NO BLOQUEANTE; el valor por defecto es el panel.
-- La app móvil NO modifica endpoints compartidos del panel: lo nuevo va en /api/mobile/... (Controllers/Mobile/, Logic/Mobile/).
-- "Dependencias entre PR": qué debe entrar antes en dev. Escribe "Ninguna" solo si es cierto.
+== A5. CIERRES POSTERIORES ==
+- Una frase de cierre posterior ("eso ya estaba", "el otro también", "ya va en la PR") cierra SOLO el ítem que nombra, o el inmediatamente anterior si la frase lo señala sin ambigüedad. Busca los cierres en toda la reunión antes de clasificar.
+- "¿Ya estaba solucionado, no?" con signo de pregunta es una duda, no un cierre: el ítem queda pendiente de confirmar.
+- Un ítem cuya acción o nombre nuevo no se definió nunca se cierra por una frase suelta cercana.
+- "Pendiente de cerrar", "me falta revisar" nunca va en "Ya resuelto". Una frase suelta de estado ("esto está validado") pertenece al ítem que se lee en ese momento; si no es claro cuál, ignórala.
 
-== 8. SIN ALCANCE EXTRA ==
-- No crees issues en un repo si la transcripción no lo pide o no es consecuencia directa de otro issue. Marca cada consecuencia como [Derivado de ISSUE-N] (con un ISSUE-N que exista).
-- No generes un issue por cada comentario menor: agrupa cambios pequeños de texto o UI del mismo módulo.
+== A6. PREGUNTAS ABIERTAS ==
+- Solo para decisiones de negocio o alcance que la reunión no resolvió; nunca para ruido o vocabulario.
+- Es BLOQUEANTE solo si: (a) bloquea un issue concreto que nombras, (b) no hay valor por defecto razonable, (c) puedes escribir "Si me equivoco: <qué trabajo se rehace>". Si no, es NO BLOQUEANTE con valor por defecto marcado [Supuesto] y el issue sale normal.
+- Una pregunta sobre algo EN CURSO o de un tercero nunca es BLOQUEANTE. Máximo 8 preguntas globales; cada una dice qué falta, a quién preguntar (si se dijo) y qué hará el agente mientras tanto.
+- Un issue es BLOQUEADO solo si su pregunta BLOQUEANTE toca su núcleo; un issue BLOQUEADO no lleva criterios inventados ni estimación definitiva.
 
-== 9. ESTADO REAL ==
-- Si algo figura como "pendiente de cerrar", "me falta revisar", "quedan dos usuarios", NO lo pongas en "Ya resuelto".
+== A7. ISSUES POR REPOSITORIO, DEPENDENCIAS Y CANAL ==
+- Un issue por repositorio afectado; nunca mezcles repos en un issue.
+- Si un cliente (panel/app) necesita un servicio de backend y no se dijo que exista, crea también el issue de backend PROPUESTO y enlázalo con "Depende de ISSUE-N". No dejes horas de cliente sin su backend.
+- No crees issue de app móvil si la transcripción no habla de la app, del operario o del supervisor móvil para ese ítem. Si hay duda del canal, pregunta NO BLOQUEANTE; el valor por defecto es el canal principal del perfil.
+- "Dependencias" es "Ninguna" o IDs de issues que existen.
 
-== 10. CONTRADICCIÓN CON EL CONTEXTO ==
-- Si lo pedido ya existe según el contexto del proyecto o las reglas de negocio (ej.: los estados de novedad Abierta / En proceso / Solucionada / Cerrada; el método de inicio "Ninguna") y la reunión NO dice que ya va en una PR, NO lo implementes desde cero: crea un issue de "verificar y completar lo que falte" con una pregunta. Si la reunión dice que ya va en una PR, es EN CURSO y no lleva issue.
+== A8. SIN ALCANCE EXTRA ==
+- No añadas pantallas, cargas de archivo, endpoints, refactors ni "centralizaciones" que no se pidieron o que no sean consecuencia directa de otro issue. Lo que dedujas va como [Supuesto] y no suma horas.
+- Agrupa cambios pequeños de texto o UI del mismo módulo en un solo issue.
 
-== 11. ESTIMACIÓN CALIBRADA ==
-- Horas por repo en cada issue, solo con números: "Backend: Xh | Panel: Yh | App: Zh | Total: Th", donde Total = X + Y + Z. Una nota como "provisional" va en el campo "Nota de estimación", nunca dentro de los campos de horas.
-- Usa la TABLA DE REFERENCIA DE HORAS del contexto. Si tu estimación se aleja más de 50 % de la referencia, justifícalo en una línea.
-- Incluye siempre: script SQL en db_changes (fecha de hoy, formato AAAAMMDD_0NN, solo si hay columnas nuevas), pruebas (xUnit / Playwright + unitarias / Jest), actualización de docs/REGLAS_DE_NEGOCIO.md, capturas para el PR y revisión de Juan.
-- Si afecta a la app: considera el modo sin conexión (SQLite + cola de sincronización) y pantallas de mínimo 360x640. NFC requiere dev build.
-- Al final calcula los totales por repo sumando issue por issue. Verifica la suma antes de escribirla; no uses "~" si puedes calcular.
+== A9. CONTRADICCIÓN CON EL CONTEXTO ==
+- Si lo pedido ya existe según el perfil del proyecto y la reunión NO dice que ya va en una PR, crea un issue de "verificar y completar lo que falte" con una pregunta. Si la reunión dice que ya va en una PR, es EN CURSO.
 
-== 12. FLUJO DE PR (en cada issue) ==
-- Rama corta desde dev, PR a dev, skill /revisar-entrega, captura de la prueba en pantalla y revisión de Juan.
+== A10. ESTIMACIÓN ==
+- "Backend: Xh | Panel: Yh | App: Zh | Total: Th" con Total = X+Y+Z, solo números. Notas como "provisional" van en "Nota de estimación".
+- Usa la tabla de horas del perfil. Si te alejas más de 50 %, justifícalo en una línea. Calcula los totales por repo sumando issue por issue; no uses "~".
 
-== 13. PROMPT DE CADA ISSUE (para el agente de código) ==
-Estructura obligatoria, en este orden:
-  Rol y Objetivo / Contexto / Pasos numerados / Restricciones / Criterios de Aceptación / Verificación.
-- Los pasos empiezan por leer AI_CONTEXT.md / CLAUDE.md / CONTEXTO.md / BITACORA.md y docs/REGLAS_DE_NEGOCIO.md.
-- NO escribas "confirma con el líder funcional" (un agente no puede hacerlo).
-- La frase de detención va SOLO en issues BLOQUEADOS o con una parte pendiente sin valor por defecto, con esta forma exacta: "Si [nombre concreto de la parte pendiente] no está resuelto, detente, repórtalo en el PR y no implementes esa parte."
-- Un issue con valor PROPUESTO o [Supuesto] por defecto NO lleva frase de detención: el agente implementa con el valor por defecto y lo deja anotado en el PR.
-- El prompt no debe contradecir el issue (ej.: pedir usar un valor propuesto y a la vez detenerse por él).
+== A11. PROMPT DE CADA ISSUE (para el agente de código) ==
+Estructura, en este orden: Rol y Objetivo / Contexto / Pasos numerados / Restricciones / Criterios de Aceptación / Verificación.
+- Los pasos empiezan por leer los documentos que lista el perfil.
+- No escribas "confirma con el líder funcional" (un agente no puede hacerlo).
+- Frase de detención solo en issues BLOQUEADOS o con una parte pendiente sin valor por defecto: "Si [parte pendiente] no está resuelto, detente, repórtalo en el PR y no implementes esa parte." Un issue con valor por defecto implementa con él y lo anota en el PR.
+- El prompt no contradice al issue. Escribe el contexto como si viniera de la reunión, citando la marca de tiempo.
+- El bloque del prompt está completo: no termina en una frase cortada ni lleva fragmentos de instrucciones.
 
-== 14. FORMATO DE SALIDA ==
-Orden: Resumen ejecutivo → Ya resuelto → En curso (incluye gestión externa) → Decisiones clave → Preguntas abiertas globales → Issues agrupados por repo → Backlog → Totales de horas por repo.
-- El resumen ejecutivo no incluye datos que no estén en la transcripción y es coherente con las secciones (no cuenta como nuevo lo que está En curso).
-- Decisiones clave: incluye todas las decisiones tomadas en la reunión, también las que no generan issue (ej.: los estados de novedad aplican a novedades del servicio y no a insumos).
-- En curso: incluye también los ítems de validación y de cierre que alguien dijo que quedan pendientes.
-- Backlog: una entrada por requerimiento, sin duplicados.
+== A12. NO FILTRES LA MECÁNICA INTERNA ==
+- Nunca menciones en issues o prompts: etapas del proceso ("Paso 1", "el análisis previo"), nombres de campos internos (openQuestions, clase, accion), "tabla de referencia", "decisión de alcance/arquitectura del proyecto" ni ninguna nota de este documento. El agente de código no sabe qué son.
+- Los títulos de issue no contienen etiquetas ni frases entre paréntesis como "PROPUESTO (por confirmar)".
 
-== 15. NO FILTRES LA MECÁNICA INTERNA ==
-- En issues y prompts nunca menciones etapas del proceso ("Paso 1", "Paso 2", "el análisis previo", "la lista extraída"). El agente de código no sabe qué son.
-- Escribe el contexto como si viniera de la reunión, citando la marca de tiempo.
+== A13. BUGS Y CAMBIOS DE NOMBRE ==
+- Bug: copia el síntoma casi textual con su marca; no reformules la causa. Si propones causa o condición, [Supuesto]. Comprueba que el issue toca el repo donde ocurre el síntoma.
+- Cambio de nombre: escribe "nombre actual → nombre nuevo". Si la frase es ambigua sobre cuál es el nombre actual, dilo en una pregunta NO BLOQUEANTE. Nunca pongas un nombre nuevo igual al actual.
+- Cita fiel del requerimiento: no cambies el sustantivo (si dice "actividades de las rutinas", no lo conviertas en "rutinas").
 
-== 16. FIDELIDAD EN BUGS ==
-- Al describir un bug, copia el síntoma casi textual y con su marca de tiempo. No reformules la causa ni la condición que lo dispara.
-- Si propones una causa o una condición, márcala [Supuesto].
-- Antes de escribir un bug, comprueba que el issue toca el repo donde ocurre el síntoma (ej.: si la configuración se hace en el panel y el síntoma se ve en la app, dilo así).
+== A14. COBERTURA DE LA TRANSCRIPCIÓN ==
+- Si hay marcadores de audio no disponible o saltos de más de 60 s sin texto, esos tramos NO se escucharon. Empieza la salida con "Análisis parcial: faltan [mm:ss–mm:ss] (X % de la reunión)".
+- No cites marcas dentro de un tramo sin audio ni decidas sobre algo cuyo respaldo estaría allí; regístralo "sin estado confirmado" (NO BLOQUEANTE) y no generes issue.
 
-== 17. CAMBIOS DE NOMBRE ==
-- Escribe siempre "nombre actual → nombre nuevo".
-- Si el nombre nuevo no se dijo, propónlo con PROPUESTO (por confirmar) y deja una pregunta NO BLOQUEANTE.
-- Nunca pongas un nombre nuevo igual al actual ni lo inventes sin marcarlo.
-
-== 18. FRASES SUELTAS DE ESTADO ==
-- Una frase como "esto está validado" se refiere al ítem que se está leyendo en ese momento (la fila de la matriz).
-- Si no es claro a cuál se refiere, ignórala. No bloquees ni condiciones un issue por ella.
-
-== 19. CRITERIOS DE ACEPTACIÓN ==
-- Cada criterio que no se dijo en la reunión lleva [Supuesto]. No presentes como requisito algo que tú deduces (ej.: "devuelve el resultado por registro", "el rango de fechas es obligatorio").
-- Usa solo estas etiquetas: [Supuesto], [Interpretación: ... → ...], [Derivado de ISSUE-N], PROPUESTO (por confirmar). No inventes otras.
-
-== 20. COBERTURA DE LA TRANSCRIPCIÓN ==
-- Si la transcripción contiene marcadores como "[Audio no disponible…]" o saltos de más de 60 s sin texto, esos tramos NO se escucharon. Empieza la salida con el aviso "Análisis parcial: faltan [mm:ss–mm:ss, …] (X % de la reunión)".
-- No cites marcas de tiempo dentro de un tramo sin audio ni afirmes qué se dijo allí.
-- No marques como cerrado, en curso, decisión ni backlog algo cuyo respaldo estaría en un tramo faltante. Si un punto aparece sin su contexto (ej.: un bug leído en voz alta cuya conversación posterior falta), regístralo como "sin estado confirmado" con una pregunta NO BLOQUEANTE y no generes issue.
-- No generes issues de ítems que dependen de contexto faltante; lístalos como "pendiente de retranscripción".
-- No uses "Hablante N" como nombre de persona; si no se dijo el nombre, escribe "sin identificar".
-
-== 21. CIERRES POSTERIORES ==
-- El cierre aplica SOLO al ítem que la frase nombra o al inmediatamente anterior si la frase lo señala sin ambigüedad. Un ítem cuyo nombre nuevo o acción no se definió (p. ej. renombrar "asignación automática") nunca se marca como cerrado por una frase suelta cercana: queda como issue pendiente. "Ya está solucionado, ¿no?" con signo de pregunta es una duda, no un cierre: registra el ítem como pendiente de confirmar.
-- Si más adelante alguien afirma que un ítem ya está resuelto ("ya te había solucionado", "el de los aislamientos también", "ya está en la PR"), el ítem es clase = cerrado: sin issue, sin pregunta bloqueante ni de ambigüedad.
-- Busca estos cierres en TODA la transcripción antes de clasificar. Una frase de cierre sin tema se refiere al ítem que se acaba de leer (regla 18).
-
-== 22. RESPONSABLES Y ORIGEN ==
-- Nombra un responsable solo si se dijo explícitamente en ese segmento ("a cargo de", "le toca a", "lo tiene X", "voy a dejar que él la cierre"). Que alguien sea interpelado, mencionado o usado como ejemplo no lo hace responsable. Si no, escribe "sin identificar".
-- No afirmes que existen documentos, roles, permisos, límites ni reglas que no se mencionan en la transcripción. No preguntes por ellos si nadie los planteó.
-- Un ítem cuya acción depende de un tercero (CRM, proveedores de datos, personas externas, APIs de terceros) es gestion_externa o seguimiento: nunca issue de código ni pregunta BLOQUEANTE.
-- Crea un issue de app solo si una frase explícita habla de la app para ese ítem; los endpoints /api/mobile solo se mencionan cuando hay issue de app.
-- Los procesos de la reunión (ej.: "abrir un archivo nuevo para el backlog") no son backlog funcional.
-- No añadas pantallas, cargas de archivo ni endpoints que no se pidieron: si los sugieres, van marcados [Supuesto] en el texto y no suman horas.
-- Respeta las DECISIONES DE ALCANCE del glosario: implementa solo el alcance mínimo indicado.
-
-== 23. COBERTURA DE LA MATRIZ ==
-- Cada ítem leído de la matriz (frase "se requiere…", "se identificó…", fila leída en voz alta) debe terminar en exactamente UNA salida: cerrado, en curso, issue(s), decisión o backlog. Ningún ítem puede quedar sin salida ni en dos a la vez.
-- Los pedidos de código leídos (borrado masivo, exportación, renombre, selects, reprogramación, dimensionamiento, etc.) generan issue salvo cierre explícito. Si un ítem tiene backend y panel, genera ambos.
-- Un ítem cuyo texto es ambiguo en canal o alcance (p. ej. "habilitar la cámara para reconocer el sitio") no se convierte en issue de panel ni de app: va a "Preguntas abiertas" (NO BLOQUEANTE) y, si coincide con algo aplazado después, se une a ese backlog.
-- Nunca fijes una hora, cifra o umbral que no se dijo con unidad clara. Si el audio dice "a partir de las 7" sin a. m./p. m., escribe "7 (sin aclarar a. m./p. m.)" y deja el valor como parámetro.
-- Un nombre nuevo no definido en la reunión es "por definir"; no propongas uno como hecho. Los archivos nuevos (scripts db_changes, etc.) solo se mencionan si hay un cambio de esquema pedido.
-- Cita siempre la marca [mm:ss] del ítem en cada salida (Ya resuelto, En curso, Decisiones, Backlog, issues), para poder verificar la cobertura.`;
+== A15. FORMATO DE SALIDA ==
+Resumen ejecutivo → Ya resuelto → En curso (con gestión externa) → Decisiones clave → Preguntas abiertas globales → Issues por repo → Backlog → Totales de horas por repo.
+- El resumen es coherente con las secciones y solo contiene datos de la transcripción.
+- Decisiones clave: todas las tomadas, también las que no generan issue. En curso: también los ítems de validación y cierre que quedan pendientes.
+- Backlog: una entrada por requerimiento, sin duplicados.`;
   }
 
-  public static getProjectContextLayer(customContext?: string): string {
-    const todayFormatted = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-
-    const baseContext = customContext || `PROYECTO: Monorepo TypeScript / Fullstack
-- Backend: Controllers, Controllers/Mobile/, Logic, Logic/Mobile/, Models/DTOs/Mobile/, db_changes/ (scripts AAAAMMDD_0NN). Flujo: Controller → Logic → ApplicationDbContext. (No hay Services).
-- Panel Admin: componente → hook → servicio → httpClient → API (más adaptadores).
-- App Móvil: expo-router, SQLite + cola de sincronización. Rutas dedicadas en /api/mobile/...`;
-
-    return `[CAPA 2 — CONTEXTO DEL PROYECTO]
-${baseContext}
-
-LISTA EXACTA DE DOCUMENTOS PERMITIDOS:
-- AI_CONTEXT.md
-- CLAUDE.md
-- CONTEXTO.md
-- BITACORA.md
-- docs/REGLAS_DE_NEGOCIO.md (o REGLAS_DE_NEGOCIO.md)
-(Cualquier otro *.md inventado está estrictamente prohibido).
-
-TABLA DE REFERENCIA DE HORAS (Para calibración de estimaciones):
-- Cambio de texto/etiqueta en panel: 2 h
-- Select con búsqueda (componente reutilizable + aplicarlo): 4 h
-- Endpoint de exportación a Excel (backend): 8 h
-- Botón de exportación con filtros (panel): 4 h
-- Selección múltiple + borrado masivo (panel): 8 h
-- Endpoint de borrado masivo (backend): 8 h
-- Reprogramación (backend / panel): 8 / 8 h
-- Incorporar un dato nuevo al cálculo de dimensionamiento (backend): 8 h (PROPUESTO: solo inyectar la matriz con rendimiento y ajustar el prompt; sin pantallas ni endpoints)
-- Migraciones SQL: db_changes/${todayFormatted}_0NN.sql (solo si hay columnas nuevas)`;
+  /**
+   * @deprecated Usar getGeneralRulesPrompt().
+   */
+  public static getUniversalRulesPrompt(): string {
+    return this.getGeneralRulesPrompt();
   }
 
-  public static getProjectGlossary(): string {
-    return renderGlossaryLayer();
+  private static buildBasePrompt(projectContext?: string, profile: ProjectProfile = GENERIC_PROFILE): string {
+    const renderedProfile = ProfileRegistry.renderProfile(profile);
+    const folderContext = projectContext?.trim() ? projectContext.trim() : "Sin contexto técnico adicional.";
+
+    return `[PARTE A — REGLAS GENERALES]
+
+${this.getGeneralRulesPrompt()}
+
+[PARTE B — PERFIL DEL PROYECTO]
+
+${renderedProfile}
+
+[CONTEXTO TÉCNICO DE LA CARPETA]
+
+${folderContext}`;
   }
 
-  public static buildStep1Prompt(projectContext?: string): string {
-    return `${this.getUniversalRulesPrompt()}
+  public static buildStep1Prompt(projectContext?: string, profile: ProjectProfile = GENERIC_PROFILE): string {
+    return `${this.buildBasePrompt(projectContext, profile)}
 
-${this.getProjectContextLayer(projectContext)}
-
-${this.getProjectGlossary()}
-
-Eres un Principal Software Architect de élite. Tu objetivo en esta ETAPA 1 (Extracción y Clasificación) es analizar la transcripción completa y devolver EXCLUSIVAMENTE una estructura JSON limpia con los puntos tratados, asignando obligatoriamente a cada uno su clase ('cerrado' | 'en_curso' | 'nuevo' | 'backlog') y su tipo de acción ('codigo' | 'gestion_externa' | 'decision' | 'seguimiento').
-Antes de clasificar, recorre TODA la transcripción buscando cierres posteriores (regla 21) y registra la frase de cierre en "cierre_posterior". En "quien_lo_lleva" escribe solo un nombre dicho explícitamente como responsable en ese segmento (regla 22); si no, null.
+Eres un Principal Software Architect de élite. Tu objetivo en esta ETAPA 1 (Extracción y Clasificación) es analizar la transcripción completa y devolver EXCLUSIVAMENTE una estructura JSON limpia con los puntos tratados, asignando obligatoriamente a cada uno su clase ('cerrado' | 'en_curso' | 'nuevo' | 'backlog') y su tipo de acción ('codigo' | 'gestion_externa' | 'decision' | 'seguimiento'), siguiendo estrictamente las reglas generales A1–A15 y el perfil del proyecto.
+Antes de clasificar, recorre TODA la transcripción buscando cierres posteriores (regla A5) y registra la frase de cierre en "cierre". En "quien_lo_lleva" escribe solo un nombre dicho explícitamente como responsable en ese segmento (regla A3); si no, null.
 
 ### FORMATO DE SALIDA DE ETAPA 1 (JSON ESTRICTO):
 {
@@ -211,10 +134,10 @@ Antes de clasificar, recorre TODA la transcripción buscando cierres posteriores
       "accion": "codigo | gestion_externa | decision | seguimiento",
       "repo": "backend | panel | app | varios | ninguno",
       "quien_lo_lleva": "nombre o null (solo si se nombra en el texto)",
-      "cierre_posterior": {"cita": "frase posterior que lo da por resuelto", "timestamp": "mm:ss"} o null,
       "tipo": "bug | mejora | consulta | soporte",
+      "cierre": {"frase": "frase de cierre", "timestamp": "mm:ss"},
       "interpretaciones": [{"transcrito": "...", "probable": "...", "confianza": "alta | baja"}],
-      "valores_ambiguos": [{"cita": "a partir de las 7", "lecturas": ["7:00 a.m.", "7:00 p.m."]}],
+      "valores_ambiguos": [{"cita": "...", "lecturas": ["...", "..."]}],
       "preguntas": [{
         "texto": "...",
         "bloqueante": false,
@@ -236,16 +159,14 @@ Antes de clasificar, recorre TODA la transcripción buscando cierres posteriores
 }`;
   }
 
-  public static buildStep2Prompt(projectContext?: string): string {
+  public static buildStep2Prompt(projectContext?: string, profile: ProjectProfile = GENERIC_PROFILE): string {
     const todayFormatted = new Date().toISOString().slice(0, 10).replace(/-/g, "");
 
-    return `${this.getUniversalRulesPrompt()}
+    return `${this.buildBasePrompt(projectContext, profile)}
 
-${this.getProjectContextLayer(projectContext)}
+Eres un Principal Software Architect y Technical Lead de élite. En esta ETAPA 2 (Redacción de Issues y Verificación Aritmética), genera los issues de programación organizados por repositorio afectado ÚNICAMENTE para los requerimientos recibidos con clase='nuevo' y accion='codigo' (sin volver a leer la transcripción para inventar detalles, y sin mencionar jamás 'Paso 1', 'Paso 2' o mecánicas internas en los issues, reglas A1–A15).
 
-${this.getProjectGlossary()}
-
-Eres un Principal Software Architect y Technical Lead de élite. En esta ETAPA 2 (Redacción de Issues y Verificación Aritmética), genera los issues de programación organizados por repositorio afectado ÚNICAMENTE para los requerimientos recibidos con clase='nuevo' y accion='codigo' (sin volver a leer la transcripción para inventar detalles, y sin mencionar jamás 'Paso 1', 'Paso 2' o mecánicas internas en los issues).
+Nota para migraciones SQL: si hay columnas nuevas, usa la fecha de hoy ${todayFormatted} (ej. db_changes/${todayFormatted}_0NN.sql).
 
 ### FORMATO DE SALIDA DE ETAPA 2 (JSON ESTRICTO):
 {
@@ -256,7 +177,7 @@ Eres un Principal Software Architect y Technical Lead de élite. En esta ETAPA 2
       "title": "[Backend] Título técnico imperativo",
       "type": "feature",
       "priority": "high",
-      "component": "Controllers / Logic",
+      "component": "Componente",
       "description": "Descripción clara citando [mm:ss] sin inventar campos...",
       "estimation": {
         "backendHours": 4,
@@ -267,13 +188,13 @@ Eres un Principal Software Architect y Technical Lead de élite. En esta ETAPA 2
       },
       "openQuestions": ["Ninguna"],
       "dependencies": ["Ninguna"],
-      "prWorkflow": "Rama corta desde dev, PR a dev, skill /revisar-entrega, captura de la prueba en pantalla y revisión de Juan.",
-      "expectedFiles": ["Controllers/ (verificar en el repo)", "Logic/ (verificar en el repo)", "db_changes/${todayFormatted}_001.sql", "docs/REGLAS_DE_NEGOCIO.md"],
+      "prWorkflow": "Flujo de entrega según perfil",
+      "expectedFiles": ["Carpetas/ (verificar en el repo)"],
       "acceptanceCriteria": [
         "Criterio explícito respaldado en [mm:ss]",
         "[Supuesto] Criterio deducido..."
       ],
-      "agentPrompt": "### Rol y Objetivo\\nActúa como Principal Developer...\\n\\n### Contexto\\nContexto según reunión [mm:ss]...\\n\\n### Pasos numerados\\n1. Leer AI_CONTEXT.md y docs/REGLAS_DE_NEGOCIO.md\\n2. ...\\n\\n### Restricciones\\n...\\n\\n### Criterios de Aceptación\\n- [ ] ...\\n\\n### Verificación\\n..."
+      "agentPrompt": "### Rol y Objetivo\\n...\\n\\n### Contexto\\n...\\n\\n### Pasos numerados\\n1. Leer documentos del perfil...\\n\\n### Restricciones\\n...\\n\\n### Criterios de Aceptación\\n- [ ] ...\\n\\n### Verificación\\n..."
     }
   ],
   "repoHoursTotals": {
@@ -285,14 +206,10 @@ Eres un Principal Software Architect y Technical Lead de élite. En esta ETAPA 2
 }`;
   }
 
-  public static buildSingleStepPrompt(projectContext?: string): string {
-    return `${this.getUniversalRulesPrompt()}
+  public static buildSingleStepPrompt(projectContext?: string, profile: ProjectProfile = GENERIC_PROFILE): string {
+    return `${this.buildBasePrompt(projectContext, profile)}
 
-${this.getProjectContextLayer(projectContext)}
-
-${this.getProjectGlossary()}
-
-Eres un Principal Software Architect y Technical Lead de élite. Convierte la reunión en documentación técnica e issues accionables listas para agentes de IA en formato JSON estricto, aplicando estrictamente las 23 reglas universales (reglas 1–23, incluye las 22 reglas base):
+Eres un Principal Software Architect y Technical Lead de élite. Convierte la reunión en documentación técnica e issues accionables listas para agentes de IA en formato JSON estricto, aplicando estrictamente las reglas generales A1–A15 y el perfil del proyecto:
 
 ### FORMATO DE SALIDA (JSON ESTRICTO):
 {
@@ -309,7 +226,7 @@ Eres un Principal Software Architect y Technical Lead de élite. Convierte la re
       "title": "[Backend] Título técnico",
       "type": "feature",
       "priority": "high",
-      "component": "Logic",
+      "component": "Componente",
       "description": "Detalle citando [mm:ss]",
       "estimation": {
         "backendHours": 4,
@@ -320,10 +237,10 @@ Eres un Principal Software Architect y Technical Lead de élite. Convierte la re
       },
       "openQuestions": ["Ninguna"],
       "dependencies": ["Ninguna"],
-      "prWorkflow": "Rama corta desde dev, PR a dev, skill /revisar-entrega, captura de la prueba en pantalla y revisión de Juan.",
-      "expectedFiles": ["Controllers/ (verificar en el repo)", "docs/REGLAS_DE_NEGOCIO.md"],
+      "prWorkflow": "Flujo según perfil",
+      "expectedFiles": ["Carpetas/ (verificar en el repo)"],
       "acceptanceCriteria": ["Criterio [mm:ss]"],
-      "agentPrompt": "### Rol y Objetivo\\n...\\n\\n### Contexto\\n...\\n\\n### Pasos numerados\\n1. Leer AI_CONTEXT.md...\\n\\n### Restricciones\\n...\\n\\n### Criterios de Aceptación\\n...\\n\\n### Verificación\\n..."
+      "agentPrompt": "### Rol y Objetivo\\n...\\n\\n### Contexto\\n...\\n\\n### Pasos numerados\\n1. Leer documentos...\\n\\n### Restricciones\\n...\\n\\n### Criterios de Aceptación\\n...\\n\\n### Verificación\\n..."
     }
   ],
   "backlog": ["Mejora futura"],

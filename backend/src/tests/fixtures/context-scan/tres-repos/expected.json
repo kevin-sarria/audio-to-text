@@ -1,0 +1,58 @@
+[
+  {
+    "id": "tres-repos-layout",
+    "descripcion": "El layout detectado debe ser multi-repo",
+    "tipo": "inventory",
+    "path": "layout",
+    "valor": "multi-repo"
+  },
+  {
+    "id": "tres-repos-count",
+    "descripcion": "Deben detectarse 3 repositorios",
+    "tipo": "inventory",
+    "path": "repositories.length",
+    "valor": 3
+  },
+  {
+    "id": "frontend-no-test-report",
+    "descripcion": "El contexto debe indicar que frontend-app no tiene script de pruebas en package.json",
+    "tipo": "context-contains",
+    "texto": "frontend-app: no tiene script de pruebas (`test`) en package.json"
+  },
+  {
+    "id": "despliegue-nginx",
+    "descripcion": "El contexto debe mencionar Nginx en despliegue",
+    "tipo": "context-contains",
+    "texto": "nginx"
+  },
+  {
+    "id": "glosario-sedes",
+    "descripcion": "El glosario o contexto debe relacionar sede con CostCenter",
+    "tipo": "context-contains",
+    "texto": "CostCenter"
+  },
+  {
+    "id": "not-contains-no-debe-salir",
+    "descripcion": "El contexto no debe contener el secreto NO-DEBE-SALIR",
+    "tipo": "context-not-contains",
+    "texto": "NO-DEBE-SALIR"
+  },
+  {
+    "id": "not-contains-super-secreta",
+    "descripcion": "El contexto no debe contener la contraseña del template",
+    "tipo": "context-not-contains",
+    "texto": "SuperSecreta123"
+  },
+  {
+    "id": "not-contains-ip-template",
+    "descripcion": "El contexto no debe contener la IP 10.20.30.40 sin redactar",
+    "tipo": "context-not-contains",
+    "texto": "10.20.30.40"
+  },
+  {
+    "id": "not-contains-repositories-layer",
+    "descripcion": "El contexto no debe contener una capa inexistente Repositories",
+    "tipo": "context-not-contains",
+    "texto": "Repositories/"
+  }
+]

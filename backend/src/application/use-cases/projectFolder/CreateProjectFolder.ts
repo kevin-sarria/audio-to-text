@@ -10,6 +10,8 @@ export interface CreateProjectFolderInput {
   defaultProvider?: string;
   defaultModel?: string;
   customApiKey?: string;
+  /** Perfil de reglas del proyecto ("diamante", "generic"…). Vacío = genérico. */
+  profileId?: string;
 }
 
 export class CreateProjectFolder {
@@ -26,6 +28,7 @@ export class CreateProjectFolder {
       defaultProvider: input.defaultProvider?.trim() || null,
       defaultModel: input.defaultModel?.trim() || null,
       customApiKey: input.customApiKey?.trim() || null,
+      profileId: input.profileId?.trim() || null,
       createdAt: now,
       updatedAt: now
     });

@@ -1,5 +1,7 @@
 import { GeneratedMeetingData } from "../../domain/services/IMeetingAnalysisService.js";
 import { ExtractionPointDto } from "./MeetingAnalysisResponseParser.js";
+import { ProjectProfile } from "./profiles/ProjectProfile.js";
+import { DIAMANTE_PROFILE } from "./profiles/diamanteProfile.js";
 import {
   MeetingAnalysisErrorValidators,
   ALLOWED_DOCUMENTS,
@@ -23,10 +25,11 @@ export class MeetingAnalysisValidators {
   public static validate(
     data: GeneratedMeetingData,
     transcript?: string,
-    extractionPoints?: ExtractionPointDto[]
+    extractionPoints?: ExtractionPointDto[],
+    profile: ProjectProfile = DIAMANTE_PROFILE
   ): ValidationResult {
-    const errors = MeetingAnalysisErrorValidators.validateErrors(data, transcript, extractionPoints);
-    const warnings = MeetingAnalysisQualityValidators.validateWarnings(data, transcript, extractionPoints);
+    const errors = MeetingAnalysisErrorValidators.validateErrors(data, transcript, extractionPoints, profile);
+    const warnings = MeetingAnalysisQualityValidators.validateWarnings(data, transcript, extractionPoints, profile);
 
     return {
       isValid: errors.length === 0,
@@ -35,7 +38,11 @@ export class MeetingAnalysisValidators {
     };
   }
 
-  public static sanitizeAndAutocorrect(data: GeneratedMeetingData, transcript?: string): GeneratedMeetingData {
-    return MeetingAnalysisQualityValidators.sanitizeAndAutocorrect(data, transcript);
+  public static sanitizeAndAutocorrect(
+    data: GeneratedMeetingData,
+    transcript?: string,
+    profile: ProjectProfile = DIAMANTE_PROFILE
+  ): GeneratedMeetingData {
+    return MeetingAnalysisQualityValidators.sanitizeAndAutocorrect(data, transcript, profile);
   }
 }

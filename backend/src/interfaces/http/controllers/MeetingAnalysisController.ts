@@ -20,7 +20,7 @@ export class MeetingAnalysisController {
         ? crypto.createHash("sha256").update(guestToken).digest("hex")
         : null;
 
-      const { title, projectContext, provider, apiKey, model, baseUrl } = req.body || {};
+      const { title, projectContext, provider, apiKey, model, baseUrl, profileId } = req.body || {};
 
       const result = await this.generateMeetingAnalysis.execute({
         sessionId,
@@ -31,7 +31,8 @@ export class MeetingAnalysisController {
         provider,
         apiKey,
         model,
-        baseUrl
+        baseUrl,
+        profileId
       });
 
       res.json({
@@ -50,6 +51,7 @@ export class MeetingAnalysisController {
           issues: result.issues,
           backlog: result.backlog,
           repoHoursTotals: result.repoHoursTotals,
+          generationMeta: result.generationMeta ?? null,
           createdAt: result.createdAt.toISOString(),
           updatedAt: result.updatedAt.toISOString()
         }
@@ -98,6 +100,7 @@ export class MeetingAnalysisController {
           issues: result.issues,
           backlog: result.backlog,
           repoHoursTotals: result.repoHoursTotals,
+          generationMeta: result.generationMeta ?? null,
           createdAt: result.createdAt.toISOString(),
           updatedAt: result.updatedAt.toISOString()
         }

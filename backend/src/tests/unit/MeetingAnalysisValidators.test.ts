@@ -372,9 +372,9 @@ xUnit.`
 
   it("carga y evalúa el caso de referencia 2026-11-18_08-04-57 con EvaluationRunner", () => {
     const casesDir = path.resolve(__dirname, "../../infrastructure/analysis/evaluation/cases");
-    const evalCase = EvaluationRunner.loadCase(casesDir, "2026-11-18_08-04-57");
+    const evalCase = EvaluationRunner.loadCase(casesDir, "diamante/2026-11-18_08-04-57");
 
-    expect(evalCase.caseId).toBe("2026-11-18_08-04-57");
+    expect(evalCase.caseId).toBe("diamante/2026-11-18_08-04-57");
     expect(evalCase.transcript.length).toBeGreaterThan(1000);
     expect(evalCase.expected.expectedIssuesCount).toBe(9);
     expect(evalCase.expected.expectedRepoBreakdown.app).toBe(0);

@@ -1,5 +1,7 @@
 import { TranscriptCoverageDetector, MissingAudioGap } from "./TranscriptCoverageDetector.js";
 import { GLOSSARY_DOMAIN_TERMS } from "./glossary/ProjectGlossary.js";
+import { ProjectProfile } from "./profiles/ProjectProfile.js";
+import { DIAMANTE_PROFILE } from "./profiles/diamanteProfile.js";
 
 export interface TranscriptSegment {
   sec: number;
@@ -40,8 +42,10 @@ export function stem(word: string): string {
 export class TranscriptIndex {
   public readonly segments: TranscriptSegment[];
   public readonly gaps: MissingAudioGap[];
+  private readonly domainTerms: string[];
 
-  constructor(transcript: string) {
+  constructor(transcript: string, profile: ProjectProfile = DIAMANTE_PROFILE) {
+    this.domainTerms = profile.domainTerms || GLOSSARY_DOMAIN_TERMS;
     const segments: TranscriptSegment[] = [];
     for (const line of (transcript || "").split(/\r?\n/)) {
       const m = line.match(/^\s*\[(\d{1,3}):(\d{2})\]\s*(.*)$/);
@@ -133,7 +137,8 @@ export class TranscriptIndex {
     const bareClosure =
       /\b(?:ya (?:esta|quedo|te habia|lo habia|se habia) (?:solucionad|resuelt|cerrad|list)|ya te habia solucionado|ya (?:va|esta) en la pr)\w*/;
     // Solo términos de una palabra ("centro de costo" es demasiado genérico como tema de cierre).
-    const domainStems = GLOSSARY_DOMAIN_TERMS.map((t) => (t.split(" (")[0] || t).trim())
+    const domainStems = (this.domainTerms || GLOSSARY_DOMAIN_TERMS)
+      .map((t) => (t.split(" (")[0] || t).trim())
       .filter((t) => !t.includes(" "))
       .map((t) => stem(t))
       .filter((t) => t.length >= 5);

@@ -1,6 +1,9 @@
 import { contextBridge, ipcRenderer } from "electron";
 
-const appVersion = process.env.npm_package_version || "1.0.0";
+// npm_package_version solo existe al correr con npm; en la app instalada la versión
+// viene del proceso principal (app.getVersion()) vía additionalArguments.
+const versionArg = process.argv.find((a) => a.startsWith("--app-version="));
+const appVersion = versionArg?.slice("--app-version=".length) || process.env.npm_package_version || "0.0.0";
 
 contextBridge.exposeInMainWorld("desktop", {
   isDesktop: true,

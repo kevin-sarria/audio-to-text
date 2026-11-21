@@ -32,7 +32,7 @@ export class ProjectFolderController {
         return;
       }
 
-      const technicalContext = await this.analysisService.generateContextFromRepo(folderPath.trim(), {
+      const scanResult = await this.analysisService.generateContextFromRepo(folderPath.trim(), {
         provider,
         model,
         apiKey,
@@ -43,7 +43,8 @@ export class ProjectFolderController {
         success: true,
         data: {
           folderPath: folderPath.trim(),
-          technicalContext
+          technicalContext: scanResult.technicalContext,
+          report: scanResult.report
         }
       });
     } catch (err) {
@@ -54,7 +55,7 @@ export class ProjectFolderController {
   public create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const userId = req.user?.userId || null;
-      const { name, description, technicalContext, defaultProvider, defaultModel, customApiKey } = req.body;
+      const { name, description, technicalContext, defaultProvider, defaultModel, customApiKey, profileId } = req.body;
 
       const folder = await this.createProjectFolder.execute({
         userId,
@@ -63,7 +64,8 @@ export class ProjectFolderController {
         technicalContext,
         defaultProvider,
         defaultModel,
-        customApiKey
+        customApiKey,
+        profileId
       });
 
       res.status(201).json({
@@ -76,6 +78,7 @@ export class ProjectFolderController {
           defaultProvider: folder.defaultProvider,
           defaultModel: folder.defaultModel,
           customApiKey: folder.customApiKey ? "••••" + folder.customApiKey.slice(-4) : undefined,
+          profileId: folder.profileId ?? undefined,
           createdAt: folder.createdAt.toISOString(),
           updatedAt: folder.updatedAt.toISOString()
         }
@@ -100,6 +103,7 @@ export class ProjectFolderController {
           defaultProvider: f.defaultProvider,
           defaultModel: f.defaultModel,
           customApiKey: f.customApiKey ? "••••" + f.customApiKey.slice(-4) : undefined,
+          profileId: f.profileId ?? undefined,
           createdAt: f.createdAt.toISOString(),
           updatedAt: f.updatedAt.toISOString()
         }))
@@ -124,6 +128,7 @@ export class ProjectFolderController {
           defaultProvider: folder.defaultProvider,
           defaultModel: folder.defaultModel,
           customApiKey: folder.customApiKey ? "••••" + folder.customApiKey.slice(-4) : undefined,
+          profileId: folder.profileId ?? undefined,
           createdAt: folder.createdAt.toISOString(),
           updatedAt: folder.updatedAt.toISOString()
         }
@@ -136,7 +141,7 @@ export class ProjectFolderController {
   public update = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const id = req.params["id"]!;
-      const { name, description, technicalContext, defaultProvider, defaultModel, customApiKey } = req.body;
+      const { name, description, technicalContext, defaultProvider, defaultModel, customApiKey, profileId } = req.body;
 
       const folder = await this.updateProjectFolderUseCase.execute({
         id,
@@ -145,7 +150,8 @@ export class ProjectFolderController {
         technicalContext,
         defaultProvider,
         defaultModel,
-        customApiKey
+        customApiKey,
+        profileId
       });
 
       res.json({
@@ -158,6 +164,7 @@ export class ProjectFolderController {
           defaultProvider: folder.defaultProvider,
           defaultModel: folder.defaultModel,
           customApiKey: folder.customApiKey ? "••••" + folder.customApiKey.slice(-4) : undefined,
+          profileId: folder.profileId ?? undefined,
           createdAt: folder.createdAt.toISOString(),
           updatedAt: folder.updatedAt.toISOString()
         }

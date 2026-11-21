@@ -24,6 +24,7 @@ export interface ProjectFolderDto {
   defaultProvider?: string;
   defaultModel?: string;
   customApiKey?: string;
+  profileId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -31,10 +32,34 @@ export interface ProjectFolderDto {
 export const CreateProjectFolderSchema = z.object({
   name: z.string().trim().min(1, "El nombre de la carpeta de proyecto es obligatorio").max(120),
   description: z.string().max(500).optional(),
-  technicalContext: z.string().min(1, "El contexto técnico es obligatorio").max(15000),
+  technicalContext: z.string().min(1, "El contexto técnico es obligatorio").max(40000),
   defaultProvider: z.string().max(50).optional(),
   defaultModel: z.string().max(100).optional(),
-  customApiKey: z.string().max(256).optional()
+  customApiKey: z.string().max(256).optional(),
+  profileId: z.string().max(50).optional()
 });
 
 export const UpdateProjectFolderSchema = CreateProjectFolderSchema.partial();
+
+export interface ProjectContextScanReportDto {
+  generatedAt: string;
+  providerLabel: string;
+  model: string;
+  layout: "single-repo" | "multi-repo" | "monorepo" | "no-git";
+  repositories: Array<{ path: string; name: string; headCommit: string | null }>;
+  readLog: Array<{ path: string; status: "complete" | "sections" | "omitted"; sections?: number; reason?: string }>;
+  notFullyRead: string[];
+  verification: { verified: number; unconfirmed: number; discarded: number };
+  discarded: Array<{ section: string; dato: string; fuente: string; reason: string }>;
+  openQuestions: string[];
+  contradictions: number;
+  notFound: string[];
+  redactions: number;
+  skippedSecretFiles: number;
+  llmCalls: number;
+}
+
+export interface ProjectContextScanResultDto {
+  technicalContext: string;
+  report: ProjectContextScanReportDto;
+}

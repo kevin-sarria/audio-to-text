@@ -7,6 +7,7 @@ export interface ProjectFolderProps {
   defaultProvider?: string | null;
   defaultModel?: string | null;
   customApiKey?: string | null;
+  profileId?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -46,6 +47,10 @@ export class ProjectFolder {
     return this.props.customApiKey;
   }
 
+  public get profileId(): string | null | undefined {
+    return this.props.profileId;
+  }
+
   public get createdAt(): Date {
     return this.props.createdAt;
   }
@@ -61,6 +66,7 @@ export class ProjectFolder {
     if (props.defaultProvider !== undefined) this.props.defaultProvider = props.defaultProvider;
     if (props.defaultModel !== undefined) this.props.defaultModel = props.defaultModel;
     if (props.customApiKey !== undefined) this.props.customApiKey = props.customApiKey;
+    if (props.profileId !== undefined) this.props.profileId = props.profileId;
     this.props.updatedAt = new Date();
   }
 }

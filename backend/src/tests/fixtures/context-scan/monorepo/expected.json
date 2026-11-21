@@ -1,0 +1,16 @@
+[
+  {
+    "id": "monorepo-layout",
+    "descripcion": "El layout detectado debe ser monorepo",
+    "tipo": "inventory",
+    "path": "layout",
+    "valor": "monorepo"
+  },
+  {
+    "id": "monorepo-count",
+    "descripcion": "Debe detectarse exactamente 1 repositorio",
+    "tipo": "inventory",
+    "path": "repositories.length",
+    "valor": 1
+  }
+]

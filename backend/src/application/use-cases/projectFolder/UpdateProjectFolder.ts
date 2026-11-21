@@ -10,6 +10,7 @@ export interface UpdateProjectFolderInput {
   defaultProvider?: string;
   defaultModel?: string;
   customApiKey?: string;
+  profileId?: string;
 }
 
 export class UpdateProjectFolder {
@@ -27,7 +28,8 @@ export class UpdateProjectFolder {
       technicalContext: input.technicalContext !== undefined ? input.technicalContext.trim() : undefined,
       defaultProvider: input.defaultProvider !== undefined ? input.defaultProvider.trim() : undefined,
       defaultModel: input.defaultModel !== undefined ? input.defaultModel.trim() : undefined,
-      customApiKey: input.customApiKey !== undefined ? input.customApiKey.trim() : undefined
+      customApiKey: input.customApiKey !== undefined ? input.customApiKey.trim() : undefined,
+      profileId: input.profileId !== undefined ? input.profileId.trim() || null : undefined
     });
 
     return await this.projectFolderRepository.update(folder);

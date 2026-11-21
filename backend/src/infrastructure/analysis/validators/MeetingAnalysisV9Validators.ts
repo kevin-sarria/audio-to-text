@@ -2,6 +2,8 @@ import { GeneratedMeetingData } from "../../../domain/services/IMeetingAnalysisS
 import { ExtractionPointDto } from "../MeetingAnalysisResponseParser.js";
 import { TranscriptIndex, TranscriptSegment, normalizeText, parseCitedSeconds } from "../TranscriptIndex.js";
 import { AMBIGUOUS_CHANNEL_TERMS } from "../glossary/ProjectGlossary.js";
+import { ProjectProfile } from "../profiles/ProjectProfile.js";
+import { DIAMANTE_PROFILE } from "../profiles/diamanteProfile.js";
 
 export interface MatrixItem {
   sec: number;
@@ -40,9 +42,10 @@ function first8(text: string): string {
  */
 export function detectMatrixItems(
   transcript: string,
-  extractionPoints?: ExtractionPointDto[]
+  extractionPoints?: ExtractionPointDto[],
+  profile: ProjectProfile = DIAMANTE_PROFILE
 ): MatrixItem[] {
-  const index = new TranscriptIndex(transcript || "");
+  const index = new TranscriptIndex(transcript || "", profile);
   const rawInicios: Array<{ sec: number; text: string }> = [];
 
   for (const seg of index.segments) {
@@ -105,11 +108,12 @@ export class MeetingAnalysisV9Validators {
     data: GeneratedMeetingData,
     transcript: string | undefined,
     errors: string[],
-    extractionPoints?: ExtractionPointDto[]
+    extractionPoints?: ExtractionPointDto[],
+    profile: ProjectProfile = DIAMANTE_PROFILE
   ): void {
     const rawTranscript = transcript || "";
-    const index = new TranscriptIndex(rawTranscript);
-    const matrixItems = detectMatrixItems(rawTranscript, extractionPoints);
+    const index = new TranscriptIndex(rawTranscript, profile);
+    const matrixItems = detectMatrixItems(rawTranscript, extractionPoints, profile);
 
     // Mapeo de destinos por ítem de la matriz
     const matrixDestinations = new Map<
@@ -315,11 +319,12 @@ export class MeetingAnalysisV9Validators {
     }
 
     // 6. Canal ambiguo en issues de panel o app
+    const ambiguousPatterns = profile.ambiguousChannelPatterns || AMBIGUOUS_CHANNEL_TERMS;
     for (const issue of data.issues || []) {
       if (issue.repo !== "panel" && issue.repo !== "app") continue;
       const issueBody = `${issue.title || ""} ${issue.description || ""}`;
       const issueNorm = normalizeText(issueBody);
-      const directMatch = AMBIGUOUS_CHANNEL_TERMS.some((re) => re.test(issueNorm));
+      const directMatch = ambiguousPatterns.some((re) => re.test(issueNorm));
 
       const cited = parseCitedSeconds(issueBody);
       const nearbyMatch = cited.some((sec) => {
@@ -328,7 +333,7 @@ export class MeetingAnalysisV9Validators {
           const end = next ? next.sec : s.sec + 30;
           return sec >= s.sec && sec < end;
         });
-        return seg && AMBIGUOUS_CHANNEL_TERMS.some((re) => re.test(seg.norm));
+        return seg && ambiguousPatterns.some((re) => re.test(seg.norm));
       });
 
       if (directMatch || nearbyMatch) {
@@ -343,10 +348,11 @@ export class MeetingAnalysisV9Validators {
     data: GeneratedMeetingData,
     transcript: string | undefined,
     warnings: string[],
-    _extractionPoints?: ExtractionPointDto[]
+    _extractionPoints?: ExtractionPointDto[],
+    profile: ProjectProfile = DIAMANTE_PROFILE
   ): void {
     const rawTranscript = transcript || "";
-    const index = new TranscriptIndex(rawTranscript);
+    const index = new TranscriptIndex(rawTranscript, profile);
 
     // Entrada de alreadyResolved sin marcas citadas
     for (const entry of data.alreadyResolved || []) {

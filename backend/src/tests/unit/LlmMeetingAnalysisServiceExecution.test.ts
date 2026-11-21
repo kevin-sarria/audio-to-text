@@ -5,6 +5,7 @@ import os from "node:os";
 import { LlmMeetingAnalysisService } from "../../infrastructure/analysis/LlmMeetingAnalysisService.js";
 import { InMemorySecretVault } from "../../desktop/infrastructure/settings/ISecretVault.js";
 import { SettingsStore } from "../../desktop/infrastructure/settings/SettingsStore.js";
+import { DIAMANTE_PROFILE } from "../../infrastructure/analysis/profiles/diamanteProfile.js";
 
 describe("LlmMeetingAnalysisService - Ejecución de Pipeline y Prompts", () => {
   let tempDir: string;
@@ -162,51 +163,31 @@ Fin de respuesta.`;
     expect(parsed.issues[0]?.description).toContain("dotnet test");
   });
 
-  it("los prompts del pipeline (Paso 1, Paso 2 y Fallback) estructuran 3 capas y las reglas 1-16", () => {
-    const step1Prompt = (service as any).buildStep1Prompt("Contexto DIAMANTE...");
-    const step2Prompt = (service as any).buildStep2Prompt("Contexto DIAMANTE...");
-    const singleStepPrompt = (service as any).buildSingleStepPrompt("Contexto DIAMANTE...");
+  it("los prompts del pipeline (etapa 1, etapa 2 y respaldo) se arman con Parte A + perfil + contexto de la carpeta", () => {
+    const step1Prompt = (service as any).buildStep1Prompt("Contexto DIAMANTE...", DIAMANTE_PROFILE);
+    const step2Prompt = (service as any).buildStep2Prompt("Contexto DIAMANTE...", DIAMANTE_PROFILE);
+    const singleStepPrompt = (service as any).buildSingleStepPrompt("Contexto DIAMANTE...", DIAMANTE_PROFILE);
 
-    // Capa 1: Reglas universales
-    expect(step1Prompt).toContain("[CAPA 1 — REGLAS UNIVERSALES DE GENERACIÓN DE ISSUES (OBLIGATORIAS)]");
-    expect(step1Prompt).toContain("== 1. FIDELIDAD A LA TRANSCRIPCIÓN ==");
-    expect(step1Prompt).toContain("== 2. RUIDO DE TRANSCRIPCIÓN, NOMBRES, VALORES Y HABLANTES ==");
-    expect(step1Prompt).toContain("== 3. PREGUNTAS ABIERTAS ==");
-    expect(step1Prompt).toContain("== 4. NO CONSTRUYAS SOBRE LO AMBIGUO ==");
-    expect(step1Prompt).toContain("== 5. NO INVENTES ESTRUCTURA NI TECNOLOGÍA ==");
-    expect(step1Prompt).toContain("== 6. CLASIFICA ANTES DE CREAR ISSUES ==");
-    expect(step1Prompt).toContain("== 7. ENDPOINTS FALTANTES Y DEPENDENCIAS ==");
-    expect(step1Prompt).toContain("== 8. SIN ALCANCE EXTRA ==");
-    expect(step1Prompt).toContain("== 9. ESTADO REAL ==");
-    expect(step1Prompt).toContain("== 10. CONTRADICCIÓN CON EL CONTEXTO ==");
-    expect(step1Prompt).toContain("== 11. ESTIMACIÓN CALIBRADA ==");
-    expect(step1Prompt).toContain("== 12. FLUJO DE PR");
-    expect(step1Prompt).toContain("== 13. PROMPT DE CADA ISSUE");
-    expect(step1Prompt).toContain("== 14. FORMATO DE SALIDA ==");
-    expect(step1Prompt).toContain("== 15. NO FILTRES LA MECÁNICA INTERNA ==");
-    expect(step1Prompt).toContain("== 16. FIDELIDAD EN BUGS ==");
-    expect(step1Prompt).toContain("== 17. CAMBIOS DE NOMBRE ==");
-    expect(step1Prompt).toContain("== 18. FRASES SUELTAS DE ESTADO ==");
-    expect(step1Prompt).toContain("== 19. CRITERIOS DE ACEPTACIÓN ==");
-
-    // Capa 2: Contexto y tabla de referencia
-    expect(step1Prompt).toContain("[CAPA 2 — CONTEXTO DEL PROYECTO]");
-    expect(step1Prompt).toContain("TABLA DE REFERENCIA DE HORAS");
-    expect(step1Prompt).toContain("LISTA EXACTA DE DOCUMENTOS PERMITIDOS");
-    expect(step1Prompt).toContain("AI_CONTEXT.md");
-    expect(step1Prompt).toContain("BITACORA.md");
-
-    // Capa 3: Glosario
-    expect(step1Prompt).toContain("[CAPA 3 — GLOSARIO]");
-    expect(step1Prompt).toContain('"Lexus" → "Alexis"');
-    expect(step1Prompt).toContain('"RAME"');
-    expect(step1Prompt).toContain('"valida de amante"');
-    expect(step1Prompt).toContain('"al EC" → "Excel"');
-
-    // Paso 2 y Single Step
-    expect(step2Prompt).toContain("[CAPA 1 — REGLAS UNIVERSALES DE GENERACIÓN DE ISSUES (OBLIGATORIAS)]");
+    for (const prompt of [step1Prompt, step2Prompt, singleStepPrompt]) {
+      // Parte A: reglas generales A1–A15
+      for (let n = 1; n <= 15; n++) expect(prompt).toContain(`== A${n}. `);
+      // Parte B: perfil DIAMANTE (documentos, horas, glosario)
+      expect(prompt).toContain("PERFIL DE PROYECTO: DIAMANTE");
+      expect(prompt).toContain("== B6. TABLA DE REFERENCIA DE HORAS ==");
+      expect(prompt).toContain("AI_CONTEXT.md");
+      expect(prompt).toContain("BITACORA.md");
+      expect(prompt).toContain('"Lexus" → "Alexis"');
+      expect(prompt).toContain('"al EC" → "Excel"');
+      // Orden de capas: A → B → contexto de la carpeta
+      const a = prompt.indexOf("[PARTE A — REGLAS GENERALES]");
+      const b = prompt.indexOf("[PARTE B — PERFIL DEL PROYECTO]");
+      const c = prompt.indexOf("[CONTEXTO TÉCNICO DE LA CARPETA]");
+      expect(a).toBeGreaterThanOrEqual(0);
+      expect(b).toBeGreaterThan(a);
+      expect(c).toBeGreaterThan(b);
+      expect(prompt).toContain("Contexto DIAMANTE...");
+    }
     expect(step2Prompt).toContain("ETAPA 2");
-    expect(singleStepPrompt).toContain("[CAPA 1 — REGLAS UNIVERSALES DE GENERACIÓN DE ISSUES (OBLIGATORIAS)]");
   });
 
   it("normaliza la extracción antes de la etapa 2 y reintenta si la etapa 2 no devuelve JSON válido", async () => {
@@ -256,7 +237,7 @@ Fin de respuesta.`;
       .mockResolvedValueOnce("esto no es JSON")
       .mockResolvedValueOnce(step2);
 
-    const result = await service.generateAnalysis(transcript, undefined, { provider: "google-account" });
+    const result = await service.generateAnalysis(transcript, undefined, { provider: "google-account", profileId: "diamante" });
 
     expect(executeSpy).toHaveBeenCalledTimes(3);
     const firstStep2Prompt = String(executeSpy.mock.calls[1]?.[1] ?? "");
@@ -373,5 +354,94 @@ Fin de respuesta.`;
     expect(retryStep1Prompt).toContain("31:50");
     expect(result.issues).toHaveLength(2);
     expect(result.issues.some((i) => i.id === "BACKEND-1")).toBe(true);
+  });
+  describe("metadatos de generación (v10)", () => {
+    const step1 = JSON.stringify({
+      summary: "Reunión corta.",
+      puntos: [{ id: "P1", cita: "Necesitamos exportar a PDF", timestamp: "04:20", clase: "nuevo", accion: "codigo", repo: "backend" }],
+      alreadyResolved: [],
+      inProgress: [],
+      keyDecisions: [],
+      topicsDiscussed: [],
+      globalOpenQuestions: [],
+      backlog: []
+    });
+    const step2 = JSON.stringify({
+      issues: [
+        {
+          id: "BACKEND-1",
+          repo: "backend",
+          title: "[Backend] Exportación a PDF",
+          type: "feature",
+          priority: "medium",
+          component: "Export",
+          description: "Exportación según [04:20]",
+          estimation: { backendHours: 3, panelHours: 0, appHours: 0, totalHours: 3, text: "" },
+          openQuestions: ["Ninguna"],
+          dependencies: ["Ninguna"],
+          acceptanceCriteria: ["Genera PDF [04:20]"],
+          agentPrompt: ["### Rol y Objetivo", "Dev", "### Contexto", "Contexto [04:20]", "### Pasos numerados", "1. Leer AI_CONTEXT.md", "### Restricciones", "Ninguna", "### Criterios de Aceptación", "- [ ] Genera PDF", "### Verificación", "Pruebas en verde."].join("\n")
+        }
+      ],
+      repoHoursTotals: { backend: 3, panel: 0, app: 0, total: 3 }
+    });
+    const transcript = "[04:20] Hablante 1: Necesitamos exportar a PDF.";
+
+    it("devuelve proveedor, modelo, perfil, intentos y avisos, y el perfil llega al prompt", async () => {
+      vi.spyOn(service as any, "resolveAgyPath").mockReturnValue("agy");
+      const executeSpy = vi.spyOn(service as any, "executeLlmCall").mockResolvedValueOnce(step1).mockResolvedValueOnce(step2);
+
+      const result = await service.generateAnalysis(transcript, "Contexto", {
+        provider: "google-account",
+        model: "gemini-3-pro",
+        profileId: "diamante"
+      });
+
+      const meta = result.generationMeta!;
+      expect(meta.provider).toBe("google-account");
+      expect(meta.providerLabel).toBe("Cuenta de Google (Antigravity)");
+      expect(meta.model).toBe("gemini-3-pro");
+      expect(meta.profileId).toBe("diamante");
+      expect(meta.profileName).toContain("DIAMANTE");
+      expect(meta.attempts).toBeGreaterThanOrEqual(1);
+      expect(meta.usedFallback).toBe(false);
+      expect(Array.isArray(meta.validationWarnings)).toBe(true);
+      expect(Array.isArray(meta.validationErrors)).toBe(true);
+      expect(meta.durationMs).toBeGreaterThanOrEqual(0);
+      expect(Number.isNaN(Date.parse(meta.generatedAt))).toBe(false);
+
+      const firstSystemPrompt = executeSpy.mock.calls[0]?.[0] as string;
+      expect(firstSystemPrompt).toContain("PERFIL DE PROYECTO: DIAMANTE");
+    });
+
+    it("sin profileId usa el perfil genérico y el prompt no contiene DIAMANTE", async () => {
+      vi.spyOn(service as any, "resolveAgyPath").mockReturnValue("agy");
+      const executeSpy = vi.spyOn(service as any, "executeLlmCall").mockResolvedValueOnce(step1).mockResolvedValueOnce(step2);
+
+      const result = await service.generateAnalysis(transcript, "Contexto", { provider: "google-account" });
+      expect(result.generationMeta?.profileId).toBe("generic");
+      expect(executeSpy.mock.calls[0]?.[0] as string).not.toMatch(/diamante/i);
+    });
+
+    it("marca usedFallback cuando cae al análisis de paso único", async () => {
+      vi.spyOn(service as any, "resolveAgyPath").mockReturnValue("agy");
+      const fallback = JSON.stringify({
+        summary: "Respaldo",
+        alreadyResolved: [],
+        inProgress: [],
+        keyDecisions: [],
+        topicsDiscussed: [],
+        globalOpenQuestions: [],
+        issues: [],
+        backlog: [],
+        repoHoursTotals: { backend: 0, panel: 0, app: 0, total: 0 }
+      });
+      vi.spyOn(service as any, "executeLlmCall").mockRejectedValueOnce(new Error("fallo de red")).mockResolvedValueOnce(fallback);
+
+      const result = await service.generateAnalysis(transcript, undefined, { provider: "google-account", profileId: "diamante" });
+      expect(result.summary).toBe("Respaldo");
+      expect(result.generationMeta?.usedFallback).toBe(true);
+      expect(result.generationMeta?.profileId).toBe("diamante");
+    });
   });
 });

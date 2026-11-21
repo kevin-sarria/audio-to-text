@@ -1,10 +1,17 @@
-import { DevIssueDto, MeetingAnalysisProvider, RepoHoursTotals } from "@audio-to-text/shared";
+import {
+  DevIssueDto,
+  MeetingAnalysisProvider,
+  RepoHoursTotals,
+  AnalysisGenerationMetaDto,
+  ProjectContextScanResultDto
+} from "@audio-to-text/shared";
 
 export interface GenerateAnalysisOptions {
   provider?: MeetingAnalysisProvider;
   apiKey?: string;
   model?: string;
   baseUrl?: string;
+  profileId?: string;
 }
 
 export interface GeneratedMeetingData {
@@ -17,6 +24,7 @@ export interface GeneratedMeetingData {
   issues: DevIssueDto[];
   backlog?: string[];
   repoHoursTotals?: RepoHoursTotals;
+  generationMeta?: AnalysisGenerationMetaDto;
 }
 
 export interface IMeetingAnalysisService {
@@ -29,5 +37,5 @@ export interface IMeetingAnalysisService {
   generateContextFromRepo?(
     repoPath: string,
     options?: GenerateAnalysisOptions
-  ): Promise<string>;
+  ): Promise<ProjectContextScanResultDto>;
 }

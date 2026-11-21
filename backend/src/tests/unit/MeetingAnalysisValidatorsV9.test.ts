@@ -12,7 +12,7 @@ import { detectMatrixItems } from "../../infrastructure/analysis/validators/Meet
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const transcript = fs.readFileSync(
-  path.join(here, "../../infrastructure/analysis/evaluation/cases/2026-11-18_08-04-57/transcript.txt"),
+  path.join(here, "../../infrastructure/analysis/evaluation/cases/diamante/2026-11-18_08-04-57/transcript.txt"),
   "utf-8"
 );
 
@@ -100,10 +100,10 @@ const buildGoodOutput = (): GeneratedMeetingData => {
   return analysis(
     [
       mk("BACKEND-1", "backend", "[Backend] Dimensionamiento con la columna de rendimiento", "Inyectar la matriz con rendimiento en dimensionamiento [09:21].", 8),
-      mk("BACKEND-2", "backend", "[Backend] Endpoint de reprogramación (PROPUESTO)", "Reprogramar actividades de las rutinas [30:29].", 8),
-      mk("BACKEND-3", "backend", "[Backend] Endpoint de borrado masivo de ubicaciones (PROPUESTO)", "Eliminar múltiples registros [31:24].", 8),
-      mk("BACKEND-4", "backend", "[Backend] Endpoint de exportación a Excel (PROPUESTO)", "Exportar al Excel las solicitudes [31:50].", 8),
-      mk("PANEL-1", "panel", "[Panel] Renombrar asignación automática (nombre nuevo por definir)", "Cambiar el nombre a asignación automática en llamados [29:06].", 2),
+      mk("BACKEND-2", "backend", "[Backend] Endpoint de reprogramación", "Reprogramar actividades de las rutinas [30:29].", 8),
+      mk("BACKEND-3", "backend", "[Backend] Endpoint de borrado masivo de ubicaciones", "Eliminar múltiples registros [31:24].", 8),
+      mk("BACKEND-4", "backend", "[Backend] Endpoint de exportación a Excel", "Exportar al Excel las solicitudes [31:50].", 8),
+      mk("PANEL-1", "panel", "[Panel] Renombrar asignación automática en llamados", "Cambiar el nombre a asignación automática en llamados [29:06].", 2),
       mk("PANEL-2", "panel", "[Panel] Selects con búsqueda", "Que se vaya filtrando [30:09].", 4),
       mk("PANEL-3", "panel", "[Panel] Reprogramación de actividades", "Botón para reprogramar actividades de las rutinas [30:29].", 8),
       mk("PANEL-4", "panel", "[Panel] Selección múltiple y borrado masivo", "Selección múltiple y eliminar [31:24].", 8),

@@ -1,0 +1,13 @@
+name: Despliegue Frontend
+on:
+  push:
+    branches: [ main ]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build web
+        run: npm run build
+      - name: Copiar a servidor Nginx
+        run: scp -r dist/* deploy@server:/var/www/frontend-app/dist

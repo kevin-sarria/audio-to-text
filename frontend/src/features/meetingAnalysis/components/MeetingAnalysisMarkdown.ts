@@ -142,6 +142,13 @@ export const getPriorityChipColor = (priority: DevIssuePriority): "error" | "war
 
 export function buildStructuredMarkdown(analysisData: MeetingAnalysisDto, title: string): string {
   let md = `# ${title || "Resumen de Reunión e Issues Técnicas"}\n\n`;
+
+  if (analysisData.generationMeta) {
+    const meta = analysisData.generationMeta;
+    const modelStr = meta.model && meta.model.trim() ? meta.model.trim() : "modelo predeterminado";
+    md += `> Generado con ${meta.providerLabel} · ${modelStr} · perfil ${meta.profileName} · ${meta.generatedAt}\n\n`;
+  }
+
   md += `**Fecha**: ${new Date(analysisData.createdAt).toLocaleString()}\n\n`;
 
   // 1. Resumen Ejecutivo

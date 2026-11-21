@@ -3,38 +3,15 @@ import { ExtractionPointDto } from "../MeetingAnalysisResponseParser.js";
 import { MeetingAnalysisCoverageValidators } from "./MeetingAnalysisCoverageValidators.js";
 import { MeetingAnalysisV8Validators } from "./MeetingAnalysisV8Validators.js";
 import { MeetingAnalysisV9Validators } from "./MeetingAnalysisV9Validators.js";
-import { GLOSSARY_TERMS } from "../glossary/ProjectGlossary.js";
+import { MeetingAnalysisV10Validators, REQUIRED_PROMPT_SECTIONS } from "./MeetingAnalysisV10Validators.js";
+import { ProjectProfile } from "../profiles/ProjectProfile.js";
+import { DIAMANTE_PROFILE } from "../profiles/diamanteProfile.js";
 import { TranscriptIndex, parseCitedSeconds } from "../TranscriptIndex.js";
 
-export const ALLOWED_DOCUMENTS = new Set([
-  "AI_CONTEXT.md",
-  "CLAUDE.md",
-  "CONTEXTO.md",
-  "BITACORA.md",
-  "docs/REGLAS_DE_NEGOCIO.md",
-  "REGLAS_DE_NEGOCIO.md"
-]);
-
-export const FORBIDDEN_TERMS = [
-  "Diamante.API",
-  "Diamante.Core",
-  "Diamante.Data",
-  "FluentValidation",
-  "Yup",
-  "Zod",
-  "TanStack"
-];
-
-export const REQUIRED_PROMPT_SECTIONS = [
-  "Rol y Objetivo",
-  "Contexto",
-  "Pasos numerados",
-  "Restricciones",
-  "Criterios de Aceptación",
-  "Verificación"
-];
-
-export { GLOSSARY_TERMS };
+export const ALLOWED_DOCUMENTS = new Set(DIAMANTE_PROFILE.allowedDocuments);
+export const FORBIDDEN_TERMS = [...DIAMANTE_PROFILE.forbiddenTerms];
+export const GLOSSARY_TERMS = [...DIAMANTE_PROFILE.glossaryTerms];
+export { REQUIRED_PROMPT_SECTIONS };
 
 interface TranscriptSegment {
   seconds: number;
@@ -45,7 +22,8 @@ export class MeetingAnalysisErrorValidators {
   public static validateErrors(
     data: GeneratedMeetingData,
     transcript?: string,
-    extractionPoints?: ExtractionPointDto[]
+    extractionPoints?: ExtractionPointDto[],
+    profile: ProjectProfile = DIAMANTE_PROFILE
   ): string[] {
     const errors: string[] = [];
 
@@ -55,7 +33,7 @@ export class MeetingAnalysisErrorValidators {
       errors.push(`El resumen contiene referencias a etapas internas de IA: "${(data.summary || "").match(internalStageRegex)?.[0]}"`);
     }
 
-    for (const issue of data.issues) {
+    for (const issue of data.issues || []) {
       const criteriaText = (issue.acceptanceCriteria || []).join(" ");
       const issueBlob = `${issue.title || ""} ${issue.description || ""} ${issue.agentPrompt || ""} ${criteriaText}`;
       if (internalStageRegex.test(issueBlob)) {
@@ -63,75 +41,58 @@ export class MeetingAnalysisErrorValidators {
       }
     }
 
-    // 2. Los nombres de documentos coinciden con la lista exacta (*.md)
-    const mdRegex = /\b([a-zA-Z0-9_\-/\\]+\.md)\b/g;
-    for (const issue of data.issues) {
-      const expectedText = (issue.expectedFiles || []).join(" ");
-      const issueText = `${issue.description || ""} ${expectedText} ${issue.agentPrompt || ""}`;
-      let match: RegExpExecArray | null;
-      while ((match = mdRegex.exec(issueText)) !== null) {
-        const docName = match[1]?.replace(/^[./\\]+/, "") || "";
-        const normalized = docName.replace(/^docs\//, "docs/");
-        if (!ALLOWED_DOCUMENTS.has(docName) && !ALLOWED_DOCUMENTS.has(normalized)) {
-          errors.push(
-            `El issue [${issue.id}] cita un documento no permitido: "${docName}". Permitidos: ${Array.from(ALLOWED_DOCUMENTS).join(", ")}`
-          );
+    // Nuevos validadores v10: términos internos (B7), prompts incompletos, títulos con etiquetas/paréntesis,
+    // horas no literales unificadas, alcance extra en títulos, rutas móviles y roles inventados.
+    MeetingAnalysisV10Validators.validateErrors(data, transcript, errors, profile, extractionPoints);
+
+    // 2. Los nombres de documentos coinciden con la lista exacta (*.md) del perfil
+    if (profile.allowedDocuments && profile.allowedDocuments.length > 0) {
+      const allowedDocs = new Set(profile.allowedDocuments);
+      const mdRegex = /\b([a-zA-Z0-9_\-/\\]+\.md)\b/g;
+      for (const issue of data.issues || []) {
+        const expectedText = (issue.expectedFiles || []).join(" ");
+        const issueText = `${issue.description || ""} ${expectedText} ${issue.agentPrompt || ""}`;
+        let match: RegExpExecArray | null;
+        while ((match = mdRegex.exec(issueText)) !== null) {
+          const docName = match[1]?.replace(/^[./\\]+/, "") || "";
+          const normalized = docName.replace(/^docs\//, "docs/");
+          if (!allowedDocs.has(docName) && !allowedDocs.has(normalized)) {
+            errors.push(
+              `El issue [${issue.id}] cita un documento no permitido: "${docName}". Permitidos: ${Array.from(allowedDocs).join(", ")}`
+            );
+          }
         }
       }
     }
 
-    // 3. Prohibidos: Diamante.API, Diamante.Core, Diamante.Data, FluentValidation, Yup, Zod, TanStack
-    for (const issue of data.issues) {
-      const expectedText = (issue.expectedFiles || []).join(" ");
-      const allText = `${issue.title || ""} ${issue.description || ""} ${expectedText} ${issue.agentPrompt || ""}`;
-      for (const term of FORBIDDEN_TERMS) {
-        const escaped = term.replace(/\./g, "\\.");
-        const termRegex = new RegExp(`\\b${escaped}\\b`, "i");
-        if (termRegex.test(allText)) {
-          errors.push(`El issue [${issue.id}] usa tecnología o namespace prohibido: "${term}".`);
+    // 3. Términos prohibidos (namespaces y librerías) del perfil
+    if (profile.forbiddenTerms && profile.forbiddenTerms.length > 0) {
+      for (const issue of data.issues || []) {
+        const expectedText = (issue.expectedFiles || []).join(" ");
+        const allText = `${issue.title || ""} ${issue.description || ""} ${expectedText} ${issue.agentPrompt || ""}`;
+        for (const term of profile.forbiddenTerms) {
+          const escaped = term.replace(/\./g, "\\.");
+          const termRegex = new RegExp(`\\b${escaped}\\b`, "i");
+          if (termRegex.test(allText)) {
+            errors.push(`El issue [${issue.id}] usa tecnología o namespace prohibido: "${term}".`);
+          }
         }
-      }
 
-      // ClosedXML y EPPlus solo dentro de "verificar en el repo"
-      for (const restricted of ["ClosedXML", "EPPlus"]) {
-        const rRegex = new RegExp(`\\b${restricted}\\b`, "i");
-        if (rRegex.test(allText) && !allText.toLowerCase().includes("verificar en el repo")) {
-          errors.push(`El issue [${issue.id}] usa "${restricted}" sin rotularlo '(verificar en el repo)'.`);
+        // Librerías del perfil permitidas solo rotuladas "(verificar en el repo)"
+        for (const restricted of profile.restrictedTerms || []) {
+          const rRegex = new RegExp(`\\b${restricted}\\b`, "i");
+          if (rRegex.test(allText) && !allText.toLowerCase().includes("verificar en el repo")) {
+            errors.push(`El issue [${issue.id}] usa "${restricted}" sin rotularlo '(verificar en el repo)'.`);
+          }
         }
-      }
-    }
-
-    // 4. Secciones obligatorias del prompt en orden
-    for (const issue of data.issues) {
-      const prompt = issue.agentPrompt || "";
-      let lastIndex = -1;
-      let orderOk = true;
-      const missingSections: string[] = [];
-
-      for (const section of REQUIRED_PROMPT_SECTIONS) {
-        const idx = prompt.indexOf(section);
-        if (idx === -1) {
-          missingSections.push(section);
-          orderOk = false;
-        } else if (idx < lastIndex) {
-          orderOk = false;
-        } else {
-          lastIndex = idx;
-        }
-      }
-
-      if (missingSections.length > 0) {
-        errors.push(`El issue [${issue.id}] no contiene las secciones obligatorias: ${missingSections.join(", ")}`);
-      } else if (!orderOk) {
-        errors.push(`El issue [${issue.id}] no respeta el orden estricto de secciones en agentPrompt.`);
       }
     }
 
     // 5. Los campos de horas contienen solo números y Total = Backend + Panel + App
-    for (const issue of data.issues) {
+    for (const issue of data.issues || []) {
       const est = issue.estimation;
       if (!est) {
-        errors.push(`El issue [${issue.id}] carece de estimación numérica conforme a la regla 11.`);
+        errors.push(`El issue [${issue.id}] carece de estimación numérica conforme a la regla A10.`);
         continue;
       }
       const rawBackend = String(est.backendHours ?? "");
@@ -143,7 +104,7 @@ export class MeetingAnalysisErrorValidators {
       for (const raw of [rawBackend, rawPanel, rawApp, rawTotal]) {
         if (/[()a-zA-Z]/.test(raw) && !/^\d+$/.test(raw.trim())) {
           errors.push(
-            `La estimación del issue [${issue.id}] contiene texto o paréntesis: "${raw}". Las horas deben ser estrictamente numéricas (Regla 11).`
+            `La estimación del issue [${issue.id}] contiene texto o paréntesis: "${raw}". Las horas deben ser estrictamente numéricas (Regla A10).`
           );
           break;
         }
@@ -165,7 +126,7 @@ export class MeetingAnalysisErrorValidators {
     let sumBackend = 0;
     let sumPanel = 0;
     let sumApp = 0;
-    for (const issue of data.issues) {
+    for (const issue of data.issues || []) {
       const b = Number(issue.estimation?.backendHours) || 0;
       const p = Number(issue.estimation?.panelHours) || 0;
       const a = Number(issue.estimation?.appHours) || 0;
@@ -187,8 +148,8 @@ export class MeetingAnalysisErrorValidators {
     }
 
     // 7. Dependencias que apuntan a issues inexistentes o con texto libre
-    const issueIds = new Set(data.issues.map((i) => i.id.toUpperCase()));
-    for (const issue of data.issues) {
+    const issueIds = new Set((data.issues || []).map((i) => i.id.toUpperCase()));
+    for (const issue of data.issues || []) {
       const deps = issue.dependencies || [];
       for (const dep of deps) {
         const trimmed = dep.trim();
@@ -206,14 +167,13 @@ export class MeetingAnalysisErrorValidators {
       }
     }
 
-    // 8. Marcas de tiempo citadas existen en la transcripción (caen dentro de un segmento real).
-    //    Antes se usaba transcript.includes("1:23"), que aceptaba "[1:23]" si existía "11:23".
+    // 8. Marcas de tiempo citadas existen en la transcripción
     if (transcript && transcript.trim().length > 0) {
-      const index = new TranscriptIndex(transcript);
+      const index = new TranscriptIndex(transcript, profile);
       if (!index.isEmpty) {
         const fmt = (sec: number) =>
           `${Math.floor(sec / 60).toString().padStart(2, "0")}:${(sec % 60).toString().padStart(2, "0")}`;
-        for (const issue of data.issues) {
+        for (const issue of data.issues || []) {
           const criteriaText = (issue.acceptanceCriteria || []).join(" ");
           const text = `${issue.title || ""} ${issue.description || ""} ${criteriaText}`;
           for (const sec of new Set(parseCitedSeconds(text))) {
@@ -225,24 +185,24 @@ export class MeetingAnalysisErrorValidators {
       }
     }
 
-    // 9. Solo etiquetas permitidas (Regla 19)
+    // 9. Solo etiquetas permitidas (Regla A1)
     const allowedTagRegex = /^\[(Supuesto|Interpretación:?.*|Derivado de [A-Z]+-\d+|\d{1,2}:\d{2}|Backend|Panel|App|BLOQUEADO|NO BLOQUEANTE|BLOQUEANTE)\]$/i;
     const bracketRegex = /\[([^\]]+)\]/g;
-    for (const issue of data.issues) {
+    for (const issue of data.issues || []) {
       const checkText = `${issue.title || ""} ${issue.description || ""} ${(issue.acceptanceCriteria || []).join(" ")}`;
       let m: RegExpExecArray | null;
       while ((m = bracketRegex.exec(checkText)) !== null) {
         if (!m[1]) continue;
         const fullTag = `[${m[1]}]`;
         if (!allowedTagRegex.test(fullTag)) {
-          errors.push(`El issue [${issue.id}] usa una etiqueta entre corchetes no permitida (Regla 19): "${fullTag}".`);
+          errors.push(`El issue [${issue.id}] usa una etiqueta entre corchetes no permitida (Regla A1): "${fullTag}".`);
         }
       }
     }
 
     // 10. Cada issue proviene de puntos con clase = nuevo y accion = codigo
     if (extractionPoints && extractionPoints.length > 0) {
-      for (const issue of data.issues) {
+      for (const issue of data.issues || []) {
         const issueText = `${issue.title || ""} ${issue.description || ""}`.toLowerCase();
         for (const pt of extractionPoints) {
           if (pt.clase !== "nuevo" || pt.accion !== "codigo") {
@@ -272,7 +232,7 @@ export class MeetingAnalysisErrorValidators {
     // 12. Toda hora o cifra no ambigua aparece literal en transcripción o lleva [Interpretación]
     if (transcript && transcript.trim().length > 0) {
       const fixedTimeRegex = /\b(19:00|06:00|7:00\s*(?:p\.?m\.?|a\.?m\.?)|entre\s*06:00\s*y\s*19:00)\b/gi;
-      const allText = `${data.summary || ""} ${data.issues.map((i) => `${i.title} ${i.description}`).join(" ")} ${(data.globalOpenQuestions || []).join(" ")}`;
+      const allText = `${data.summary || ""} ${(data.issues || []).map((i) => `${i.title} ${i.description}`).join(" ")} ${(data.globalOpenQuestions || []).join(" ")}`;
       let timeMatch: RegExpExecArray | null;
       while ((timeMatch = fixedTimeRegex.exec(allText)) !== null) {
         const matchedStr = timeMatch[0];
@@ -301,7 +261,7 @@ export class MeetingAnalysisErrorValidators {
     const noiseDoubtRegex = /\b(no se entiende|con certeza|ilegible|duda de vocabulario|cómo se escribe)\b/i;
     for (const q of data.globalOpenQuestions || []) {
       if (noiseDoubtRegex.test(q)) {
-        for (const term of GLOSSARY_TERMS) {
+        for (const term of profile.glossaryTerms || []) {
           if (q.toLowerCase().includes(term.toLowerCase())) {
             errors.push(
               `La pregunta global "${q}" cuestiona el término del glosario "${term}" como ruido o duda de vocabulario (Regla 2 y Glosario).`
@@ -311,12 +271,9 @@ export class MeetingAnalysisErrorValidators {
       }
     }
 
-    // 15. Issue de app sin evidencia móvil: lo valida MeetingAnalysisV8Validators contra los
-    //     segmentos citados de la transcripción (antes bastaba con que el propio issue dijera "app").
-
     // 16. La frase de detención solo aparece si el issue está BLOQUEADO por una pregunta BLOQUEANTE asociada
     const stopRegex = /\bdetente\b/i;
-    for (const issue of data.issues) {
+    for (const issue of data.issues || []) {
       if (stopRegex.test(issue.agentPrompt || "")) {
         const isBlockedByAssociatedQuestion = (data.globalOpenQuestions || []).some(
           (q) => q.includes("[BLOQUEANTE]") && q.toUpperCase().includes(issue.id.toUpperCase())
@@ -361,22 +318,27 @@ export class MeetingAnalysisErrorValidators {
 
     // 19. Citas textuales entre comillas deben coincidir con la transcripción en la marca citada (±10s)
     if (transcript && transcript.trim().length > 0) {
-      MeetingAnalysisErrorValidators.validateCitations(data, transcript, errors);
+      MeetingAnalysisErrorValidators.validateCitations(data, transcript, errors, profile);
     }
 
     // 20. Validadores de cobertura de transcripción e integridad de issues (v7)
     MeetingAnalysisCoverageValidators.validateCoverageAndIntegrityErrors(data, transcript, errors);
 
     // 21. Validadores v8: cierres posteriores, responsables, origen, app y estructura inventada
-    MeetingAnalysisV8Validators.validateErrors(data, transcript, errors);
+    MeetingAnalysisV8Validators.validateErrors(data, transcript, errors, profile);
 
     // 22. Validadores v9: cobertura de la matriz, cierres que son pregunta, canal ambiguo, horas no respaldadas
-    MeetingAnalysisV9Validators.validateErrors(data, transcript, errors, extractionPoints);
+    MeetingAnalysisV9Validators.validateErrors(data, transcript, errors, extractionPoints, profile);
 
     return errors;
   }
 
-  private static validateCitations(data: GeneratedMeetingData, transcript: string, errors: string[]): void {
+  private static validateCitations(
+    data: GeneratedMeetingData,
+    transcript: string,
+    errors: string[],
+    profile: ProjectProfile = DIAMANTE_PROFILE
+  ): void {
     const segments: TranscriptSegment[] = [];
     const lines = transcript.split(/\r?\n/);
     for (const line of lines) {
@@ -389,13 +351,14 @@ export class MeetingAnalysisErrorValidators {
 
     const quoteRegex = /"([^"\n]{8,80})"/g;
     const tsRegex = /\[(\d{1,2}):(\d{2})\]/;
+    const glossary = profile.glossaryTerms || [];
 
-    for (const issue of data.issues) {
+    for (const issue of data.issues || []) {
       const issueText = `${issue.title || ""} ${issue.description || ""} ${(issue.acceptanceCriteria || []).join(" ")}`;
       let qm: RegExpExecArray | null;
       while ((qm = quoteRegex.exec(issueText)) !== null) {
         const rawQuote = qm[1]?.trim() || "";
-        if (GLOSSARY_TERMS.some((g) => g.toLowerCase().includes(rawQuote.toLowerCase()))) continue;
+        if (glossary.some((g) => g.toLowerCase().includes(rawQuote.toLowerCase()))) continue;
 
         // Buscar marca de tiempo próxima a la cita
         const surrounding = issueText.slice(Math.max(0, qm.index - 30), Math.min(issueText.length, qm.index + rawQuote.length + 30));

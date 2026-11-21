@@ -1,229 +1,116 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Box,
   Typography,
   Paper,
-  Button,
   CircularProgress,
-  TextField,
-  Snackbar,
-  IconButton,
-  Tooltip
+  Snackbar
 } from "@mui/material";
-import {
-  AutoAwesome as AutoAwesomeIcon,
-  Edit as EditIcon,
-  Save as SaveIcon
-} from "@mui/icons-material";
-import {
-  MeetingAnalysisDto,
-  MeetingAnalysisProvider,
-  CustomAiProviderDto
-} from "@audio-to-text/shared";
-import { api } from "../../lib/api.js";
+import type { MeetingAnalysisProvider } from "@audio-to-text/shared";
 import { useAppStore } from "../../store/index.js";
 import { useProjectFolders } from "../projectFolders/useProjectFolders.js";
 import { CustomProviderModal } from "../customAi/CustomProviderModal.js";
 
-import {
-  DEFAULT_PROJECT_CONTEXT,
-  buildStructuredMarkdown
-} from "./components/MeetingAnalysisMarkdown.js";
+import { buildStructuredMarkdown } from "./components/MeetingAnalysisMarkdown.js";
+import { AnalysisHeaderBar } from "./components/AnalysisHeaderBar.js";
+import { GenerationSettingsDrawer } from "./components/GenerationSettingsDrawer.js";
+import { ValidationNotices } from "./components/ValidationNotices.js";
 import { AnalysisErrorAlert } from "./components/AnalysisErrorAlert.js";
-import { ProjectFolderLinkBar } from "./components/ProjectFolderLinkBar.js";
-import { ProjectContextAccordion } from "./components/ProjectContextAccordion.js";
-import { AnalysisTitleHeader } from "./components/AnalysisTitleHeader.js";
 import { AnalysisTabsNav } from "./components/AnalysisTabsNav.js";
-import { MeetingSummaryCard } from "./components/MeetingSummaryCard.js";
-import { MeetingClassifiedSection } from "./components/MeetingClassifiedSection.js";
 import { HoursTotalsCard } from "./components/HoursTotalsCard.js";
 import { DevIssuesSection } from "./components/DevIssuesSection.js";
+import { MeetingSummaryCard } from "./components/MeetingSummaryCard.js";
+import { MeetingClassifiedSection } from "./components/MeetingClassifiedSection.js";
+
+import { useMeetingAnalysis } from "./useMeetingAnalysis.js";
+import { useGenerationSettings } from "./useGenerationSettings.js";
 
 interface MeetingAnalysisPanelProps {
   sessionId: string;
 }
 
 export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sessionId }) => {
-  const { guestToken, currentSession, updateSessionProjectFolder } = useAppStore();
+  const { currentSession } = useAppStore();
   const { folders } = useProjectFolders();
 
-  const [analysis, setAnalysis] = useState<MeetingAnalysisDto | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [snackMessage, setSnackMessage] = useState<string | null>(null);
+  const {
+    analysis,
+    isLoading,
+    isGenerating,
+    errorMsg,
+    setErrorMsg,
+    snackMessage,
+    setSnackMessage,
+    isEditingTitle,
+    setIsEditingTitle,
+    editableTitle,
+    setEditableTitle,
+    isSavingTitle,
+    generationSeconds,
+    handleGenerate,
+    handleSaveTitle,
+    handleLinkFolder
+  } = useMeetingAnalysis({ sessionId });
 
-  // Pestaña activa del análisis
-  const [activeAnalysisTab, setActiveAnalysisTab] = useState(0);
-
-  // Título editable del análisis
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [editableTitle, setEditableTitle] = useState("");
-  const [isSavingTitle, setIsSavingTitle] = useState(false);
-
-  // Opciones de configuración
-  const [projectContext, setProjectContext] = useState(DEFAULT_PROJECT_CONTEXT);
-  const [provider, setProvider] = useState<string>("google-account");
-  const [customApiKey, setCustomApiKey] = useState("");
-  const [customModel, setCustomModel] = useState("");
-  const [isConfigExpanded, setIsConfigExpanded] = useState(false);
-
-  // Proveedores personalizados registrados
-  const [customProviders, setCustomProviders] = useState<CustomAiProviderDto[]>([]);
-  const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
-
-  // Filtros de issues
-  const [filterType, setFilterType] = useState<string>("all");
-  const [filterPriority, setFilterPriority] = useState<string>("all");
-  const [filterRepo, setFilterRepo] = useState<string>("all");
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-
-  // Carpeta asociada a la sesión
   const linkedFolder = useMemo(() => {
     if (!currentSession?.projectFolderId) return null;
     return folders.find((f) => f.id === currentSession.projectFolderId) || null;
   }, [currentSession?.projectFolderId, folders]);
 
-  const fetchSettingsAndProviders = async () => {
-    try {
-      const res = await api.get<any>("/desktop/settings");
-      if (res.success && res.data) {
-        if (res.data.settings?.customProviders) {
-          setCustomProviders(res.data.settings.customProviders);
-        }
-        if (res.data.settings?.issuesDefaultProvider) {
-          setProvider(res.data.settings.issuesDefaultProvider);
-        }
-        if (res.data.settings?.issuesDefaultModel) {
-          setCustomModel(res.data.settings.issuesDefaultModel);
-        }
-      }
-    } catch {
-      // Ignorar en entorno web puro
-    }
-  };
+  const {
+    provider,
+    setProvider,
+    customApiKey,
+    setCustomApiKey,
+    customModel,
+    setCustomModel,
+    profileId,
+    setProfileId,
+    projectContext,
+    setProjectContext,
+    resetProjectContext,
+    customProviders,
+    setCustomProviders,
+    projectProfiles,
+    profilesError,
+    selectedProviderLabel,
+    selectedProfileName
+  } = useGenerationSettings({
+    analysis,
+    linkedFolder
+  });
 
-  const fetchAnalysis = async () => {
-    setIsLoading(true);
-    setErrorMsg(null);
-    try {
-      const headers: Record<string, string> = guestToken ? { "x-guest-token": guestToken } : {};
-      const res = await api.get<{ success: boolean; data: MeetingAnalysisDto | null }>(
-        `/sessions/${sessionId}/meeting-analysis`,
-        { headers }
-      );
-      if (res.success && res.data) {
-        setAnalysis(res.data);
-        setEditableTitle(res.data.title || `Análisis: ${currentSession?.originalFileName || "Reunión"}`);
-        if (res.data.projectContext) {
-          setProjectContext(res.data.projectContext);
-        }
-      } else {
-        setEditableTitle(`Análisis: ${currentSession?.originalFileName || "Reunión"}`);
-        setIsConfigExpanded(true);
-      }
-    } catch (err: any) {
-      setErrorMsg(err.message || "Error al cargar el análisis de la reunión.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Drawer de configuración y modal de nuevo proveedor
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
 
-  useEffect(() => {
-    fetchSettingsAndProviders();
-    fetchAnalysis();
-  }, [sessionId]);
+  // Pestañas y filtros
+  const [activeAnalysisTab, setActiveAnalysisTab] = useState(0);
+  const [filterType, setFilterType] = useState<string>("all");
+  const [filterPriority, setFilterPriority] = useState<string>("all");
+  const [filterRepo, setFilterRepo] = useState<string>("all");
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (linkedFolder) {
-      setProjectContext(linkedFolder.technicalContext);
-      if (linkedFolder.defaultProvider) {
-        setProvider(linkedFolder.defaultProvider);
-      }
-      if (linkedFolder.defaultModel) {
-        setCustomModel(linkedFolder.defaultModel);
-      }
-    }
-  }, [linkedFolder]);
+  const triggerGenerate = async (overrideProvider?: string) => {
+    const chosenProvider = overrideProvider || provider;
+    const matchedCustom = customProviders.find((cp) => cp.id === chosenProvider);
+    const effectiveBaseUrl = matchedCustom ? matchedCustom.baseUrl : undefined;
+    const effectiveModel = customModel.trim() || matchedCustom?.defaultModel || undefined;
+    const effectiveApiKey = customApiKey.trim() || undefined;
+    const effectiveProvider = (matchedCustom ? matchedCustom.id : chosenProvider) as MeetingAnalysisProvider;
 
-  const handleGenerate = async (overrideProvider?: string) => {
-    setIsGenerating(true);
-    setErrorMsg(null);
-    try {
-      const headers: Record<string, string> = guestToken ? { "x-guest-token": guestToken } : {};
-      const chosenProvider = overrideProvider || provider;
-      const matchedCustom = customProviders.find((cp) => cp.id === chosenProvider);
-      const effectiveBaseUrl = matchedCustom ? matchedCustom.baseUrl : undefined;
-      const effectiveModel = customModel.trim() || matchedCustom?.defaultModel || undefined;
-      const effectiveApiKey = customApiKey.trim() || undefined;
-      const effectiveProvider = (matchedCustom ? matchedCustom.id : chosenProvider) as MeetingAnalysisProvider;
+    const success = await handleGenerate({
+      title: editableTitle,
+      projectContext,
+      provider: effectiveProvider,
+      apiKey: effectiveApiKey,
+      model: effectiveModel,
+      baseUrl: effectiveBaseUrl,
+      profileId
+    });
 
-      const body = {
-        title: editableTitle.trim() || undefined,
-        projectContext: projectContext.trim() || undefined,
-        provider: effectiveProvider,
-        apiKey: effectiveApiKey,
-        model: effectiveModel,
-        baseUrl: effectiveBaseUrl
-      };
-
-      const res = await api.post<{ success: boolean; data: MeetingAnalysisDto }>(
-        `/sessions/${sessionId}/meeting-analysis`,
-        body,
-        { headers }
-      );
-
-      if (res.success && res.data) {
-        setAnalysis(res.data);
-        setEditableTitle(res.data.title || `Análisis: ${currentSession?.originalFileName || "Reunión"}`);
-        setIsConfigExpanded(false);
-        setActiveAnalysisTab(0);
-        setSnackMessage("¡Resumen e issues generadas exitosamente!");
-      }
-    } catch (err: any) {
-      setErrorMsg(err.message || "Error al generar el análisis con IA.");
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  const handleSaveTitle = async () => {
-    if (!editableTitle.trim()) return;
-    setIsSavingTitle(true);
-    try {
-      const headers: Record<string, string> = guestToken ? { "x-guest-token": guestToken } : {};
-      const res = await api.patch<{ success: boolean; data: any }>(
-        `/sessions/${sessionId}/meeting-analysis/title`,
-        { title: editableTitle.trim() },
-        { headers }
-      );
-
-      if (res.success) {
-        setAnalysis((prev) => (prev ? { ...prev, title: editableTitle.trim() } : null));
-        setIsEditingTitle(false);
-        setSnackMessage("Título actualizado correctamente en el historial.");
-      }
-    } catch (err: any) {
-      setSnackMessage(`Error al actualizar título: ${err.message}`);
-    } finally {
-      setIsSavingTitle(false);
-    }
-  };
-
-  const handleLinkFolder = async (folderId: string) => {
-    try {
-      const headers: Record<string, string> = guestToken ? { "x-guest-token": guestToken } : {};
-      const res = await api.patch<{ success: boolean; data: any }>(
-        `/sessions/${sessionId}/project`,
-        { projectFolderId: folderId || null },
-        { headers }
-      );
-      if (res.success) {
-        updateSessionProjectFolder(folderId || null);
-        setSnackMessage(folderId ? "Sesión vinculada a la carpeta de proyecto." : "Sesión desvinculada.");
-      }
-    } catch (err: any) {
-      setSnackMessage(`Error al vincular carpeta: ${err.message}`);
+    if (success) {
+      setActiveAnalysisTab(0);
     }
   };
 
@@ -279,6 +166,15 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
     });
   }, [analysis, filterType, filterPriority, filterRepo]);
 
+  const statusCount = useMemo(() => {
+    if (!analysis) return 0;
+    return (
+      (analysis.alreadyResolved?.length || 0) +
+      (analysis.inProgress?.length || 0) +
+      (analysis.backlog?.length || 0)
+    );
+  }, [analysis]);
+
   if (isLoading) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
@@ -287,85 +183,88 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
     );
   }
 
+  const progressMinutes = Math.floor(generationSeconds / 60);
+  const progressSecs = (generationSeconds % 60).toString().padStart(2, "0");
+  const progressTimeStr = `${progressMinutes}:${progressSecs}`;
+  const modelTextForProgress = customModel.trim() || "modelo predeterminado";
+
   return (
     <Box sx={{ mt: 2 }}>
-      <ProjectFolderLinkBar
-        linkedFolder={linkedFolder}
-        folders={folders}
-        currentFolderId={currentSession?.projectFolderId || null}
-        onLinkFolder={handleLinkFolder}
-        isConfigExpanded={isConfigExpanded}
-        onToggleConfig={() => setIsConfigExpanded(!isConfigExpanded)}
-      />
-
-      <AnalysisTitleHeader
+      {/* Cabecera unificada y responsiva */}
+      <AnalysisHeaderBar
         title={analysis?.title || editableTitle}
         isEditingTitle={isEditingTitle}
         editableTitle={editableTitle}
         isSavingTitle={isSavingTitle}
         isGenerating={isGenerating}
         hasAnalysis={!!analysis}
-        onStartEditing={() => setIsEditingTitle(true)}
-        onCancelEditing={() => setIsEditingTitle(false)}
+        analysisUpdatedAt={analysis?.updatedAt}
+        generationMeta={analysis?.generationMeta}
+        onStartEditingTitle={() => setIsEditingTitle(true)}
+        onCancelEditingTitle={() => setIsEditingTitle(false)}
         onChangeTitle={setEditableTitle}
         onSaveTitle={handleSaveTitle}
-        onGenerate={() => handleGenerate()}
+        onGenerate={() => triggerGenerate()}
+        onOpenSettings={() => setIsDrawerOpen(true)}
+        folders={folders}
+        currentFolderId={currentSession?.projectFolderId || null}
+        onLinkFolder={handleLinkFolder}
+        selectedProviderLabel={selectedProviderLabel}
+        selectedModel={customModel}
+        selectedProfileName={selectedProfileName}
       />
 
+      {/* Avisos de validación o análisis parcial del backend */}
+      {analysis?.generationMeta && <ValidationNotices meta={analysis.generationMeta} />}
+
+      {/* Alerta de error con acción directa para reintentar o abrir configuración */}
       {errorMsg && (
         <AnalysisErrorAlert
           errorMsg={errorMsg}
           onRetryWithGoogle={() => {
             setProvider("google-account");
             setErrorMsg(null);
-            handleGenerate("google-account");
+            triggerGenerate("google-account");
           }}
-          onOpenConfig={() => setIsConfigExpanded(true)}
+          onOpenConfig={() => setIsDrawerOpen(true)}
         />
       )}
 
+      {/* Indicador visual de progreso con contador en tiempo real */}
       {isGenerating && (
-        <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "action.hover" }}>
+        <Paper
+          elevation={0}
+          sx={{
+            p: 2.5,
+            mb: 3,
+            borderRadius: 2,
+            border: "1px solid",
+            borderColor: "divider",
+            bgcolor: "action.hover"
+          }}
+        >
           <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-            <CircularProgress size={28} />
+            <CircularProgress size={26} />
             <Box>
-              <Typography variant="subtitle2" fontWeight={600}>
-                Generando resumen técnico y extrayendo issues con IA...
+              <Typography variant="subtitle2" fontWeight={700}>
+                Generando con {selectedProviderLabel} · {modelTextForProgress}… {progressTimeStr}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                Extrayendo decisiones clave, identificando tareas técnicas y redactando prompts optimizados para agentes de código.
+                Extrayendo puntos de la reunión y redactando issues; puede tardar 1–3 minutos.
               </Typography>
             </Box>
           </Box>
         </Paper>
       )}
 
-      <ProjectContextAccordion
-        isExpanded={isConfigExpanded}
-        onToggleExpanded={setIsConfigExpanded}
-        projectContext={projectContext}
-        onProjectContextChange={setProjectContext}
-        provider={provider}
-        onProviderChange={(val) => {
-          setProvider(val);
-          const matched = customProviders.find((cp) => cp.id === val);
-          if (matched) setCustomModel(matched.defaultModel);
-        }}
-        customApiKey={customApiKey}
-        onCustomApiKeyChange={setCustomApiKey}
-        customModel={customModel}
-        onCustomModelChange={setCustomModel}
-        customProviders={customProviders}
-        onOpenCustomModal={() => setIsCustomModalOpen(true)}
-      />
-
+      {/* Pestañas de resultados */}
       {analysis && (
         <>
-          {/* Navegación por pestañas limpias que reduce el ruido de cajas apiladas */}
           <AnalysisTabsNav
             activeTab={activeAnalysisTab}
             onChangeTab={setActiveAnalysisTab}
             issuesCount={analysis.issues.length}
+            statusCount={statusCount}
             questionsCount={analysis.globalOpenQuestions?.length || 0}
           />
 
@@ -393,10 +292,8 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
             </>
           )}
 
-          {/* Pestaña 1: Resumen y Decisiones Clave */}
-          {activeAnalysisTab === 1 && (
-            <MeetingSummaryCard analysis={analysis} />
-          )}
+          {/* Pestaña 1: Resumen Ejecutivo */}
+          {activeAnalysisTab === 1 && <MeetingSummaryCard analysis={analysis} />}
 
           {/* Pestaña 2: Ya Resuelto, En Curso y Backlog */}
           {activeAnalysisTab === 2 && (
@@ -410,6 +307,32 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
         </>
       )}
 
+      {/* Panel lateral de configuración (Drawer) */}
+      <GenerationSettingsDrawer
+        open={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        hasAnalysis={!!analysis}
+        isGenerating={isGenerating}
+        onGenerate={() => triggerGenerate()}
+        provider={provider}
+        onProviderChange={setProvider}
+        customApiKey={customApiKey}
+        onCustomApiKeyChange={setCustomApiKey}
+        customModel={customModel}
+        onCustomModelChange={setCustomModel}
+        customProviders={customProviders}
+        onOpenCustomModal={() => setIsCustomModalOpen(true)}
+        profileId={profileId}
+        onProfileIdChange={setProfileId}
+        projectProfiles={projectProfiles}
+        profilesError={profilesError}
+        projectContext={projectContext}
+        onProjectContextChange={setProjectContext}
+        linkedFolder={linkedFolder}
+        onResetProjectContext={resetProjectContext}
+      />
+
+      {/* Modal para registrar un proveedor personalizado nuevo */}
       <CustomProviderModal
         open={isCustomModalOpen}
         onClose={() => setIsCustomModalOpen(false)}

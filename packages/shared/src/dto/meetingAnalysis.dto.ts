@@ -36,6 +36,37 @@ export interface RepoHoursTotals {
   total: number;
 }
 
+export interface AnalysisGenerationMetaDto {
+  /** ID del proveedor resuelto: "google-account" | "gemini" | "groq" | "openai" | "custom-xxxx" */
+  provider: string;
+  /** Nombre legible: "Cuenta de Google (Antigravity)", "Google Gemini API", "Groq", "OpenAI" o el nombre del proveedor personalizado ("DeepSeek") */
+  providerLabel: string;
+  /** Modelo efectivo usado. "" = modelo predeterminado del proveedor */
+  model: string;
+  /** Perfil de proyecto usado: "diamante" | "generic" | ... */
+  profileId: string;
+  profileName: string;
+  /** ISO 8601 */
+  generatedAt: string;
+  durationMs: number;
+  /** Intentos de la etapa de redacción (1 = sin reintentos). 0 si no se llamó al modelo */
+  attempts: number;
+  /** true si se cayó al análisis de paso único */
+  usedFallback: boolean;
+  /** true si la transcripción tiene tramos sin audio (Análisis parcial) */
+  partialAnalysis: boolean;
+  /** Errores de validación que quedaron tras el último reintento (vacío = todo validado) */
+  validationErrors: string[];
+  /** Avisos para revisión humana */
+  validationWarnings: string[];
+}
+
+export interface ProjectProfileSummaryDto {
+  id: string;          // "diamante", "generic"
+  name: string;        // "DIAMANTE (Limpieza Inteligente)", "Genérico (sin reglas de negocio)"
+  description: string; // una línea
+}
+
 export interface MeetingAnalysisDto {
   id: string;
   sessionId: string;
@@ -50,6 +81,7 @@ export interface MeetingAnalysisDto {
   globalOpenQuestions?: string[];
   backlog?: string[];
   repoHoursTotals?: RepoHoursTotals;
+  generationMeta?: AnalysisGenerationMetaDto | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -66,6 +98,7 @@ export interface GenerateMeetingAnalysisRequestDto {
   apiKey?: string;
   model?: string;
   baseUrl?: string;
+  profileId?: string;
 }
 
 export const GenerateMeetingAnalysisSchema = z.object({
@@ -73,7 +106,8 @@ export const GenerateMeetingAnalysisSchema = z.object({
   provider: z.string().max(100).optional(),
   apiKey: z.string().max(256).optional(),
   model: z.string().max(100).optional(),
-  baseUrl: z.string().url("La URL base debe ser una URL válida").max(500).optional()
+  baseUrl: z.string().url("La URL base debe ser una URL válida").max(500).optional(),
+  profileId: z.string().max(50).optional()
 });
 
 export interface AvailableModelItem {

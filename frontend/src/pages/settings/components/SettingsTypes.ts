@@ -15,6 +15,8 @@ export interface DesktopSettings {
   issuesDefaultModel?: string;
   autoGenerateIssues?: boolean;
   customProviders?: CustomAiProviderDto[];
+  contextScanModelLimits?: Record<string, number>;
+  contextScanMaxSummaryCalls?: number;
 }
 
 export type KeysInfo = Record<string, { hasKey: boolean; last4: string }>;

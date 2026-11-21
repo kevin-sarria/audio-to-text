@@ -21,6 +21,8 @@ export interface GenerateMeetingAnalysisInput {
   apiKey?: string;
   model?: string;
   baseUrl?: string;
+  /** Perfil de reglas del proyecto. Si no llega, se usa el de la carpeta vinculada y si no, "generic". */
+  profileId?: string;
 }
 
 export class GenerateMeetingAnalysis {
@@ -59,6 +61,7 @@ export class GenerateMeetingAnalysis {
     let resolvedProvider = input.provider;
     let resolvedModel = input.model;
     let resolvedApiKey = input.apiKey;
+    let resolvedProfileId = input.profileId?.trim() || undefined;
 
     if (session.projectFolderId && this.projectFolderRepository) {
       try {
@@ -68,6 +71,7 @@ export class GenerateMeetingAnalysis {
           if (!resolvedProvider && folder.defaultProvider) resolvedProvider = folder.defaultProvider as any;
           if (!resolvedModel && folder.defaultModel) resolvedModel = folder.defaultModel;
           if (!resolvedApiKey && folder.customApiKey) resolvedApiKey = folder.customApiKey;
+          if (!resolvedProfileId && folder.profileId) resolvedProfileId = folder.profileId;
         }
       } catch (err) {
         console.warn(`[GenerateMeetingAnalysis] No se pudo cargar carpeta ${session.projectFolderId}:`, err);
@@ -102,7 +106,8 @@ export class GenerateMeetingAnalysis {
         provider: resolvedProvider,
         apiKey: resolvedApiKey,
         model: resolvedModel,
-        baseUrl: input.baseUrl
+        baseUrl: input.baseUrl,
+        profileId: resolvedProfileId || "generic"
       }
     );
 
@@ -123,7 +128,8 @@ export class GenerateMeetingAnalysis {
         inProgress: analysisData.inProgress ?? existing.inProgress,
         globalOpenQuestions: analysisData.globalOpenQuestions ?? existing.globalOpenQuestions,
         backlog: analysisData.backlog ?? existing.backlog,
-        repoHoursTotals: analysisData.repoHoursTotals ?? existing.repoHoursTotals
+        repoHoursTotals: analysisData.repoHoursTotals ?? existing.repoHoursTotals,
+        generationMeta: analysisData.generationMeta ?? null
       });
       resultAnalysis = await this.analysisRepository.save(existing);
     } else {
@@ -141,6 +147,7 @@ export class GenerateMeetingAnalysis {
         globalOpenQuestions: analysisData.globalOpenQuestions || [],
         backlog: analysisData.backlog || [],
         repoHoursTotals: analysisData.repoHoursTotals || null,
+        generationMeta: analysisData.generationMeta ?? null,
         createdAt: new Date(),
         updatedAt: new Date()
       });
