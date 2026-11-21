@@ -1,0 +1,17 @@
+name: Deploy API
+on:
+  push:
+    branches: [develop, main]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - run: dotnet publish src/CampoApi/CampoApi.csproj -c Release -o out
+      - name: Copiar al servidor
+        run: |
+          rsync -az out/ deploy@${{ secrets.SERVER_HOST }}:/srv/campo-api/
+          ssh deploy@${{ secrets.SERVER_HOST }} "pm2 restart campo-api"

@@ -1,0 +1,13 @@
+name: Deploy Panel
+on:
+  push:
+    branches: [develop, main]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - run: npm run build
+      - name: Publicar en Nginx
+        run: rsync -az dist/ deploy@${{ secrets.SERVER_HOST }}:/var/www/campo-panel/

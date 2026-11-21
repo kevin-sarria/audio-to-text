@@ -54,5 +54,84 @@
     "descripcion": "El contexto no debe contener una capa inexistente Repositories",
     "tipo": "context-not-contains",
     "texto": "Repositories/"
+  },
+  {
+    "id": "q-glosario-sede",
+    "tipo": "pregunta",
+    "fase": 2,
+    "seccion": "glosario",
+    "pregunta": "¿Cómo se llama una Sede en el código?",
+    "respuesta": [
+      "Sede",
+      "CostCenter"
+    ]
+  },
+  {
+    "id": "q-regla-rn01",
+    "tipo": "pregunta",
+    "fase": 2,
+    "seccion": [
+      "reglas_negocio_ubicacion",
+      "reglas_inquebrantables"
+    ],
+    "pregunta": "¿Qué exige RN-01?",
+    "respuesta": [
+      "RN-01",
+      "trazabilidad|comprobante*|saldo"
+    ]
+  },
+  {
+    "id": "q-scripts-sql",
+    "tipo": "pregunta",
+    "fase": 2,
+    "seccion": "cambios_base_datos",
+    "pregunta": "¿Dónde van los cambios de base de datos?",
+    "respuesta": [
+      "Database/Scripts*|001_create_cost_centers*"
+    ]
+  },
+  {
+    "id": "q-deploy-frontend",
+    "tipo": "pregunta",
+    "fase": 3,
+    "seccion": "despliegue",
+    "pregunta": "¿Cómo se despliega el frontend?",
+    "respuesta": [
+      "main",
+      "nginx"
+    ]
+  },
+  {
+    "id": "q-pruebas-frontend",
+    "tipo": "pregunta",
+    "fase": 0,
+    "seccion": "verificacion",
+    "pregunta": "¿El frontend tiene pruebas?",
+    "respuesta": [
+      "frontend-app",
+      "no tiene"
+    ]
+  },
+  {
+    "id": "q-pruebas-movil",
+    "tipo": "pregunta",
+    "fase": 3,
+    "seccion": "verificacion",
+    "pregunta": "¿Cómo se corren las pruebas de la app móvil?",
+    "respuesta": [
+      "mobile-app",
+      "npm test|jest"
+    ]
+  },
+  {
+    "id": "q-contradiccion-pm2",
+    "tipo": "pregunta",
+    "fase": 2,
+    "seccion": "contradicciones",
+    "pregunta": "¿Qué contradicción hay en el despliegue del frontend?",
+    "respuesta": [
+      "PM2",
+      "Nginx"
+    ]
   }
 ]

@@ -22,9 +22,48 @@
   },
   {
     "id": "sin-git-deploy-fact",
-    "descripcion": "El despliegue debe detectar EXPOSE 8000",
-    "tipo": "inventory",
-    "path": "deployment[0].facts[0]",
-    "valor": "EXPOSE 8000"
+    "descripcion": "El despliegue debe mostrar EXPOSE 8000 del Dockerfile",
+    "tipo": "context-contains",
+    "texto": "EXPOSE 8000"
+  },
+  {
+    "id": "q-sin-git",
+    "tipo": "pregunta",
+    "fase": 0,
+    "seccion": "repositorios",
+    "pregunta": "¿Tiene control de versiones?",
+    "respuesta": [
+      "sin git"
+    ]
+  },
+  {
+    "id": "q-fastapi",
+    "tipo": "pregunta",
+    "fase": 2,
+    "seccion": "tecnologias",
+    "pregunta": "¿Con qué framework está hecho?",
+    "respuesta": [
+      "FastAPI"
+    ]
+  },
+  {
+    "id": "q-puerto",
+    "tipo": "pregunta",
+    "fase": 0,
+    "seccion": "despliegue",
+    "pregunta": "¿En qué puerto escucha?",
+    "respuesta": [
+      "8000"
+    ]
+  },
+  {
+    "id": "q-pruebas",
+    "tipo": "pregunta",
+    "fase": 0,
+    "seccion": "verificacion",
+    "pregunta": "¿Cómo se corren las pruebas?",
+    "respuesta": [
+      "make test"
+    ]
   }
 ]

@@ -1,0 +1,6 @@
+CREATE TABLE Incidencias (
+    Id INT IDENTITY PRIMARY KEY,
+    Tipo INT NOT NULL,
+    Descripcion NVARCHAR(500) NOT NULL,
+    CreadaEn DATETIME2 NOT NULL
+);

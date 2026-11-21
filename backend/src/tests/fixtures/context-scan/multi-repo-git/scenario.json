@@ -1,0 +1,40 @@
+{
+  "description": "3 repos activos (API .NET, panel React/Vite, app Expo), una copia de trabajo de la API, un clon duplicado de la API y un prototipo sin git. CLAUDE.md de la API tiene una sección nueva y obligatoria (2025) arriba de una vieja (2024) que la contradice; los merges recientes muestran que se trabaja por PR.",
+  "steps": [
+    { "op": "overlay", "from": "snapshots/base" },
+
+    { "op": "init", "repo": "campo-api", "remote": "https://github.com/orbe-ejemplo/campo-api.git" },
+    { "op": "commit", "repo": "campo-api", "message": "chore: estructura inicial de la API", "date": "2024-03-04T10:00:00Z", "author": "Tomás Rivas" },
+    { "op": "branch", "repo": "campo-api", "name": "develop" },
+
+    { "op": "init", "repo": "campo-panel", "remote": "https://github.com/orbe-ejemplo/campo-panel.git" },
+    { "op": "commit", "repo": "campo-panel", "message": "chore: estructura inicial del panel", "date": "2024-03-11T10:00:00Z", "author": "Tomás Rivas" },
+    { "op": "branch", "repo": "campo-panel", "name": "develop" },
+
+    { "op": "init", "repo": "campo-movil", "remote": "https://github.com/orbe-ejemplo/campo-movil.git" },
+    { "op": "commit", "repo": "campo-movil", "message": "chore: estructura inicial de la app", "date": "2024-04-02T10:00:00Z", "author": "Ana Quiroga" },
+    { "op": "branch", "repo": "campo-movil", "name": "develop" },
+
+    { "op": "branch", "repo": "campo-api", "name": "feature/flujo-pr" },
+    { "op": "overlay", "from": "snapshots/v2-api" },
+    { "op": "commit", "repo": "campo-api", "message": "docs: flujo de ramas obligatorio por pull request", "date": "2025-09-01T15:00:00Z", "author": "Laura Méndez" },
+    { "op": "switch", "repo": "campo-api", "name": "develop" },
+    { "op": "merge", "repo": "campo-api", "branch": "feature/flujo-pr", "message": "Merge pull request #41 from orbe-ejemplo/feature/flujo-pr", "date": "2025-09-02T09:00:00Z", "author": "Laura Méndez" },
+
+    { "op": "branch", "repo": "campo-api", "name": "feature/fotos-s3" },
+    { "op": "overlay", "from": "snapshots/v3-api" },
+    { "op": "commit", "repo": "campo-api", "message": "feat: fotos en S3 fuera de desarrollo", "date": "2025-10-10T14:00:00Z", "author": "Tomás Rivas" },
+    { "op": "switch", "repo": "campo-api", "name": "develop" },
+    { "op": "merge", "repo": "campo-api", "branch": "feature/fotos-s3", "message": "Merge pull request #42 from orbe-ejemplo/feature/fotos-s3", "date": "2025-10-11T09:30:00Z", "author": "Laura Méndez" },
+
+    { "op": "overlay", "from": "snapshots/v2-panel" },
+    { "op": "commit", "repo": "campo-panel", "message": "feat(panel): filtro de incidencias por tipo (#7)", "date": "2025-10-20T16:00:00Z", "author": "Laura Méndez" },
+
+    { "op": "remote-refs", "repo": "campo-api", "branches": ["main", "develop"] },
+    { "op": "remote-refs", "repo": "campo-panel", "branches": ["main", "develop"] },
+    { "op": "remote-refs", "repo": "campo-movil", "branches": ["main", "develop"] },
+
+    { "op": "worktree", "repo": "campo-api", "path": "campo-api-hotfix", "branch": "hotfix/login" },
+    { "op": "clone", "repo": "campo-api", "path": "campo-api-copia" }
+  ]
+}

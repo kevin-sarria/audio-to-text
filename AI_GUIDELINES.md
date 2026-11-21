@@ -102,9 +102,18 @@ El sistema soporta tanto proveedores integrados por defecto como proveedores din
 ### 4.1 Evaluación con Fixtures
 Para evaluar el escáner contra fixtures reales sin requerir un repositorio externo:
 ```bash
+# Todos los fixtures con el proveedor por defecto (gasta cuota de la cuenta de Google)
+npm --workspace backend run eval:context-scan -- --fixture all --provider google-account --model gemini-3.8-flash-low --label antes
+# Piso sin IA: mide lo que aporta solo el inventario, gratis
+npm --workspace backend run eval:context-scan -- --fixture all --provider none
+# Un proveedor con API key
 npm --workspace backend run eval:context-scan -- --fixture tres-repos --provider openai --model gpt-4o-mini
 ```
-La API key se lee exclusivamente de la variable de entorno `SCAN_EVAL_API_KEY`. Los fixtures de prueba se encuentran en `backend/src/tests/fixtures/context-scan/` (`tres-repos`, `monorepo`, `sin-git`).
+- La API key se lee exclusivamente de la variable de entorno `SCAN_EVAL_API_KEY`.
+- Fixtures en `backend/src/tests/fixtures/context-scan/`: `tres-repos`, `monorepo`, `sin-git` (archivos estáticos; `dot-git`, `dot-env` y `dot-gitignore` se renombran al copiar) y `multi-repo-git`, que trae `scenario.json` y se construye con git real: repos con commits fechados, merges de PR, una copia de trabajo, un clon duplicado y un prototipo sin git (`backend/src/tests/helpers/gitScenario.ts`).
+- Cada `expected.json` mezcla hechos (`inventory`, `report`, `context-contains`, `context-not-contains`) con **preguntas fijas** (`tipo: "pregunta"`, `seccion`, `respuesta`). Una pregunta cuenta como respondida solo si una misma línea de su sección trae todos los términos (`a|b` = alternativas, `pref*` = prefijo, el resto palabra completa). `fase` indica qué fase del plan de mejora debería responderla.
+- Métricas (`ContextScanMetrics.ts`): preguntas respondidas, % de líneas que son **temas** (nombran la pregunta sin responderla, según `FactConcreteness.ts`) y % de «sin confirmar».
+- Cada corrida se guarda en `backend/eval-results/context-scan/` (ignorado por git) para comparar antes y después.
 
 - **Aviso de Facturación y Privacidad:** La interfaz gráfica exhibe de forma obligatoria tanto la advertencia de consumo de tokens (indicando que los documentos largos se resumen por partes) como el aviso del proveedor destino al que se envían los archivos saneados.
 

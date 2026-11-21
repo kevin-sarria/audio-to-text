@@ -61,3 +61,6 @@ desktop/dist/
 desktop/release/
 desktop/resources/bin/*
 !desktop/resources/bin/.gitkeep
+
+# Resultados de la evaluación del escáner de contexto (contienen el contexto generado)
+/backend/eval-results/

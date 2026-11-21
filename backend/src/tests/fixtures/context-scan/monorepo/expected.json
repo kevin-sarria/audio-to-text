@@ -12,5 +12,40 @@
     "tipo": "inventory",
     "path": "repositories.length",
     "valor": 1
+  },
+  {
+    "id": "q-monorepo",
+    "tipo": "pregunta",
+    "fase": 0,
+    "seccion": "repositorios",
+    "pregunta": "¿Qué tipo de repositorio es?",
+    "respuesta": [
+      "monorepo"
+    ]
+  },
+  {
+    "id": "q-workspaces",
+    "tipo": "pregunta",
+    "fase": 2,
+    "seccion": [
+      "repositorios",
+      "capas_estructura"
+    ],
+    "pregunta": "¿Dónde están los paquetes?",
+    "respuesta": [
+      "packages*",
+      "workspace*"
+    ]
+  },
+  {
+    "id": "q-pruebas-api",
+    "tipo": "pregunta",
+    "fase": 3,
+    "seccion": "verificacion",
+    "pregunta": "¿Cómo se corren las pruebas del paquete api?",
+    "respuesta": [
+      "packages/api",
+      "npm test|vitest"
+    ]
   }
 ]

@@ -1,0 +1,23 @@
+{
+  "name": "campo-panel",
+  "version": "2.3.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "test": "vitest run",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "antd": "5.20.0",
+    "axios": "1.7.2",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "zustand": "4.5.4"
+  },
+  "devDependencies": {
+    "typescript": "5.5.4",
+    "vite": "5.4.0",
+    "vitest": "2.0.5"
+  }
+}
