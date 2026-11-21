@@ -137,7 +137,7 @@
     "pregunta": "¿Qué manda si el código contradice las reglas?",
     "respuesta": [
       "REGLAS_NEGOCIO*",
-      "manda|prevalece|gana|prima"
+      "manda|prevalece|gana|prima|precedencia|prioridad"
     ]
   },
   {
@@ -283,6 +283,49 @@
       "permiso*|capacidad*",
       "panel",
       "movil|app"
+    ]
+  },
+  {
+    "id": "mrg-ramas-sin-regla-vieja",
+    "descripcion": "Ramas y PR no repite como vigente la regla vieja «no hace falta abrir pull requests»",
+    "tipo": "section-not-contains",
+    "seccion": "ramas_pr",
+    "texto": "no hace falta abrir pull requests"
+  },
+  {
+    "id": "mrg-contradiccion-no-contra-escaner",
+    "descripcion": "No hay contradicciones «código sobre documento» inventadas contra la regla de precedencia del proyecto",
+    "tipo": "section-not-contains",
+    "seccion": "contradicciones",
+    "texto": "codigo_sobre_documento"
+  },
+  {
+    "id": "mrg-preguntas-sin-especular",
+    "descripcion": "Las preguntas abiertas no especulan con forks",
+    "tipo": "section-not-contains",
+    "seccion": "preguntas_abiertas",
+    "texto": "fork"
+  },
+  {
+    "id": "q-contradiccion-flujo",
+    "tipo": "pregunta",
+    "fase": 4,
+    "seccion": "contradicciones",
+    "pregunta": "En la contradicción del flujo de ramas, ¿gana la sección nueva?",
+    "respuesta": [
+      "Gana",
+      "pull request|PR|PRs|obligatori*|Flujo de ramas|2025*"
+    ]
+  },
+  {
+    "id": "q-evidencia-git",
+    "tipo": "pregunta",
+    "fase": 4,
+    "seccion": "ramas_pr",
+    "pregunta": "¿Qué muestra git sobre cómo entran los cambios a campo-api?",
+    "respuesta": [
+      "campo-api",
+      "entraron por PR"
     ]
   }
 ]

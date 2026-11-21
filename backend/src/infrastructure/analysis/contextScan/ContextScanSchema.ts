@@ -100,7 +100,16 @@ export const ContradictionSchema = z.object({
   fuentes: z.array(z.string()).min(1),
   gana: z.string().default("sin resolver"),
   motivo: z
-    .enum(["codigo_sobre_documento", "mas_reciente", "sin_resolver"])
+    .enum([
+      "marca_explicita",
+      "seccion_mas_reciente",
+      "evidencia_git",
+      "documento_desactualizado",
+      "codigo_sobre_documento",
+      "mas_reciente",
+      "sin_resolver"
+    ])
+    .catch("sin_resolver")
     .default("sin_resolver")
 });
 export type Contradiction = z.infer<typeof ContradictionSchema>;

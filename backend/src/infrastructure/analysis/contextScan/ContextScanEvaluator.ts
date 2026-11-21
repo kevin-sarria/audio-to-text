@@ -4,13 +4,15 @@ import {
   answerQuestion,
   computeContextMetrics,
   ContextMetrics,
+  normalizeForMatch,
+  parseContextSections,
   QuestionResult
 } from "./ContextScanMetrics.js";
 
 export interface ExpectedFact {
   id: string;
   descripcion?: string;
-  tipo: "inventory" | "context-contains" | "context-not-contains" | "report" | "pregunta";
+  tipo: "inventory" | "context-contains" | "context-not-contains" | "section-not-contains" | "report" | "pregunta";
   path?: string;
   valor?: any;
   texto?: string;
@@ -105,6 +107,19 @@ export function evaluateScan(
         found++;
       } else {
         missing.push(`${label} (no contiene "${target}")`);
+      }
+    } else if (fact.tipo === "section-not-contains") {
+      // Lo que NO debe aparecer en una sección (p. ej. la regla vieja que perdió).
+      const keys = new Set(Array.isArray(fact.seccion) ? fact.seccion : [fact.seccion ?? ""]);
+      const target = normalizeForMatch(fact.texto || String(fact.valor ?? ""));
+      const offending = parseContextSections(contextText)
+        .filter((s) => keys.has(s.key))
+        .flatMap((s) => s.lines)
+        .find((l) => target && normalizeForMatch(l).includes(target));
+      if (!offending) {
+        found++;
+      } else {
+        falseFacts.push(`${label} (aparece en la sección: "${offending.trim().slice(0, 140)}")`);
       }
     } else if (fact.tipo === "context-not-contains") {
       const target = (fact.texto || fact.valor || "").toLowerCase();

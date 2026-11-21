@@ -3,6 +3,7 @@ import { ProjectInventory } from "./ProjectInventory.js";
 import { ScanResponse, SCAN_SECTIONS, ScanItem } from "./ContextScanSchema.js";
 import { ProjectContextScanReportDto } from "@audio-to-text/shared";
 import { WarningHint } from "./WarningHints.js";
+import { RepoGitEvidence, describeGitEvidence } from "./vigencia/gitEvidence.js";
 import {
   repositoriesBlock,
   technologiesBlock,
@@ -32,8 +33,21 @@ export function renderFact(it: ScanItem): string {
 }
 
 /** Bloque determinista de cada sección (si tiene). */
-function inventoryBlockFor(key: string, inventory: ProjectInventory): { title: string; lines: string[] } | null {
+export interface RenderExtras {
+  hints?: WarningHint[];
+  gitEvidence?: RepoGitEvidence[];
+}
+
+function inventoryBlockFor(
+  key: string,
+  inventory: ProjectInventory,
+  extras: RenderExtras
+): { title: string; lines: string[] } | null {
   switch (key) {
+    case "ramas_pr":
+      return extras.gitEvidence?.length
+        ? { title: "**Del historial de git (lo que se hace de verdad):**", lines: extras.gitEvidence.map(describeGitEvidence) }
+        : null;
     case "repositorios":
       return { title: "**Del inventario:**", lines: repositoriesBlock(inventory) };
     case "tecnologias":
@@ -65,8 +79,9 @@ export function renderTechnicalContext(
   data: ScanResponse,
   inventory: ProjectInventory,
   report: ProjectContextScanReportDto,
-  hints: WarningHint[] = []
+  extras: RenderExtras = {}
 ): string {
+  const hints = extras.hints ?? [];
   const rootDirName = path.basename(path.resolve(inventory.rootPath));
   const isoShort = report.generatedAt.slice(0, 16).replace("T", " ");
   const commits = inventory.repositories.map((r) => `${r.name}${r.headCommit ? `@${r.headCommit.slice(0, 7)}` : ""}`);
@@ -84,7 +99,7 @@ export function renderTechnicalContext(
 
   for (const [idx, sec] of SCAN_SECTIONS.entries()) {
     const lines: string[] = [`## ${idx + 1}. ${sec.title}`];
-    const block = inventoryBlockFor(sec.key, inventory);
+    const block = inventoryBlockFor(sec.key, inventory, extras);
     if (block && block.lines.length) lines.push(block.title, ...block.lines, "");
 
     if (sec.key === "glosario") {

@@ -9,6 +9,7 @@ import { DocumentContent, ReadLogEntry } from "./DocumentReader.js";
 import { ScanSectionKey, SCAN_SECTIONS } from "./ContextScanSchema.js";
 import { redactSecrets } from "./SecretRedactor.js";
 import { WarningHint } from "./WarningHints.js";
+import { RepoGitEvidence, describeGitEvidence } from "./vigencia/gitEvidence.js";
 
 export const SUMMARY_SYSTEM_PROMPT = `Eres un extractor de hechos técnicos y reglas de negocio de documentación de software.
 Tu tarea es resumir secciones de documentos extrayendo ÚNICAMENTE hechos presentes de forma explícita en el texto.
@@ -54,10 +55,12 @@ REGLAS CRÍTICAS DE ANÁLISIS:
 2. CITA Y FUENTE: Cada dato lleva "cita" (texto copiado literalmente de la fuente, máximo 200 caracteres, sin reescribirlo) y "fuente" (ruta relativa exacta del archivo, o "inventario" si sale del inventario). Si el dato no está escrito tal cual y lo deduces de varias fuentes, deja "cita" en null y pon esas rutas en "deducido_de". Usa "impacto" (opcional) para decir en una frase por qué importa al redactar un issue.
 3. REPOSITORIOS Y LAYOUT: Copia con exactitud la cantidad, nombres y tipo de repositorios del inventario ("layout" y "repositories"). Las carpetas ya vienen clasificadas: "repositories" son los repos activos del proyecto; "otherFolders" son copias de trabajo de git, clones duplicados y carpetas sin git, y NO forman parte del proyecto activo. No les atribuyas tecnologías, comandos, reglas ni flujos. Su clasificación ya explica qué son: no especules sobre su propósito (por ejemplo, forks o marcas blancas) ni hagas preguntas sobre ellas.
 4. COMANDOS ESTRICTOS: Solo puedes citar comandos que aparezcan explícitamente en "inventario.commands" (campo "runAs") y asignados al repositorio correcto. Si un repositorio no tiene script de pruebas, dilo explícitamente.
-5. PRECEDENCIA Y CONTRADICCIONES:
-   - El código y la configuración real (manifiestos, workflows de CI/CD, Dockerfile, Nginx, código fuente) SIEMPRE tienen precedencia sobre la documentación.
-   - Si dos documentos se contradicen, gana el que tenga fecha de modificación más reciente (indicada junto a cada archivo).
-   - Toda discrepancia debe registrarse en la sección "contradicciones" indicando "descripcion", "fuentes", qué versión "gana" y el "motivo" ("codigo_sobre_documento", "mas_reciente" o "sin_resolver").
+5. VIGENCIA Y CONTRADICCIONES:
+   - Una contradicción es SOLO entre fuentes del proyecto (documentos, código, configuración, historial de git). Nunca registres como contradicción una regla del proyecto contra estas instrucciones: si el proyecto dice cómo se resuelven sus conflictos (por ejemplo, "este documento manda sobre el código"), esa es una regla del proyecto: anótala en "reglas_inquebrantables" y aplícala.
+   - Compara por SECCIÓN, no por archivo: cada encabezado trae "[fecha de esta sección: …]" y sus marcas. Dentro de un mismo archivo puede haber una sección nueva y otra vieja que se contradicen.
+   - Orden para decidir quién gana: (1) marcas explícitas: un texto marcado "OBSOLETA", "ya no aplica" o "reemplazado" nunca gana; uno marcado "obligatorio", "aprobado el/por" o "desde <fecha>" gana sobre texto sin marcas más viejo; (2) la sección con fecha más reciente; (3) para lo que se afirme sobre el proceso (ramas, PR, quién aprueba, despliegue), la EVIDENCIA DE GIT es de primer nivel: lo que muestra el historial (merges "Merge pull request #N", squash "(#N)", commits directos, ramas remotas, CODEOWNERS) decide; (4) si un documento afirma que algo existe o no existe y el inventario o el código muestran lo contrario, gana el inventario y el documento está desactualizado.
+   - Registra cada contradicción con "descripcion", "fuentes", qué versión "gana" y "motivo": "marca_explicita", "seccion_mas_reciente", "evidencia_git", "documento_desactualizado", "codigo_sobre_documento" o "sin_resolver". Solo usa "sin_resolver" si agotaste fechas por sección, marcas, código y git.
+   - En las secciones de datos escribe solo lo VIGENTE (lo que gana). Los documentos marcados HISTÓRICO no son fuente de lo vigente si hay algo más nuevo.
 6. GLOSARIO DE NEGOCIO Y CÓDIGO: En "glosario", "termino_reunion" es la palabra o frase que usan las personas o la UI/i18n (ej. "Sede"), y "nombre_codigo" es la entidad, modelo o tabla real presente en el código o inventario (ej. "CostCenter"). Pon dos palabras como sinónimos solo si una fuente las equipara. Si un término general agrupa varios tipos, escribe "nombre_codigo" como "A o B" y no pongas los tipos como sinónimos del general. NO inventes entradas.
 
 QUÉ RESPUESTA CONCRETA PIDE CADA SECCIÓN:
@@ -100,7 +103,7 @@ ESQUEMA DE RESPUESTA REQUERIDO (JSON puro, en español). Cada hecho:
         "descripcion": "...",
         "fuentes": ["..."],
         "gana": "...",
-        "motivo": "codigo_sobre_documento" | "mas_reciente" | "sin_resolver"
+        "motivo": "marca_explicita" | "seccion_mas_reciente" | "evidencia_git" | "documento_desactualizado" | "codigo_sobre_documento" | "sin_resolver"
       }
     ],
     "preguntas_abiertas": [ "pregunta 1", "pregunta 2" ]
@@ -120,8 +123,9 @@ RECORDATORIO DE REGLAS CRÍTICAS:
 2. Cada dato lleva su "cita" literal y su "fuente" exacta; si lo deduces, "cita": null y "deducido_de".
 3. Copia layout y repositorios exactamente del inventario; "otherFolders" no son parte del proyecto activo.
 4. Solo usa comandos de verificación listados en el inventario.
-5. Código gana sobre documentos viejos; documentos recientes ganan sobre documentos antiguos.
+5. Vigencia por sección: marcas explícitas, luego fecha de la sección, luego evidencia de git para el proceso; las reglas de precedencia del propio proyecto se respetan.
 6. Glosario fiel a términos reales encontrados.
+7. "preguntas_abiertas": solo lo que no pudiste responder después de buscarlo; cada pregunta dice qué revisaste. Prohibido especular causas.
 RESPONDE EXCLUSIVAMENTE CON EL OBJETO JSON VÁLIDO.
 ==================================================`;
 }
@@ -130,7 +134,8 @@ export function buildScanUserPrompt(
   inventory: ProjectInventory,
   contents: DocumentContent[],
   readLog: ReadLogEntry[],
-  hints: WarningHint[] = []
+  hints: WarningHint[] = [],
+  gitEvidence: RepoGitEvidence[] = []
 ): string {
   // Construir inventario compacto enriquecido con fechas
   const enrichedManifests = inventory.manifests.map((m) => ({
@@ -187,7 +192,8 @@ export function buildScanUserPrompt(
       c.mode === "full" ? "completo" : "resumen por secciones";
     const historical = c.ref.priority === 5 ? " | HISTÓRICO: no es fuente de lo vigente si hay algo más nuevo" : "";
     const identical = c.duplicates?.length ? ` | idéntico en: ${c.duplicates.join(", ")}` : "";
-    docsText += `--- ARCHIVO: ${c.ref.path} | ${c.ref.category} | última modificación: ${c.ref.lastModified} (${c.ref.dateSource}) | ${modeLabel}${identical}${historical} ---\n${cleanDocText}\n\n`;
+    const sectionDates = c.sectionDates ? ` | fechas por sección: ${c.sectionDates}` : "";
+    docsText += `--- ARCHIVO: ${c.ref.path} | ${c.ref.category} | última modificación: ${c.ref.lastModified} (${c.ref.dateSource}) | ${modeLabel}${identical}${sectionDates}${historical} ---\n${cleanDocText}\n\n`;
   }
 
   const hintsText =
@@ -217,6 +223,9 @@ ${docsText}
 === ARCHIVOS NO LEÍDOS COMPLETOS ===
 ${notReadText}
 
+=== EVIDENCIA DE GIT (primer nivel para lo que se afirme sobre ramas, PR, aprobación y despliegue) ===
+${gitEvidence.length ? gitEvidence.map(describeGitEvidence).join("\n") : "Sin historial de git disponible."}
+
 === POSIBLES TRAMPAS (frases de advertencia y configuración remota encontradas por código; confírmalas con su cita) ===
 ${hintsText}
 
@@ -225,7 +234,7 @@ RECORDATORIO FINAL DE REGLAS:
 - Regla 1: Solo hechos del inventario o de los documentos entregados; sin inventar.
 - Regla 3: Respeta el layout y los repositorios del inventario.
 - Regla 4: Solo comandos reales de "commands" del inventario.
-- Regla 5: Código gana a documentos; fechas más recientes ganan a fechas viejas.
+- Regla 5: Gana lo vigente: marcas explícitas, sección más reciente, evidencia de git; respeta las reglas de precedencia del propio proyecto.
 
 Genera el JSON de análisis cumpliendo el esquema solicitado:`;
 }

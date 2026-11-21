@@ -20,6 +20,8 @@ export interface DocumentContent {
   text: string;
   /** Otros documentos idénticos a este (no se envían de nuevo). */
   duplicates?: string[];
+  /** Documentos resumidos: fecha y marcas de cada sección (los completos las llevan en los encabezados). */
+  sectionDates?: string;
 }
 
 export type SummarizeFn = (

@@ -25,6 +25,9 @@ import { refineTopics } from "./TopicRefiner.js";
 import { renderTechnicalContext } from "./ContextScanRenderer.js";
 import { redactSecrets } from "./SecretRedactor.js";
 import { extractWarningHints } from "./WarningHints.js";
+import { annotateContentsWithVigencia } from "./vigencia/annotateContents.js";
+import { collectGitEvidence } from "./vigencia/gitEvidence.js";
+import { applyQuestionsPolicy } from "./vigencia/questionsPolicy.js";
 
 export type LlmCallFn = (
   systemPrompt: string,
@@ -92,9 +95,14 @@ export async function runContextScan(
   // Pistas deterministas para la sección «Trampas»
   const hints = extractWarningHints(rootPath, inventory.documents);
 
+  // Vigencia: fecha y marcas por sección, y lo que muestra git sobre el proceso
+  const useGit = options.useGit ?? true;
+  annotateContentsWithVigencia(rootPath, inventory, contents, useGit);
+  const gitEvidence = useGit ? collectGitEvidence(inventory) : [];
+
   // 3. Prompt principal
   const systemPrompt = buildScanSystemPrompt();
-  const userPrompt = buildScanUserPrompt(inventory, contents, readLog, hints);
+  const userPrompt = buildScanUserPrompt(inventory, contents, readLog, hints, gitEvidence);
 
   // Secretos ocultos: los de los documentos (contados antes de redactar) más los del inventario.
   accumulatedRedactions += docRedactions;
@@ -187,9 +195,11 @@ ${missingPrompt}`);
   scanData = refinement.data;
 
   // 7. Verificación final por cita; lo que siga siendo tema se descarta
-  const { data: verifiedData, stats, discarded } = verifyScanResponse(scanData, inventory, rootPath, {
+  const { data: verifiedRaw, stats, discarded } = verifyScanResponse(scanData, inventory, rootPath, {
     discardTopics: true
   });
+  // Contradicciones sin resolver → preguntas; fuera las preguntas especulativas
+  const verifiedData = applyQuestionsPolicy(verifiedRaw, inventory);
   const topicRate =
     refinement.firstAnswerFacts === 0
       ? 0
@@ -249,7 +259,7 @@ ${missingPrompt}`);
 
   // 8. Renderizado final a Markdown
   // El contexto se guarda y se envía al proveedor en cada generación de issues: también se redacta.
-  const technicalContext = redactSecrets(renderTechnicalContext(verifiedData, inventory, report, hints)).text;
+  const technicalContext = redactSecrets(renderTechnicalContext(verifiedData, inventory, report, { hints, gitEvidence })).text;
 
   return {
     technicalContext,
