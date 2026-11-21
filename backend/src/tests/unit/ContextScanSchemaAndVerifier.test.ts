@@ -132,9 +132,9 @@ describe("ContextScan - Schema y SourceVerifier", () => {
 
     const { data: verified, stats, discarded } = verifyScanResponse(rawResponse, inventory, root);
 
-    // 1. Descarta capa Repository porque la carpeta backend-api/Repositories/ no existe
+    // 1. Descarta capa Repository porque la ruta backend-api/Repositories/ no existe y no hay cita que la respalde
     expect(verified.secciones.capas_estructura).toHaveLength(0);
-    expect(discarded.some((d) => d.section === "capas_estructura" && d.reason.includes("carpeta no existe"))).toBe(true);
+    expect(discarded.some((d) => d.section === "capas_estructura" && d.reason.includes("ruta no existe"))).toBe(true);
 
     // 2. Descarta npm test del frontend (no existe en comandos de frontend-app)
     const verifItems = verified.secciones.verificacion || [];
@@ -146,17 +146,20 @@ describe("ContextScan - Schema y SourceVerifier", () => {
 
     // 4. Marca sin confirmar una versión que no está en la fuente (React 18 vs react 19.1.0 en package.json)
     const tecItems = verified.secciones.tecnologias || [];
-    expect(tecItems[0]?.verificado).toBe(false);
+    expect(tecItems[0]?.estado).toBe("sin_confirmar");
 
     // 5. Verifica glosario sede -> CostCenter
     const gloItems = verified.secciones.glosario || [];
-    expect(gloItems[0]?.verificado).toBe(true);
+    expect(gloItems[0]?.estado).toBe("confirmado");
 
     // 6. Rechaza fuente fuera del proyecto y fuente secreta
     expect(discarded.some((d) => d.reason.includes("fuente fuera del proyecto"))).toBe(true);
     expect(discarded.some((d) => d.reason.includes("fuente con secretos"))).toBe(true);
 
     expect(stats.discarded).toBeGreaterThanOrEqual(4);
-    expect(stats.verified).toBeGreaterThanOrEqual(2);
+    // «Confirmado» exige una cita comprobada: el glosario sí (CostCenter está en el archivo);
+    // «npm run build» existe en el inventario pero no está literal en package.json → sin confirmar.
+    expect(stats.verified).toBeGreaterThanOrEqual(1);
+    expect(verifItems.find((v) => v.valor === "npm run build")?.estado).toBe("sin_confirmar");
   });
 });

@@ -40,7 +40,8 @@ describe("FactConcreteness — dato vs tema", () => {
     ["Autenticación con JWT", "identificador"],
     ["Endpoints protegidos con [Authorize(Roles = \"Admin\")]", "identificador"],
     ["Reglas citadas como RN-01", "numero"],
-    ["La app sincroniza con campo-api al recuperar señal", "identificador"]
+    ["La app sincroniza con campo-api al recuperar señal", "identificador"],
+    ["FastAPI como framework del servicio", "identificador"]
   ])("«%s» es un dato (%s)", (text, signal) => {
     expect(isConcrete(text)).toBe(true);
     expect(concreteSignals(text)).toContain(signal);

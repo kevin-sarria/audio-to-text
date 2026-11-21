@@ -21,6 +21,7 @@ import {
   buildSummaryUserPrompt
 } from "./ContextScanPrompts.js";
 import { verifyScanResponse } from "./SourceVerifier.js";
+import { refineTopics } from "./TopicRefiner.js";
 import { renderTechnicalContext } from "./ContextScanRenderer.js";
 import { redactSecrets } from "./SecretRedactor.js";
 
@@ -173,12 +174,19 @@ ${missingPrompt}`);
     }
   }
 
-  // 6. Verificación de fuentes
-  const { data: verifiedData, stats, discarded } = verifyScanResponse(
-    scanData,
-    inventory,
-    rootPath
-  );
+  // 6. Temas: las líneas que nombran el tema sin dar el dato se re-piden una vez
+  const refinement = await refineTopics(scanData, inventory, rootPath, llm, systemPrompt, userPrompt);
+  if (refinement.called) llmCallsCount++;
+  scanData = refinement.data;
+
+  // 7. Verificación final por cita; lo que siga siendo tema se descarta
+  const { data: verifiedData, stats, discarded } = verifyScanResponse(scanData, inventory, rootPath, {
+    discardTopics: true
+  });
+  const topicRate =
+    refinement.firstAnswerFacts === 0
+      ? 0
+      : Math.round((refinement.firstAnswerTopics / refinement.firstAnswerFacts) * 1000) / 10;
 
   // 7. Construcción preliminar del reporte para pasar al renderer
   const notFoundTitles = verifiedData.no_encontrado.map((k) => {
@@ -208,7 +216,15 @@ ${missingPrompt}`);
     })),
     readLog,
     notFullyRead: readLog.filter((l) => l.status !== "complete").map((l) => l.path),
-    verification: stats,
+    verification: {
+      verified: stats.verified,
+      deduced: stats.deduced,
+      unconfirmed: stats.unconfirmed,
+      discarded: stats.discarded,
+      topicRateFirstAnswer: topicRate,
+      topicsDiscarded: discarded.filter((d) => d.reason === "nombra el tema sin dar el dato").length,
+      topicsReplaced: refinement.replacementsAdded
+    },
     discarded: discarded.map((d) => ({
       section: d.section,
       dato: d.dato,

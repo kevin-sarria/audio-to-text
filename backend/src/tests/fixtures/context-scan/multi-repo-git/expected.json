@@ -18,27 +18,271 @@
     "tipo": "context-not-contains",
     "texto": "react-scripts"
   },
-
-  { "id": "q-aprueba-pr", "tipo": "pregunta", "fase": 2, "seccion": "ramas_pr", "pregunta": "¿Quién aprueba los PR?", "respuesta": ["Laura Mendez"] },
-  { "id": "q-todo-por-pr", "tipo": "pregunta", "fase": 4, "seccion": "ramas_pr", "pregunta": "¿Cómo entra un cambio a develop?", "respuesta": ["pull request|PR|PRs", "develop"] },
-  { "id": "q-develop-pruebas", "tipo": "pregunta", "fase": 2, "seccion": ["despliegue", "ramas_pr"], "pregunta": "¿Qué despliega develop?", "respuesta": ["develop", "prueba*|test*|staging"] },
-  { "id": "q-main-produccion", "tipo": "pregunta", "fase": 2, "seccion": ["despliegue", "ramas_pr"], "pregunta": "¿Qué despliega main?", "respuesta": ["main", "produccion|prod"] },
-  { "id": "q-cambio-esquema", "tipo": "pregunta", "fase": 2, "seccion": "cambios_base_datos", "pregunta": "¿Cómo se cambia el esquema de la base?", "respuesta": ["EnsureCreated", "db/scripts*"] },
-  { "id": "q-roles-movil", "tipo": "pregunta", "fase": 2, "seccion": "roles_permisos", "pregunta": "¿Qué roles entran a la app móvil?", "respuesta": ["movil|app", "Supervisor", "Tecnico"] },
-  { "id": "q-roles-panel", "tipo": "pregunta", "fase": 2, "seccion": "roles_permisos", "pregunta": "¿Qué roles entran al panel web?", "respuesta": ["panel|web", "Administrador", "Supervisor"] },
-  { "id": "q-citar-reglas", "tipo": "pregunta", "fase": 2, "seccion": ["reglas_negocio_ubicacion", "como_escribir_issues"], "pregunta": "¿Cómo se citan las reglas de negocio?", "respuesta": ["RN-0*"] },
-  { "id": "q-precedencia-reglas", "tipo": "pregunta", "fase": 2, "seccion": ["reglas_inquebrantables", "reglas_negocio_ubicacion"], "pregunta": "¿Qué manda si el código contradice las reglas?", "respuesta": ["REGLAS_NEGOCIO*", "manda|prevalece|gana|prima"] },
-  { "id": "q-reglas-identicas", "tipo": "pregunta", "fase": 3, "seccion": ["reglas_negocio_ubicacion", "repositorios"], "pregunta": "¿El documento de reglas es el mismo en los 3 repos?", "respuesta": ["REGLAS_NEGOCIO*", "identic*|igual*|mismo"] },
-  { "id": "q-glosario-incidencia", "tipo": "pregunta", "fase": 2, "seccion": "glosario", "pregunta": "¿Qué es una Incidencia?", "respuesta": ["Incidencia", "Reclamo", "Novedad"] },
-  { "id": "q-worktree", "tipo": "pregunta", "fase": 1, "seccion": "repositorios", "pregunta": "¿Qué es campo-api-hotfix?", "respuesta": ["campo-api-hotfix", "hotfix/login"] },
-  { "id": "q-clon", "tipo": "pregunta", "fase": 1, "seccion": "repositorios", "pregunta": "¿Qué es campo-api-copia?", "respuesta": ["campo-api-copia", "clon*|copia de"] },
-  { "id": "q-prototipo", "tipo": "pregunta", "fase": 1, "seccion": "repositorios", "pregunta": "¿Qué es prototipo-panel?", "respuesta": ["prototipo-panel", "obsolet*|sin git|no se mantiene"] },
-  { "id": "q-pruebas-panel", "tipo": "pregunta", "fase": 3, "seccion": "verificacion", "pregunta": "¿Cómo se corren las pruebas del panel?", "respuesta": ["campo-panel", "npm test|vitest"] },
-  { "id": "q-pruebas-movil", "tipo": "pregunta", "fase": 2, "seccion": "verificacion", "pregunta": "¿La app móvil tiene pruebas?", "respuesta": ["campo-movil", "no tiene|sin pruebas|no hay"] },
-  { "id": "q-trampa-base-compartida", "tipo": "pregunta", "fase": 3, "seccion": "trampas", "pregunta": "¿A qué base se conecta el entorno local?", "respuesta": ["compartida"] },
-  { "id": "q-trampa-sesion-unica", "tipo": "pregunta", "fase": 3, "seccion": "trampas", "pregunta": "¿Cuántas sesiones puede tener un usuario?", "respuesta": ["una sola sesion|sesion unica|una sesion"] },
-  { "id": "q-trampa-offline", "tipo": "pregunta", "fase": 3, "seccion": "trampas", "pregunta": "¿La app debe funcionar sin conexión?", "respuesta": ["sin conexion|offline"] },
-  { "id": "q-trampa-intentos", "tipo": "pregunta", "fase": 5, "seccion": "trampas", "pregunta": "¿Cuántos intentos de login hay antes del bloqueo?", "respuesta": ["5", "intento*|bloque*"] },
-  { "id": "q-trampa-fotos", "tipo": "pregunta", "fase": 5, "seccion": "trampas", "pregunta": "¿Dónde se guardan las fotos?", "respuesta": ["S3", "disco"] },
-  { "id": "q-trampa-permisos", "tipo": "pregunta", "fase": 5, "seccion": "trampas", "pregunta": "¿Panel y app calculan los permisos igual?", "respuesta": ["permiso*|capacidad*", "panel", "movil|app"] }
+  {
+    "id": "q-aprueba-pr",
+    "tipo": "pregunta",
+    "fase": 2,
+    "seccion": "ramas_pr",
+    "pregunta": "¿Quién aprueba los PR?",
+    "respuesta": [
+      "Laura Mendez"
+    ]
+  },
+  {
+    "id": "q-todo-por-pr",
+    "tipo": "pregunta",
+    "fase": 4,
+    "seccion": "ramas_pr",
+    "pregunta": "¿Cómo entra un cambio a develop?",
+    "respuesta": [
+      "pull request|PR|PRs",
+      "develop"
+    ]
+  },
+  {
+    "id": "q-develop-pruebas",
+    "tipo": "pregunta",
+    "fase": 2,
+    "seccion": [
+      "despliegue",
+      "ramas_pr"
+    ],
+    "pregunta": "¿Qué despliega develop?",
+    "respuesta": [
+      "develop",
+      "prueba*|test*|staging"
+    ]
+  },
+  {
+    "id": "q-main-produccion",
+    "tipo": "pregunta",
+    "fase": 2,
+    "seccion": [
+      "despliegue",
+      "ramas_pr"
+    ],
+    "pregunta": "¿Qué despliega main?",
+    "respuesta": [
+      "main",
+      "produccion|prod"
+    ]
+  },
+  {
+    "id": "q-cambio-esquema",
+    "tipo": "pregunta",
+    "fase": 2,
+    "seccion": "cambios_base_datos",
+    "pregunta": "¿Cómo se crea el esquema de la base?",
+    "respuesta": [
+      "EnsureCreated",
+      "migracion*"
+    ]
+  },
+  {
+    "id": "q-script-manual",
+    "tipo": "pregunta",
+    "fase": 2,
+    "seccion": "cambios_base_datos",
+    "pregunta": "¿Dónde va un cambio de columnas en una base existente?",
+    "respuesta": [
+      "db/scripts*",
+      "script*"
+    ]
+  },
+  {
+    "id": "q-roles-movil",
+    "tipo": "pregunta",
+    "fase": 2,
+    "seccion": "roles_permisos",
+    "pregunta": "¿Qué roles entran a la app móvil?",
+    "respuesta": [
+      "movil|app",
+      "Supervisor",
+      "Tecnico"
+    ]
+  },
+  {
+    "id": "q-roles-panel",
+    "tipo": "pregunta",
+    "fase": 2,
+    "seccion": "roles_permisos",
+    "pregunta": "¿Qué roles entran al panel web?",
+    "respuesta": [
+      "panel|web",
+      "Administrador",
+      "Supervisor"
+    ]
+  },
+  {
+    "id": "q-citar-reglas",
+    "tipo": "pregunta",
+    "fase": 2,
+    "seccion": [
+      "reglas_negocio_ubicacion",
+      "como_escribir_issues"
+    ],
+    "pregunta": "¿Cómo se citan las reglas de negocio?",
+    "respuesta": [
+      "RN-0*"
+    ]
+  },
+  {
+    "id": "q-precedencia-reglas",
+    "tipo": "pregunta",
+    "fase": 2,
+    "seccion": [
+      "reglas_inquebrantables",
+      "reglas_negocio_ubicacion"
+    ],
+    "pregunta": "¿Qué manda si el código contradice las reglas?",
+    "respuesta": [
+      "REGLAS_NEGOCIO*",
+      "manda|prevalece|gana|prima"
+    ]
+  },
+  {
+    "id": "q-reglas-identicas",
+    "tipo": "pregunta",
+    "fase": 3,
+    "seccion": [
+      "reglas_negocio_ubicacion",
+      "repositorios"
+    ],
+    "pregunta": "¿El documento de reglas es el mismo en los 3 repos?",
+    "respuesta": [
+      "REGLAS_NEGOCIO*",
+      "identic*|igual*|mismo"
+    ]
+  },
+  {
+    "id": "q-glosario-incidencia",
+    "tipo": "pregunta",
+    "fase": 2,
+    "seccion": "glosario",
+    "pregunta": "¿Qué es una Incidencia?",
+    "respuesta": [
+      "Incidencia",
+      "Reclamo",
+      "Novedad"
+    ]
+  },
+  {
+    "id": "q-worktree",
+    "tipo": "pregunta",
+    "fase": 1,
+    "seccion": "repositorios",
+    "pregunta": "¿Qué es campo-api-hotfix?",
+    "respuesta": [
+      "campo-api-hotfix",
+      "hotfix/login"
+    ]
+  },
+  {
+    "id": "q-clon",
+    "tipo": "pregunta",
+    "fase": 1,
+    "seccion": "repositorios",
+    "pregunta": "¿Qué es campo-api-copia?",
+    "respuesta": [
+      "campo-api-copia",
+      "clon*|copia de"
+    ]
+  },
+  {
+    "id": "q-prototipo",
+    "tipo": "pregunta",
+    "fase": 1,
+    "seccion": "repositorios",
+    "pregunta": "¿Qué es prototipo-panel?",
+    "respuesta": [
+      "prototipo-panel",
+      "obsolet*|sin git|no se mantiene"
+    ]
+  },
+  {
+    "id": "q-pruebas-panel",
+    "tipo": "pregunta",
+    "fase": 3,
+    "seccion": "verificacion",
+    "pregunta": "¿Cómo se corren las pruebas del panel?",
+    "respuesta": [
+      "campo-panel",
+      "npm test|vitest"
+    ]
+  },
+  {
+    "id": "q-pruebas-movil",
+    "tipo": "pregunta",
+    "fase": 2,
+    "seccion": "verificacion",
+    "pregunta": "¿La app móvil tiene pruebas?",
+    "respuesta": [
+      "campo-movil",
+      "no tiene|sin pruebas|no hay"
+    ]
+  },
+  {
+    "id": "q-trampa-base-compartida",
+    "tipo": "pregunta",
+    "fase": 3,
+    "seccion": "trampas",
+    "pregunta": "¿A qué base se conecta el entorno local?",
+    "respuesta": [
+      "compartida"
+    ]
+  },
+  {
+    "id": "q-trampa-sesion-unica",
+    "tipo": "pregunta",
+    "fase": 3,
+    "seccion": "trampas",
+    "pregunta": "¿Cuántas sesiones puede tener un usuario?",
+    "respuesta": [
+      "una sola sesion|sesion unica|una sesion"
+    ]
+  },
+  {
+    "id": "q-trampa-offline",
+    "tipo": "pregunta",
+    "fase": 3,
+    "seccion": "trampas",
+    "pregunta": "¿La app debe funcionar sin conexión?",
+    "respuesta": [
+      "sin conexion|offline"
+    ]
+  },
+  {
+    "id": "q-trampa-intentos",
+    "tipo": "pregunta",
+    "fase": 5,
+    "seccion": "trampas",
+    "pregunta": "¿Cuántos intentos de login hay antes del bloqueo?",
+    "respuesta": [
+      "5",
+      "intento*|bloque*"
+    ]
+  },
+  {
+    "id": "q-trampa-fotos",
+    "tipo": "pregunta",
+    "fase": 5,
+    "seccion": "trampas",
+    "pregunta": "¿Dónde se guardan las fotos?",
+    "respuesta": [
+      "S3",
+      "disco"
+    ]
+  },
+  {
+    "id": "q-trampa-permisos",
+    "tipo": "pregunta",
+    "fase": 5,
+    "seccion": "trampas",
+    "pregunta": "¿Panel y app calculan los permisos igual?",
+    "respuesta": [
+      "permiso*|capacidad*",
+      "panel",
+      "movil|app"
+    ]
+  }
 ]

@@ -22,6 +22,23 @@ function formatLayoutSpanish(layout: RepoLayout): string {
   }
 }
 
+/**
+ * Una línea por hecho: el valor (la respuesta), no la etiqueta del tema. Si el valor
+ * solo nombra el tema pero hay una cita confirmada, la cita literal lleva el dato.
+ */
+export function renderFact(it: ScanItem): string {
+  const text = it.mostrar_cita && it.cita ? `${it.valor.replace(/[.;:,\s]+$/, "")}: «${it.cita}»` : it.valor;
+  const impact = it.impacto ? ` — ${it.impacto}` : "";
+  const marker =
+    it.estado === "deducido"
+      ? ` _(deducido de ${it.fuente})_`
+      : it.estado === "sin_confirmar"
+      ? " _(sin confirmar)_"
+      : "";
+  const source = it.estado === "deducido" ? "" : ` (fuente: ${it.fuente})`;
+  return `- ${text}${impact}${source}${marker}`;
+}
+
 function describeOtherFolder(f: OtherFolder): string {
   const owner = f.ownerPath ? `\`${f.ownerPath}\`` : "un repo fuera de la carpeta escaneada";
   const notes = f.notes.filter((n) => !/^mismo remoto/.test(n));
@@ -221,7 +238,7 @@ export function renderTechnicalContext(
         lines.push("| --- | --- | --- | --- |");
         for (const g of glossary) {
           const sinStr = (g.sinonimos || []).join(", ");
-          const unconfirmed = g.verificado === false ? " _(sin confirmar)_" : "";
+          const unconfirmed = g.estado === "sin_confirmar" ? " _(sin confirmar)_" : "";
           lines.push(
             `| ${g.termino_reunion} | ${sinStr} | \`${g.nombre_codigo}\` | ${g.fuente}${unconfirmed} |`
           );
@@ -255,10 +272,7 @@ export function renderTechnicalContext(
           lines.push("No encontrado.");
         }
       } else {
-        for (const it of items) {
-          const unconfirmed = it.verificado === false ? " _(sin confirmar)_" : "";
-          lines.push(`- ${it.dato} (fuente: ${it.fuente})${unconfirmed}`);
-        }
+        for (const it of items) lines.push(renderFact(it));
       }
     }
 

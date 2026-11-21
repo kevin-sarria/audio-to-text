@@ -54,7 +54,7 @@ export function stripRenderNoise(line: string): string {
     .trim();
 }
 
-function isPathToken(raw: string): boolean {
+export function isPathToken(raw: string): boolean {
   const t = raw.replace(/^[(\[`'"«“]+|[)\],.;:`'"»”]+$/g, "");
   if (!t) return false;
   if (BRANCH_PREFIX.test(t)) return true;
@@ -125,6 +125,7 @@ export function concreteSignals(rawText: string, options: ConcretenessOptions = 
   const identifierPatterns = [
     /\b[A-Z][a-z0-9]+(?:[A-Z][a-z0-9]+)+\b/, // PascalCase: CostCenter, EnsureCreated
     /\b[a-z]+(?:[A-Z][a-z0-9]+)+\b/, // camelCase: useAuth, maxFailedAttempts
+    /\b[A-Za-z]*[a-z][A-Z][A-Za-z0-9]*\b/, // mayúsculas mixtas: FastAPI, GitHub, iOS
     /\b[A-Za-z0-9]+_[A-Za-z0-9_]+\b/, // snake_case / SCREAMING_CASE
     /(?<![\p{L}\p{N}-])[a-z][a-z0-9]*(?:-[a-z0-9]+)+(?![\p{L}\p{N}-])/u, // kebab-case: campo-api, frontend-app
     /\b\w+\.\w+\(/, // llamada a miembro: db.Database.EnsureCreated(

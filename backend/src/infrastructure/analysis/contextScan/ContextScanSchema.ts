@@ -39,12 +39,48 @@ export const DATA_SECTION_KEYS = [
 
 export type DataSectionKey = (typeof DATA_SECTION_KEYS)[number];
 
-export const ScanItemSchema = z.object({
-  dato: z.string().min(1, "El dato no puede estar vacío"),
-  fuente: z.string().min(1, "La fuente no puede estar vacía"),
-  valor: z.string().optional(),
-  verificado: z.boolean().optional()
-});
+/**
+ * confirmado: la cita (o el valor literal) aparece en la fuente.
+ * deducido: el modelo lo infiere de fuentes que existen, pero no está literal.
+ * sin_confirmar: la fuente existe pero no se encontró la cita.
+ */
+export const FactStatusSchema = z.enum(["confirmado", "deducido", "sin_confirmar"]);
+export type FactStatus = z.infer<typeof FactStatusSchema>;
+
+const optionalText = z
+  .union([z.string(), z.null()])
+  .optional()
+  .transform((v) => (typeof v === "string" && v.trim() ? v.trim() : undefined));
+
+/**
+ * Un hecho: `valor` es la respuesta concreta (no el tema), `cita` el texto literal
+ * de la fuente. Acepta el formato anterior (`dato` sin `valor`) copiando `dato` a `valor`.
+ */
+export const ScanItemSchema = z.preprocess(
+  (raw) => {
+    if (!raw || typeof raw !== "object") return raw;
+    const o: Record<string, unknown> = { ...(raw as Record<string, unknown>) };
+    if ((typeof o.valor !== "string" || !o.valor.trim()) && typeof o.dato === "string") o.valor = o.dato;
+    if ((typeof o.fuente !== "string" || !o.fuente.trim()) && Array.isArray(o.deducido_de) && o.deducido_de.length) {
+      o.fuente = o.deducido_de.join(", ");
+    }
+    return o;
+  },
+  z.object({
+    valor: z.string().min(1, "El valor no puede estar vacío"),
+    cita: optionalText,
+    fuente: z.string().min(1, "La fuente no puede estar vacía"),
+    impacto: optionalText,
+    deducido_de: z.array(z.string()).optional(),
+    /** Etiqueta del tema (formato anterior). No se muestra. */
+    dato: z.string().optional(),
+    estado: FactStatusSchema.optional(),
+    /** Lo marca el verificador: el valor nombra el tema sin responderlo. */
+    tema: z.boolean().optional(),
+    /** Lo marca el verificador: el valor es un tema pero la cita confirmada trae el dato. */
+    mostrar_cita: z.boolean().optional()
+  })
+);
 export type ScanItem = z.infer<typeof ScanItemSchema>;
 
 export const GlossaryItemSchema = z.object({
@@ -52,7 +88,8 @@ export const GlossaryItemSchema = z.object({
   sinonimos: z.array(z.string()).default([]),
   nombre_codigo: z.string().min(1),
   fuente: z.string().min(1),
-  verificado: z.boolean().optional()
+  cita: optionalText,
+  estado: FactStatusSchema.optional()
 });
 export type GlossaryItem = z.infer<typeof GlossaryItemSchema>;
 
@@ -191,7 +228,7 @@ export function findIncompleteSections(data: ScanResponse): ScanSectionKey[] {
       }
     } else {
       const scanItems = secData as ScanItem[];
-      const allEmpty = scanItems.every((si) => !si.dato || !si.dato.trim());
+      const allEmpty = scanItems.every((si) => !si.valor || !si.valor.trim());
       if (allEmpty) {
         incomplete.push(key);
       }

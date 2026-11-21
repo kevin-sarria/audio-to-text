@@ -101,6 +101,47 @@ describe("ContextScanOrchestrator: reintentos, re-pedido de secciones y secretos
     expect(result.technicalContext).toMatch(/## 5\. Glosario[^\n]*\n+No encontrado\./);
   });
 
+  it("re-pide una vez las líneas que son temas, usa los reemplazos con dato y descarta lo que siga siendo tema", async () => {
+    const root = fixture();
+    const prompts: string[] = [];
+    const llm = vi.fn(async (_s: string, u: string) => {
+      prompts.push(u);
+      if (u.includes("nombran el tema pero no dan el dato")) {
+        return JSON.stringify({
+          secciones: {
+            despliegue: [
+              {
+                valor: "Un push a main construye con npm run build y copia dist/ al servidor Nginx",
+                cita: "branches: [ main ]",
+                fuente: "frontend-app/.github/workflows/deploy.yml"
+              }
+            ]
+          },
+          no_encontrado: []
+        });
+      }
+      return minimalResponse({
+        despliegue: [{ valor: "Estrategia de despliegue del frontend", fuente: "frontend-app/README.md" }],
+        reglas_inquebrantables: [{ valor: "Trazabilidad completa obligatoria", fuente: "backend-api/docs/REGLAS.md" }],
+        glosario: [{ termino_reunion: "Sede", nombre_codigo: "CostCenter", fuente: "backend-api/Models/Entities/CostCenter.cs" }]
+      });
+    });
+
+    const result = await runContextScan(root, llm, { budget: bigBudget(), providerLabel: "Prueba", model: "m", useGit: false });
+
+    const repedido = prompts.filter((p) => p.includes("nombran el tema pero no dan el dato"));
+    expect(repedido).toHaveLength(1);
+    expect(repedido[0]).toContain('"Estrategia de despliegue del frontend"');
+    expect(repedido[0]).toContain("=== INVENTARIO");
+
+    expect(result.technicalContext).toContain("Un push a main construye con npm run build");
+    expect(result.technicalContext).not.toContain("Estrategia de despliegue del frontend");
+    // «Trazabilidad completa obligatoria» no se reemplazó: queda descartada como tema.
+    expect(result.technicalContext).not.toContain("Trazabilidad completa obligatoria");
+    expect(result.report.verification.topicsDiscarded).toBeGreaterThanOrEqual(1);
+    expect(result.report.verification.topicRateFirstAnswer).toBeGreaterThan(0);
+  });
+
   it("ningún prompt ni el contexto final llevan secretos ni la ruta local, y el reporte cuenta los secretos ocultos", async () => {
     const root = fixture();
     const llm = vi.fn(async () => minimalResponse());

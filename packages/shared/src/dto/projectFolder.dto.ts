@@ -64,7 +64,19 @@ export interface ProjectContextScanReportDto {
   }>;
   readLog: Array<{ path: string; status: "complete" | "sections" | "omitted"; sections?: number; reason?: string }>;
   notFullyRead: string[];
-  verification: { verified: number; unconfirmed: number; discarded: number };
+  verification: {
+    verified: number;
+    unconfirmed: number;
+    discarded: number;
+    /** Datos que no están literales pero se dedujeron de fuentes existentes. */
+    deduced?: number;
+    /** % de hechos de la primera respuesta que nombraban el tema sin dar el dato. */
+    topicRateFirstAnswer?: number;
+    /** Líneas tema que se quitaron del contexto (todas las que no traían el dato). */
+    topicsDiscarded?: number;
+    /** Hechos con dato que trajo el re-pedido para reemplazar los temas. */
+    topicsReplaced?: number;
+  };
   discarded: Array<{ section: string; dato: string; fuente: string; reason: string }>;
   openQuestions: string[];
   contradictions: number;
