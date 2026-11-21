@@ -83,12 +83,7 @@ describe("Fixture multi-repo-git — el escenario se construye como se describe"
   });
 });
 
-/**
- * Defectos conocidos del inventario actual. `it.fails` documenta el comportamiento
- * de hoy: cuando una fase lo corrija, la prueba empezará a fallar y habrá que
- * pasarla a `it` normal.
- */
-describe("Fixture multi-repo-git — defectos conocidos (se corrigen en la Fase 1)", () => {
+describe("Fixture multi-repo-git — clasificación de carpetas (Fase 1)", () => {
   let root = "";
   let inventory: ProjectInventory;
 
@@ -101,16 +96,42 @@ describe("Fixture multi-repo-git — defectos conocidos (se corrigen en la Fase 
     if (root) fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it.fails("defecto 2: el layout es multi-repo aunque un repo tenga un .sln con 2 proyectos", () => {
+  it("defecto 2: el layout es multi-repo aunque un repo tenga un .sln con 2 proyectos", () => {
     expect(inventory.layout).toBe("multi-repo");
   });
 
-  it.fails("obs. 3: la copia de trabajo y el clon no se cuentan como repos aparte", () => {
+  it("obs. 3: la copia de trabajo y el clon no se cuentan como repos aparte", () => {
     expect(inventory.repositories.map((r) => r.path).sort()).toEqual(["campo-api", "campo-movil", "campo-panel"]);
+    const wt = inventory.otherFolders.find((f) => f.path === "campo-api-hotfix");
+    expect(wt).toMatchObject({ kind: "copia-de-trabajo", ownerPath: "campo-api", branch: "hotfix/login" });
+    const clon = inventory.otherFolders.find((f) => f.path === "campo-api-copia");
+    expect(clon).toMatchObject({ kind: "clon-duplicado", ownerPath: "campo-api" });
+    expect(clon?.notes).toContain("mismo remoto y mismo commit");
   });
 
-  it.fails("obs. 4: el prototipo sin git no aporta comandos", () => {
+  it("obs. 3: las copias no aportan manifiestos, comandos ni documentos duplicados", () => {
+    const fromCopies = (p: string) => p.startsWith("campo-api-hotfix/") || p.startsWith("campo-api-copia/");
+    expect(inventory.manifests.some((m) => fromCopies(m.path))).toBe(false);
+    expect(inventory.commands.some((c) => fromCopies(c.source))).toBe(false);
+    expect(inventory.documents.some((d) => fromCopies(d.path))).toBe(false);
+    expect(inventory.skipped.filter((s) => s.reason === "excluded-folder").map((s) => s.path).sort()).toEqual([
+      "campo-api-copia",
+      "campo-api-hotfix",
+      "prototipo-panel"
+    ]);
+  });
+
+  it("obs. 4: el prototipo sin git se lista aparte, no aporta comandos y se anota que está obsoleto", () => {
     expect(inventory.commands.some((c) => c.source.startsWith("prototipo-panel/"))).toBe(false);
+    expect(inventory.manifests.some((m) => m.path.startsWith("prototipo-panel/"))).toBe(false);
+    const proto = inventory.otherFolders.find((f) => f.path === "prototipo-panel");
+    expect(proto?.kind).toBe("sin-git");
+    expect(proto?.lastModified).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(proto?.notes.join(" ")).toContain("campo-panel/README.md");
+  });
+
+  it("los repos activos traen su rama", () => {
+    expect(inventory.repositories.every((r) => r.branch === "develop" && r.kind === "repo")).toBe(true);
   });
 });
 

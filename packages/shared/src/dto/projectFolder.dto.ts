@@ -46,7 +46,22 @@ export interface ProjectContextScanReportDto {
   providerLabel: string;
   model: string;
   layout: "single-repo" | "multi-repo" | "monorepo" | "no-git";
-  repositories: Array<{ path: string; name: string; headCommit: string | null }>;
+  repositories: Array<{
+    path: string;
+    name: string;
+    headCommit: string | null;
+    branch?: string | null;
+    kind?: "repo" | "submodulo";
+  }>;
+  /** Copias de trabajo, clones duplicados y carpetas sin git: se listan pero no se analizan. */
+  otherFolders?: Array<{
+    path: string;
+    kind: "copia-de-trabajo" | "clon-duplicado" | "sin-git";
+    ownerPath: string | null;
+    branch: string | null;
+    lastModified: string | null;
+    notes: string[];
+  }>;
   readLog: Array<{ path: string; status: "complete" | "sections" | "omitted"; sections?: number; reason?: string }>;
   notFullyRead: string[];
   verification: { verified: number; unconfirmed: number; discarded: number };

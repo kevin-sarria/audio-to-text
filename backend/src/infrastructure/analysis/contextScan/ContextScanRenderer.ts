@@ -1,5 +1,5 @@
 import path from "node:path";
-import { ProjectInventory, RepoLayout } from "./ProjectInventory.js";
+import { OtherFolder, ProjectInventory, RepoLayout } from "./ProjectInventory.js";
 import {
   ScanResponse,
   SCAN_SECTIONS,
@@ -20,6 +20,44 @@ function formatLayoutSpanish(layout: RepoLayout): string {
     case "no-git":
       return "sin git";
   }
+}
+
+function describeOtherFolder(f: OtherFolder): string {
+  const owner = f.ownerPath ? `\`${f.ownerPath}\`` : "un repo fuera de la carpeta escaneada";
+  const notes = f.notes.filter((n) => !/^mismo remoto/.test(n));
+  let text: string;
+  if (f.kind === "copia-de-trabajo") {
+    text = `copia de trabajo de ${owner}${f.branch ? ` en la rama \`${f.branch}\`` : ""}`;
+  } else if (f.kind === "clon-duplicado") {
+    const detail = f.notes.find((n) => /^mismo remoto/.test(n));
+    text = `clon de ${owner}${detail ? ` (${detail})` : ""}`;
+  } else {
+    text = `carpeta sin git${f.lastModified ? `, último cambio ${f.lastModified.slice(0, 10)}` : ""}`;
+  }
+  return notes.length > 0 ? `${text}; ${notes.join("; ")}` : text;
+}
+
+/** Repos activos y, aparte, las carpetas que no se analizan (una línea cada una). */
+function renderRepositoriesBlock(inventory: ProjectInventory): string[] {
+  const out: string[] = [];
+  const principals = inventory.repositories.filter((r) => r.kind === "repo");
+  out.push(`- ${principals.length} repositorio(s) — ${formatLayoutSpanish(inventory.layout)}`);
+  for (const r of inventory.repositories) {
+    const details = [
+      r.kind === "submodulo" ? `submódulo de \`${r.parentPath ?? "?"}\`` : null,
+      r.branch ? `rama \`${r.branch}\`` : null,
+      r.remoteUrl ? `remoto: ${r.remoteUrl}` : null,
+      ...r.notes
+    ].filter(Boolean);
+    out.push(`  - \`${r.path}\`${details.length ? ` (${details.join(", ")})` : ""}`);
+  }
+  if (inventory.otherFolders.length > 0) {
+    out.push("- Otras carpetas (no se analizan; no aportan tecnologías, comandos ni reglas):");
+    for (const f of inventory.otherFolders) {
+      out.push(`  - \`${f.path}\`: ${describeOtherFolder(f)}`);
+    }
+  }
+  return out;
 }
 
 export function renderTechnicalContext(
@@ -53,14 +91,7 @@ export function renderTechnicalContext(
     // Hechos determinísticos del inventario
     if (sec.key === "repositorios") {
       lines.push("**Del inventario:**");
-      const layoutEs = formatLayoutSpanish(inventory.layout);
-      lines.push(
-        `- ${inventory.repositories.length} repositorio(s) — ${layoutEs}`
-      );
-      for (const r of inventory.repositories) {
-        const remoteInfo = r.remoteUrl ? ` (remoto: ${r.remoteUrl})` : "";
-        lines.push(`  - \`${r.path}\`${remoteInfo}`);
-      }
+      lines.push(...renderRepositoriesBlock(inventory));
       lines.push("");
     } else if (sec.key === "tecnologias") {
       if (inventory.manifests.length > 0) {
@@ -283,6 +314,8 @@ function truncateLongMarkdown(md: string, maxLen: number): string {
       !l.startsWith("- Separar lo") &&
       !l.startsWith("- Usar como") &&
       !l.startsWith("- Repositorio `") &&
+      !l.startsWith("- Otras carpetas") &&
+      !/^- \d+ repositorio/.test(l) &&
       !l.startsWith("- `")
     ) {
       currentLen -= l.length + 1;

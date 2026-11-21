@@ -37,7 +37,7 @@ export function buildScanSystemPrompt(): string {
 REGLAS CRÍTICAS DE ANÁLISIS:
 1. SOLO HECHOS VERIFICABLES: Basa tus afirmaciones únicamente en el INVENTARIO o en los DOCUMENTOS entregados. Queda TERMINANTEMENTE PROHIBIDO completar con lo típico del framework (capas, patrones, carpetas, comandos o puertos que no aparezcan). Si no hay evidencia clara para una sección, colócala en "no_encontrado".
 2. FUENTE EXACTA Y VALOR LITERAL: Cada dato debe llevar el campo "fuente" con la ruta relativa exacta del archivo donde se encuentra (o "inventario" si proviene del inventario determinístico). Cuando exista un literal comprobable (versión exacta, nombre de script, puerto, ruta de carpeta o código de regla), inclúyelo en el campo "valor".
-3. REPOSITORIOS Y LAYOUT: Copia con exactitud la cantidad, nombres y tipo de repositorios del inventario ("layout" y "repositories"). Múltiples entradas .git corresponden a repositorios separados, salvo que layout sea "monorepo".
+3. REPOSITORIOS Y LAYOUT: Copia con exactitud la cantidad, nombres y tipo de repositorios del inventario ("layout" y "repositories"). Las carpetas ya vienen clasificadas: "repositories" son los repos activos del proyecto; "otherFolders" son copias de trabajo de git, clones duplicados y carpetas sin git, y NO forman parte del proyecto activo. No les atribuyas tecnologías, comandos, reglas ni flujos. Su clasificación ya explica qué son: no especules sobre su propósito (por ejemplo, forks o marcas blancas) ni hagas preguntas sobre ellas.
 4. COMANDOS ESTRICTOS: Solo puedes citar comandos que aparezcan explícitamente en "inventario.commands" (campo "runAs") y asignados al repositorio correcto. Si un repositorio no tiene script de pruebas, dilo explícitamente.
 5. PRECEDENCIA Y CONTRADICCIONES:
    - El código y la configuración real (manifiestos, workflows de CI/CD, Dockerfile, Nginx, código fuente) SIEMPRE tienen precedencia sobre la documentación.
@@ -87,7 +87,7 @@ Si una sección no tiene evidencia en los archivos, añade su clave a "no_encont
 RECORDATORIO DE REGLAS CRÍTICAS:
 1. NUNCA inventes tecnologías, capas, comandos ni reglas que no estén en los textos.
 2. Cada dato lleva su "fuente" exacta y "valor" literal comprobable.
-3. Copia layout y repositorios exactamente del inventario.
+3. Copia layout y repositorios exactamente del inventario; "otherFolders" no son parte del proyecto activo.
 4. Solo usa comandos de verificación listados en el inventario.
 5. Código gana sobre documentos viejos; documentos recientes ganan sobre documentos antiguos.
 6. Glosario fiel a términos reales encontrados.
@@ -126,6 +126,14 @@ export function buildScanUserPrompt(
     layout: inventory.layout,
     workspaceManifests: inventory.workspaceManifests,
     repositories: inventory.repositories,
+    otherFolders: inventory.otherFolders.map((f) => ({
+      path: f.path,
+      kind: f.kind,
+      ownerPath: f.ownerPath,
+      branch: f.branch,
+      lastModified: f.lastModified,
+      notes: f.notes
+    })),
     manifests: enrichedManifests,
     commands: inventory.commands,
     deployment: enrichedDeployment,

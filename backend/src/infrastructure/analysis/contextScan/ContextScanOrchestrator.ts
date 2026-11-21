@@ -194,7 +194,17 @@ ${missingPrompt}`);
     repositories: inventory.repositories.map((r) => ({
       path: r.path,
       name: r.name,
-      headCommit: r.headCommit
+      headCommit: r.headCommit,
+      branch: r.branch,
+      kind: r.kind
+    })),
+    otherFolders: inventory.otherFolders.map((f) => ({
+      path: f.path,
+      kind: f.kind,
+      ownerPath: f.ownerPath,
+      branch: f.branch,
+      lastModified: f.lastModified,
+      notes: f.notes
     })),
     readLog,
     notFullyRead: readLog.filter((l) => l.status !== "complete").map((l) => l.path),
