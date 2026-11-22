@@ -36,6 +36,7 @@ export interface IMeetingAnalysisService {
 
   generateContextFromRepo?(
     repoPath: string,
-    options?: GenerateAnalysisOptions
+    options?: GenerateAnalysisOptions,
+    onProgress?: (msg: string) => void
   ): Promise<ProjectContextScanResultDto>;
 }

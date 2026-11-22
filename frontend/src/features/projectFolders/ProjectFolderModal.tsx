@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -17,7 +17,8 @@ import type {
   ProjectFolderDto,
   CustomAiProviderDto,
   ProjectProfileSummaryDto,
-  ProjectContextScanReportDto
+  ProjectContextScanReportDto,
+  ContextScanJobDto
 } from "@audio-to-text/shared";
 import { api } from "../../lib/api.js";
 import { BasicSection } from "./folderModal/BasicSection.js";
@@ -25,6 +26,7 @@ import { ScanSection } from "./folderModal/ScanSection.js";
 import { AiConfigSection } from "./folderModal/AiConfigSection.js";
 import { buildFolderPayload } from "./folderModal/folderPayload.js";
 import { TEMPLATE_CONTEXT } from "./folderModal/templateContext.js";
+import { pollScanJob } from "./folderModal/pollScanJob.js";
 
 interface ProjectFolderModalProps {
   open: boolean;
@@ -63,9 +65,47 @@ export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
   // Estados para escaneo de repositorio con IA
   const [repoPath, setRepoPath] = useState("");
   const [isScanning, setIsScanning] = useState(false);
+  const [scanProgressStage, setScanProgressStage] = useState("");
+  const [scanElapsedSec, setScanElapsedSec] = useState(0);
   const [scanStatusMsg, setScanStatusMsg] = useState<{ type: "success" | "warning" | "error"; text: string } | null>(null);
   const [scanSuccessNotice, setScanSuccessNotice] = useState(false);
   const [scanReport, setScanReport] = useState<ProjectContextScanReportDto | null>(null);
+  const isCancelledRef = useRef(false);
+  // Número del escaneo vigente: una consulta de un escaneo anterior no escribe en la pantalla.
+  const scanRunRef = useRef(0);
+
+  // Cancelar escaneo al cerrar modal o desmontar
+  useEffect(() => {
+    if (!open) {
+      isCancelledRef.current = true;
+      setIsScanning(false);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    return () => {
+      isCancelledRef.current = true;
+    };
+  }, []);
+
+  // Contador de tiempo transcurrido durante el escaneo
+  useEffect(() => {
+    if (!isScanning) {
+      setScanElapsedSec(0);
+      return;
+    }
+    const timer = setInterval(() => {
+      setScanElapsedSec((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isScanning]);
+
+  const formatElapsedTime = (sec: number): string => {
+    if (sec < 60) return `${sec} s`;
+    const mins = Math.floor(sec / 60);
+    const rem = sec % 60;
+    return `${mins} min ${rem} s`;
+  };
 
   // Cambio de proveedor: vaciar el modelo para que el selector rellene el predeterminado del nuevo proveedor
   const handleProviderChange = (newProvider: string) => {
@@ -99,14 +139,19 @@ export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
       return;
     }
 
+    isCancelledRef.current = false;
+    const runId = ++scanRunRef.current;
+    const isStale = () => isCancelledRef.current || runId !== scanRunRef.current;
     setIsScanning(true);
+    setScanProgressStage("Inventario y lectura del código");
+    setScanElapsedSec(0);
     setScanStatusMsg(null);
     setScanSuccessNotice(false);
     setScanReport(null);
     setErrorMsg(null);
 
     try {
-      const res = await api.post<{ success: boolean; data?: { technicalContext: string; report?: ProjectContextScanReportDto }; error?: string }>(
+      const res = await api.post<{ success: boolean; data?: ContextScanJobDto; error?: string }>(
         "/project-folders/scan-context",
         {
           folderPath: repoPath.trim(),
@@ -116,23 +161,56 @@ export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
         }
       );
 
-      if (res && res.success && res.data?.technicalContext) {
-        setTechnicalContext(res.data.technicalContext);
-        if (res.data.report) {
-          setScanReport(res.data.report);
+      if (!res || !res.success || !res.data) {
+        throw new Error(res?.error || "No se pudo iniciar el escaneo del repositorio.");
+      }
+
+      const completedJob = await pollScanJob({
+        jobId: res.data.jobId,
+        fetchJob: async (jobId) => {
+          const check = await api.get<{ success: boolean; data?: ContextScanJobDto; error?: string }>(
+            `/project-folders/scan-context/${jobId}`
+          );
+          if (!check || !check.success || !check.data) {
+            throw new Error(check?.error || "Error al consultar estado del escaneo.");
+          }
+          return check.data;
+        },
+        onProgress: (job) => {
+          if (job.progress && !isStale()) {
+            setScanProgressStage(job.progress);
+          }
+        },
+        isCancelled: isStale
+      });
+
+      if (isStale()) return;
+
+      if (completedJob.status === "done" && completedJob.result?.technicalContext) {
+        setTechnicalContext(completedJob.result.technicalContext);
+        if (completedJob.result.report) {
+          setScanReport(completedJob.result.report);
         }
         setScanSuccessNotice(true);
         setScanStatusMsg(null);
+      } else if (completedJob.status === "error") {
+        setScanStatusMsg({
+          type: "error",
+          text: `Error al escanear proyecto: ${completedJob.error || "Error desconocido"}`
+        });
       } else {
-        throw new Error(res.error || "No se pudo extraer el contexto del repositorio.");
+        throw new Error("El escaneo finalizó con un estado desconocido.");
       }
     } catch (err: any) {
+      if (isStale()) return;
       setScanStatusMsg({
         type: "error",
         text: `Error al escanear proyecto: ${err.message}`
       });
     } finally {
-      setIsScanning(false);
+      if (!isStale()) {
+        setIsScanning(false);
+      }
     }
   };
 
@@ -294,6 +372,11 @@ export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
               scanStatusMsg={scanStatusMsg}
               scanSuccessNotice={scanSuccessNotice}
               scanReport={scanReport}
+              scanProgressText={
+                scanProgressStage
+                  ? `${scanProgressStage} · ${formatElapsedTime(scanElapsedSec)}`
+                  : `Iniciando escaneo… · ${formatElapsedTime(scanElapsedSec)}`
+              }
               defaultProvider={defaultProvider}
               defaultModel={defaultModel}
               customProviders={customProviders}

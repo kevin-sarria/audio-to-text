@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { Request, Response, NextFunction } from "express";
 import { CreateProjectFolder } from "../../../application/use-cases/projectFolder/CreateProjectFolder.js";
 import { ListProjectFolders } from "../../../application/use-cases/projectFolder/ListProjectFolders.js";
@@ -5,6 +6,7 @@ import { GetProjectFolder } from "../../../application/use-cases/projectFolder/G
 import { UpdateProjectFolder } from "../../../application/use-cases/projectFolder/UpdateProjectFolder.js";
 import { DeleteProjectFolder } from "../../../application/use-cases/projectFolder/DeleteProjectFolder.js";
 import { IMeetingAnalysisService } from "../../../domain/services/IMeetingAnalysisService.js";
+import { ContextScanJobs } from "../../../application/services/ContextScanJobs.js";
 
 export class ProjectFolderController {
   constructor(
@@ -13,7 +15,8 @@ export class ProjectFolderController {
     private getProjectFolder: GetProjectFolder,
     private updateProjectFolderUseCase: UpdateProjectFolder,
     private deleteProjectFolderUseCase: DeleteProjectFolder,
-    private analysisService?: IMeetingAnalysisService
+    private analysisService?: IMeetingAnalysisService,
+    private scanJobs: ContextScanJobs = new ContextScanJobs()
   ) {}
 
   public scanContext = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -21,6 +24,12 @@ export class ProjectFolderController {
       const { folderPath, provider, model, apiKey, baseUrl } = req.body || {};
       if (!folderPath || typeof folderPath !== "string" || !folderPath.trim()) {
         res.status(400).json({ success: false, error: "La ruta de la carpeta del proyecto es obligatoria." });
+        return;
+      }
+
+      const trimmedPath = folderPath.trim();
+      if (!fs.existsSync(trimmedPath) || !fs.statSync(trimmedPath).isDirectory()) {
+        res.status(400).json({ success: false, error: "La ruta no existe o no es una carpeta válida." });
         return;
       }
 
@@ -32,20 +41,38 @@ export class ProjectFolderController {
         return;
       }
 
-      const scanResult = await this.analysisService.generateContextFromRepo(folderPath.trim(), {
-        provider,
-        model,
-        apiKey,
-        baseUrl
-      });
+      const job = this.scanJobs.start(trimmedPath, (onProgress) =>
+        this.analysisService!.generateContextFromRepo!(
+          trimmedPath,
+          { provider, model, apiKey, baseUrl },
+          onProgress
+        )
+      );
 
-      res.json({
+      res.status(202).json({
         success: true,
-        data: {
-          folderPath: folderPath.trim(),
-          technicalContext: scanResult.technicalContext,
-          report: scanResult.report
-        }
+        data: job
+      });
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  public getScanJob = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const jobId = req.params["jobId"]!;
+      const job = this.scanJobs.get(jobId);
+      if (!job) {
+        res.status(404).json({
+          success: false,
+          error: "No se encontró el escaneo (pudo expirar)."
+        });
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        data: job
       });
     } catch (err) {
       next(err);

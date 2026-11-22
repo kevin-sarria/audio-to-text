@@ -83,7 +83,7 @@ El sistema soporta tanto proveedores integrados por defecto como proveedores din
 
 ## 4. Escáner de Repositorios con IA (Contexto Técnico v2)
 
-- Ubicación: `POST /api/project-folders/scan-context`.
+- Ubicación: `POST /api/project-folders/scan-context` crea un trabajo en segundo plano (202 con `jobId`) y `GET /api/project-folders/scan-context/:jobId` da su estado y etapa; los trabajos terminados se guardan 30 minutos.
 - Arquitectura y módulo: Todo el escaneo reside en `backend/src/infrastructure/analysis/contextScan/`, compuesto por funciones puras y clases testeables sin red:
   - `ScanIgnore.ts`: Directorios ignorados (`IGNORED_DIRS`), soporte de `.gitignore` recursivo/apilado (`GitignoreMatcher`), filtro estricto de secretos (`isSecretFile`) y archivos binarios (`isBinaryFile`). Nunca se lee ningún archivo clasificado como secreto.
   - `SecretRedactor.ts`: Sanitización obligatoria antes de enviar texto a cualquier modelo. Redacta `[REDACTADO:<tipo>]` para llaves privadas, connection strings (URI y ADO), API keys de múltiples proveedores, JWTs, asignaciones de passwords/tokens (respetando placeholders como `<...>` o `${...}`), IPs (ignorando localhost y versiones semver), ARNs de AWS, suscripciones de Azure y correos electrónicos. Una asignación precedida de un artículo (del, el, la, the…) cuyo valor tiene 3 o más palabras se trata como prosa y no se tapa; una contraseña de una palabra se tapa igual. Es idempotente.

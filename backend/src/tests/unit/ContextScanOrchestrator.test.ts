@@ -172,4 +172,54 @@ describe("ContextScan - ContextScanOrchestrator", () => {
     expect(evalRes.falseFacts).toHaveLength(0);
     expect(evalRes.found).toBe(evalRes.total);
   });
+
+  it("llama a onProgress con las etapas principales del escaneo", async () => {
+    const root = getCleanFixture("sin-git");
+    const budget = resolveScanBudget("modelo-pequeno", undefined, 5);
+    const progressMessages: string[] = [];
+
+    const cannedResponse = JSON.stringify({
+      secciones: {
+        proposito: [{ dato: "Plataforma sin git", fuente: "README.md" }],
+        repositorios: [],
+        tecnologias: [],
+        capas_estructura: [],
+        glosario: [],
+        roles_permisos: [],
+        flujos: [],
+        reglas_negocio_ubicacion: [],
+        reglas_inquebrantables: [],
+        cambios_base_datos: [],
+        verificacion: [],
+        ramas_pr: [],
+        despliegue: [],
+        como_escribir_issues: [],
+        contradicciones: [],
+        preguntas_abiertas: []
+      },
+      no_encontrado: []
+    });
+
+    const mockLlm = vi.fn().mockImplementation(async (sys: string) => {
+      if (sys.includes("extractor de hechos técnicos")) {
+        return JSON.stringify({ hechos: ["Hecho resumido"] });
+      }
+      return cannedResponse;
+    });
+
+    await runContextScan(root, mockLlm, {
+      budget,
+      providerLabel: "Prueba",
+      model: "gpt-4o-mini",
+      useGit: false,
+      onProgress: (msg) => {
+        progressMessages.push(msg);
+      }
+    });
+
+    expect(progressMessages).toContain("Inventario y lectura del código");
+    expect(progressMessages).toContain("Leyendo documentos");
+    expect(progressMessages).toContain("Análisis principal con IA");
+    expect(progressMessages).toContain("Verificando fuentes y armando el contexto");
+  });
 });

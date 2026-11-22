@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
-  Autocomplete,
   TextField,
+  MenuItem,
   CircularProgress,
   IconButton,
   Tooltip,
   Box,
   Typography,
-  Chip,
   SxProps,
   Theme
 } from "@mui/material";
@@ -15,6 +14,7 @@ import { Refresh as RefreshIcon, CloudDone as LiveIcon } from "@mui/icons-materi
 import { AvailableModelItem, AvailableLlmModelsDto } from "@audio-to-text/shared";
 import { api } from "../../lib/api.js";
 import { shouldAutoSelectModel } from "./modelAutoSelect.js";
+import { buildModelOptions, ModelOption } from "./modelOptions.js";
 
 /**
  * Contrato de selección de modelos de IA (LlmModelSelector):
@@ -28,7 +28,7 @@ import { shouldAutoSelectModel } from "./modelAutoSelect.js";
  *   la respuesta ya hay una petición más nueva, no se tocan `models` ni el valor.
  * - La lógica pura de auto-selección reside en `shouldAutoSelectModel`.
  * - El botón de refrescar sigue refrescando la lista sin cambiar el valor existente.
- * - La normalización («Nombre (id)» → id) se mantiene.
+ * - El selector es una lista desplegable (Select) no editable por texto.
  */
 
 export interface LlmModelSelectorProps {
@@ -55,21 +55,21 @@ export const LlmModelSelector: React.FC<LlmModelSelectorProps> = ({
   size = "small",
   disabled = false,
   label = "Modelo de IA",
-  placeholder = "Selecciona o escribe el modelo",
+  placeholder = "Selecciona un modelo",
   helperText,
   sx,
   purpose = "analysis"
 }) => {
   const [models, setModels] = useState<AvailableModelItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [isLive, setIsLive] = useState(false);
 
   // Ref con el último value para evitar problemas de stale closure
   const valueRef = useRef(value);
   valueRef.current = value;
 
-  // Ref con el último onChange: los padres suelen pasar una función nueva en cada render,
-  // y si fetchModels dependiera de ella el efecto de abajo pediría la lista en cada render.
+  // Ref con el último onChange
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
@@ -81,6 +81,7 @@ export const LlmModelSelector: React.FC<LlmModelSelectorProps> = ({
       if (!prov) return;
       const requestId = ++requestIdRef.current;
       setIsLoading(true);
+      setLoadError(false);
 
       try {
         const res = await api.post<{ success: boolean; data: AvailableLlmModelsDto }>(
@@ -99,6 +100,7 @@ export const LlmModelSelector: React.FC<LlmModelSelectorProps> = ({
         if (res.success && res.data) {
           setModels(res.data.models || []);
           setIsLive(!!res.data.isLiveDiscovered);
+          setLoadError(false);
 
           // Solo auto-seleccionar si la petición sigue vigente y el valor actual está vacío
           if (
@@ -113,9 +115,14 @@ export const LlmModelSelector: React.FC<LlmModelSelectorProps> = ({
               onChangeRef.current(defaultChoice);
             }
           }
+        } else {
+          setLoadError(true);
         }
       } catch (err) {
         console.warn("[LlmModelSelector] No se pudieron cargar modelos vía API:", err);
+        if (requestId === requestIdRef.current) {
+          setLoadError(true);
+        }
       } finally {
         if (requestId === requestIdRef.current) {
           setIsLoading(false);
@@ -162,104 +169,131 @@ export const LlmModelSelector: React.FC<LlmModelSelectorProps> = ({
     }
   }, [normalizedValue, value, onChange]);
 
+  const options = React.useMemo((): ModelOption[] => {
+    const built = buildModelOptions(models, normalizedValue);
+    // Sin lista (cargando o falló) no se puede afirmar que el modelo «no está en la lista»:
+    // se muestra el valor guardado tal cual.
+    return models.length === 0 ? built.map((o) => ({ id: o.id, label: o.id })) : built;
+  }, [models, normalizedValue]);
+
+  const isInitialLoading = isLoading && models.length === 0;
+  const isFailedEmpty = loadError && models.length === 0;
+  const isSelectDisabled = disabled || isInitialLoading || isFailedEmpty;
+
+  let effectiveHelperText = helperText;
+  if (isFailedEmpty) {
+    effectiveHelperText = "No se pudo cargar la lista de modelos. Pulsa actualizar.";
+  } else if (!effectiveHelperText) {
+    if (isLive) {
+      effectiveHelperText = "✨ Modelos descubiertos en vivo desde la API pública del proveedor";
+    }
+  }
+
   return (
     <Box sx={{ width: "100%", ...sx }}>
-      <Autocomplete
-        freeSolo
-        size={size}
-        disabled={disabled}
-        options={models.map((m) => m.id)}
-        value={normalizedValue}
-        onInputChange={(_event, newInputValue, reason) => {
-          if (reason === "input") {
-            const match = models.find((m) => m.name.toLowerCase() === newInputValue.trim().toLowerCase());
-            onChange(match ? match.id : newInputValue);
-          } else if (reason === "clear") {
-            onChange("");
-          }
-          // Ignorar 'reset' para evitar que la etiqueta descriptiva sobreescriba el ID técnico
-        }}
-        onChange={(_event, newValue) => {
-          if (typeof newValue === "string") {
-            const match = models.find((m) => m.name.toLowerCase() === newValue.trim().toLowerCase());
-            onChange(match ? match.id : newValue);
-          } else {
-            onChange("");
-          }
-        }}
-        getOptionLabel={(option) => {
-          const match = models.find((m) => m.id === option);
-          return match ? match.name : option;
-        }}
-        isOptionEqualToValue={(option, val) => option === val || option === normalizedValue}
-        renderOption={(props, option) => {
-          const match = models.find((m) => m.id === option);
-          return (
-            <li {...props} key={option}>
-              <Box sx={{ display: "flex", flexDirection: "column", width: "100%", py: 0.5 }}>
-                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <Typography variant="body2" fontWeight={600}>
-                    {match ? match.name : option}
+      <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+        <TextField
+          select
+          fullWidth
+          size={size}
+          disabled={isSelectDisabled}
+          label={label}
+          value={isInitialLoading && !normalizedValue ? "" : normalizedValue}
+          onChange={(e) => onChange(e.target.value)}
+          helperText={effectiveHelperText}
+          error={isFailedEmpty}
+          SelectProps={{
+            displayEmpty: true,
+            renderValue: (selected) => {
+              if (isInitialLoading && !selected) {
+                return (
+                  <Typography variant="body2" color="text.secondary">
+                    Cargando modelos…
                   </Typography>
-                  {match?.contextWindow && (
-                    <Chip
-                      size="small"
-                      label={`${Math.round(match.contextWindow / 1024)}k tokens`}
-                      variant="outlined"
-                      sx={{ fontSize: "0.7rem", height: 20 }}
-                    />
+                );
+              }
+              if (!selected) {
+                return (
+                  <Typography variant="body2" color="text.secondary">
+                    {placeholder}
+                  </Typography>
+                );
+              }
+              const match = options.find((o) => o.id === selected);
+              if (!match) return String(selected);
+              return (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, overflow: "hidden" }}>
+                  <Typography
+                    variant="body2"
+                    noWrap
+                    sx={{
+                      fontWeight: match.missing ? 400 : 500,
+                      fontStyle: match.missing ? "italic" : "normal"
+                    }}
+                  >
+                    {match.label}
+                  </Typography>
+                  {match.secondary && (
+                    <Typography variant="caption" color="text.secondary" noWrap>
+                      ({match.secondary})
+                    </Typography>
                   )}
                 </Box>
-                {match && match.name !== match.id && (
+              );
+            }
+          }}
+        >
+          {isInitialLoading && (
+            <MenuItem value="" disabled>
+              Cargando modelos…
+            </MenuItem>
+          )}
+          {options.length === 0 && !isInitialLoading && (
+            <MenuItem value="" disabled>
+              Sin modelos disponibles
+            </MenuItem>
+          )}
+          {options.map((opt) => (
+            <MenuItem key={opt.id} value={opt.id}>
+              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: 1 }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontWeight: opt.missing ? 400 : 600,
+                    fontStyle: opt.missing ? "italic" : "normal"
+                  }}
+                >
+                  {opt.label}
+                </Typography>
+                {opt.secondary && (
                   <Typography variant="caption" color="text.secondary">
-                    ID técnico: <code>{match.id}</code>
-                  </Typography>
-                )}
-                {match?.description && (
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.2 }}>
-                    {match.description}
+                    {opt.secondary}
                   </Typography>
                 )}
               </Box>
-            </li>
-          );
-        }}
-        renderInput={(params) => (
-          <TextField
-            {...params}
-            label={label}
-            placeholder={placeholder}
-            helperText={
-              helperText ||
-              (isLive
-                ? "✨ Modelos descubiertos en vivo desde la API pública del proveedor"
-                : "Lista de modelos optimizados. Puedes elegir uno o escribir cualquier modelo nuevo.")
-            }
-            InputProps={{
-              ...params.InputProps,
-              endAdornment: (
-                <React.Fragment>
-                  {isLoading ? (
-                    <CircularProgress color="inherit" size={18} sx={{ mr: 1 }} />
-                  ) : (
-                    <Tooltip title={isLive ? "API en vivo conectada. Clic para refrescar lista." : "Consultar modelos disponibles en la API"}>
-                      <IconButton
-                        size="small"
-                        onClick={handleRefreshClick}
-                        edge="end"
-                        sx={{ mr: 0.5 }}
-                      >
-                        {isLive ? <LiveIcon color="primary" fontSize="small" /> : <RefreshIcon fontSize="small" />}
-                      </IconButton>
-                    </Tooltip>
-                  )}
-                  {params.InputProps.endAdornment}
-                </React.Fragment>
-              )
-            }}
-          />
-        )}
-      />
+            </MenuItem>
+          ))}
+        </TextField>
+
+        <Box sx={{ display: "flex", alignItems: "center", mt: size === "small" ? 0.5 : 1 }}>
+          {isLoading ? (
+            <CircularProgress color="inherit" size={20} sx={{ m: 1 }} />
+          ) : (
+            <Tooltip title={isLive ? "API en vivo conectada. Clic para refrescar lista." : "Consultar modelos disponibles en la API"}>
+              <span>
+                <IconButton
+                  size="small"
+                  onClick={handleRefreshClick}
+                  disabled={disabled}
+                  sx={{ p: 1 }}
+                >
+                  {isLive ? <LiveIcon color="primary" fontSize="small" /> : <RefreshIcon fontSize="small" />}
+                </IconButton>
+              </span>
+            </Tooltip>
+          )}
+        </Box>
+      </Box>
     </Box>
   );
 };

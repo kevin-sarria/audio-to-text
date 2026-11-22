@@ -28,6 +28,7 @@ export interface ScanSectionProps {
   scanStatusMsg: { type: "success" | "warning" | "error"; text: string } | null;
   scanSuccessNotice: boolean;
   scanReport: ProjectContextScanReportDto | null;
+  scanProgressText?: string;
   defaultProvider: string;
   defaultModel: string;
   customProviders: CustomAiProviderDto[];
@@ -44,6 +45,7 @@ export const ScanSection: React.FC<ScanSectionProps> = ({
   scanStatusMsg,
   scanSuccessNotice,
   scanReport,
+  scanProgressText,
   defaultProvider,
   defaultModel,
   customProviders,
@@ -141,7 +143,7 @@ export const ScanSection: React.FC<ScanSectionProps> = ({
           </Button>
           {isScanning && (
             <Typography variant="caption" color="text.secondary">
-              Inspeccionando arquitectura, dependencias y reglas de negocio...
+              {scanProgressText || "Inspeccionando arquitectura, dependencias y reglas de negocio..."}
             </Typography>
           )}
         </Box>

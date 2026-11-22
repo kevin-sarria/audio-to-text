@@ -93,3 +93,17 @@ export interface ProjectContextScanResultDto {
   technicalContext: string;
   report: ProjectContextScanReportDto;
 }
+
+export type ContextScanJobStatus = "running" | "done" | "error";
+
+export interface ContextScanJobDto {
+  jobId: string;
+  status: ContextScanJobStatus;
+  /** Etapa actual en español, para mostrar al usuario. */
+  progress: string;
+  startedAt: string;   // ISO
+  finishedAt?: string; // ISO
+  result?: { folderPath: string; technicalContext: string; report: ProjectContextScanReportDto };
+  error?: string;
+}
+

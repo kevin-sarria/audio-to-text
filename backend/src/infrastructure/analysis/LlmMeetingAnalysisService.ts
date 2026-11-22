@@ -305,7 +305,8 @@ export class LlmMeetingAnalysisService implements IMeetingAnalysisService {
 
   public async generateContextFromRepo(
     repoPath: string,
-    options?: GenerateAnalysisOptions
+    options?: GenerateAnalysisOptions,
+    onProgress?: (msg: string) => void
   ): Promise<ProjectContextScanResultDto> {
     if (!fs.existsSync(repoPath)) {
       throw new Error(`La ruta de la carpeta no existe: ${repoPath}`);
@@ -332,7 +333,8 @@ export class LlmMeetingAnalysisService implements IMeetingAnalysisService {
       budget,
       providerLabel,
       model,
-      requestedModel: requestedModel && requestedModel !== model ? requestedModel : undefined
+      requestedModel: requestedModel && requestedModel !== model ? requestedModel : undefined,
+      onProgress
     });
   }
 

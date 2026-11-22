@@ -43,6 +43,7 @@ export interface ContextScanRunOptions {
   /** Modelo que se pidió, si el proveedor usó otro (se muestra en el encabezado). */
   requestedModel?: string;
   useGit?: boolean;
+  onProgress?: (msg: string) => void;
 }
 
 export async function runContextScan(
@@ -52,8 +53,10 @@ export async function runContextScan(
 ): Promise<ProjectContextScanResultDto> {
   let llmCallsCount = 0;
   let accumulatedRedactions = 0;
+  let summaryCallIndex = 0;
 
   // 1. Inventario determinístico
+  options.onProgress?.("Inventario y lectura del código");
   const inventory = buildInventory(rootPath, { useGit: options.useGit });
 
   // 2. Lectura y resumen de documentos
@@ -62,6 +65,8 @@ export async function runContextScan(
     sectionTitle: string,
     text: string
   ): Promise<string> => {
+    summaryCallIndex++;
+    options.onProgress?.(`Resumiendo documentos (${summaryCallIndex} de ${options.budget.maxSummaryCalls} máximo)`);
     llmCallsCount++;
     // El texto llega ya redactado desde DocumentReader; buildSummaryUserPrompt vuelve a redactar por seguridad.
     const userPrompt = buildSummaryUserPrompt(fileLabel, sectionTitle, text);
@@ -92,6 +97,7 @@ export async function runContextScan(
   const codeText = describeCodeForPrompt(codeFacts, Math.min(30000, Math.round(options.budget.maxInputChars * 0.12)));
   const docBudget = { ...options.budget, maxInputChars: Math.max(4000, options.budget.maxInputChars - codeText.length) };
 
+  options.onProgress?.("Leyendo documentos");
   const { contents, readLog, redactions: docRedactions } = await readDocuments(
     rootPath,
     inventory.documents,
@@ -116,6 +122,7 @@ export async function runContextScan(
   accumulatedRedactions += docRedactions;
   accumulatedRedactions += redactSecrets(JSON.stringify(inventory.deployment) + JSON.stringify(inventory.repositories)).redactions;
 
+  options.onProgress?.("Análisis principal con IA");
   llmCallsCount++;
   const rawMainResponse = await llm(systemPrompt, userPrompt);
 
@@ -124,6 +131,7 @@ export async function runContextScan(
   let scanData: ScanResponse;
 
   if (!parseResult.ok) {
+    options.onProgress?.("Corrigiendo la respuesta");
     llmCallsCount++;
     const retryPrompt = buildRetryPrompt(rawMainResponse, parseResult.error);
     // Los proveedores no guardan la conversación: se reenvían los datos junto con la corrección.
@@ -144,6 +152,7 @@ ${retryPrompt}`);
   // 5. Secciones incompletas: 1 re-pedido si hay alguna
   const incompleteKeys = findIncompleteSections(scanData);
   if (incompleteKeys.length > 0) {
+    options.onProgress?.("Completando secciones");
     llmCallsCount++;
     const missingPrompt = buildMissingSectionsPrompt(incompleteKeys);
     try {
@@ -199,12 +208,14 @@ ${missingPrompt}`);
 
   // 6. Temas: las líneas que nombran el tema sin dar el dato se re-piden una vez
   // Los hechos del código confirman las citas copiadas del bloque CÓDIGO y los nombres del glosario.
+  options.onProgress?.("Pidiendo los datos concretos");
   const verifyOptions = { codeEvidence: codeEvidence(codeFacts), codeNames: codeNames(codeFacts) };
   const refinement = await refineTopics(scanData, inventory, rootPath, llm, systemPrompt, userPrompt, verifyOptions);
   if (refinement.called) llmCallsCount++;
   scanData = refinement.data;
 
   // 7. Verificación final por cita; lo que siga siendo tema se descarta
+  options.onProgress?.("Verificando fuentes y armando el contexto");
   const { data: verifiedRaw, stats, discarded } = verifyScanResponse(scanData, inventory, rootPath, {
     ...verifyOptions,
     discardTopics: true

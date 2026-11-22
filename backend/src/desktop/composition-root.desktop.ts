@@ -42,6 +42,7 @@ import { ExportController } from "../interfaces/http/controllers/ExportControlle
 import { EventsController } from "../interfaces/http/controllers/EventsController.js";
 import { MeetingAnalysisController } from "../interfaces/http/controllers/MeetingAnalysisController.js";
 import { ProjectFolderController } from "../interfaces/http/controllers/ProjectFolderController.js";
+import { ContextScanJobs } from "../application/services/ContextScanJobs.js";
 import { setupDesktopPipeline, runStartupRecovery } from "./pipeline.js";
 
 export interface CreateDesktopContainerOptions {
@@ -158,13 +159,15 @@ export function createDesktopContainer(options: CreateDesktopContainerOptions) {
     getMeetingAnalysis,
     updateMeetingAnalysisTitle
   );
+  const contextScanJobs = new ContextScanJobs();
   const projectFolderController = new ProjectFolderController(
     createProjectFolder,
     listProjectFolders,
     getProjectFolder,
     updateProjectFolder,
     deleteProjectFolder,
-    meetingAnalysisService
+    meetingAnalysisService,
+    contextScanJobs
   );
 
   // 7. Pipeline en proceso y handlers
