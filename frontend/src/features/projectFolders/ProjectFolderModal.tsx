@@ -5,27 +5,26 @@ import {
   DialogContent,
   DialogActions,
   Button,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Alert,
-  Box,
   Typography,
   CircularProgress,
-  Paper
+  Tabs,
+  Tab,
+  Box
 } from "@mui/material";
-import {
-  Folder as FolderIcon,
-  AutoFixHigh as AutoFixIcon,
-  AutoAwesome as AutoAwesomeIcon,
-  FolderOpen as BrowseFolderIcon
-} from "@mui/icons-material";
-import { ProjectFolderDto, CustomAiProviderDto, ProjectProfileSummaryDto, ProjectContextScanReportDto } from "@audio-to-text/shared";
+import { Folder as FolderIcon } from "@mui/icons-material";
+import type {
+  ProjectFolderDto,
+  CustomAiProviderDto,
+  ProjectProfileSummaryDto,
+  ProjectContextScanReportDto
+} from "@audio-to-text/shared";
 import { api } from "../../lib/api.js";
-import { LlmModelSelector } from "../customAi/LlmModelSelector.js";
-import { ContextScanReport } from "./ContextScanReport.js";
+import { BasicSection } from "./folderModal/BasicSection.js";
+import { ScanSection } from "./folderModal/ScanSection.js";
+import { AiConfigSection } from "./folderModal/AiConfigSection.js";
+import { buildFolderPayload } from "./folderModal/folderPayload.js";
+import { TEMPLATE_CONTEXT } from "./folderModal/templateContext.js";
 
 interface ProjectFolderModalProps {
   open: boolean;
@@ -34,22 +33,16 @@ interface ProjectFolderModalProps {
   onSaved?: (folder: ProjectFolderDto) => void;
 }
 
-const TEMPLATE_CONTEXT = `PROYECTO: [Nombre del Sistema]
-ARQUITECTURA: [Monorepo / Microservicios / Monolito]
-STACK:
-- Backend: [Ej. .NET 8, Express, NestJS, FastAPI]
-- Frontend: [Ej. React 18, Vite, Next.js, Angular]
-- Base de datos: [Ej. PostgreSQL, MySQL, SQL Server]
-CONVENCIONES:
-- Nomenclatura, estructura de carpetas y patrones de diseño utilizados
-- Reglas para agentes de IA (Cursor, Antigravity, Claude Code)`;
-
 export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
   open,
   onClose,
   folder,
   onSaved
 }) => {
+  // Pestaña activa: 0 = General, 1 = Escanear con IA, 2 = Configuración de IA
+  const [activeTab, setActiveTab] = useState(0);
+
+  // Estados del formulario
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [technicalContext, setTechnicalContext] = useState("");
@@ -58,9 +51,12 @@ export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
   const [customApiKey, setCustomApiKey] = useState("");
   const [profileId, setProfileId] = useState("generic");
 
+  // Proveedores y perfiles
   const [customProviders, setCustomProviders] = useState<CustomAiProviderDto[]>([]);
   const [projectProfiles, setProjectProfiles] = useState<ProjectProfileSummaryDto[]>([]);
   const [profilesError, setProfilesError] = useState(false);
+
+  // Estados de envío y error general
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -68,7 +64,14 @@ export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
   const [repoPath, setRepoPath] = useState("");
   const [isScanning, setIsScanning] = useState(false);
   const [scanStatusMsg, setScanStatusMsg] = useState<{ type: "success" | "warning" | "error"; text: string } | null>(null);
+  const [scanSuccessNotice, setScanSuccessNotice] = useState(false);
   const [scanReport, setScanReport] = useState<ProjectContextScanReportDto | null>(null);
+
+  // Cambio de proveedor: vaciar el modelo para que el selector rellene el predeterminado del nuevo proveedor
+  const handleProviderChange = (newProvider: string) => {
+    setDefaultProvider(newProvider);
+    setDefaultModel("");
+  };
 
   const handleBrowseFolder = async () => {
     if (window.desktop?.selectProjectFolder) {
@@ -98,6 +101,7 @@ export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
 
     setIsScanning(true);
     setScanStatusMsg(null);
+    setScanSuccessNotice(false);
     setScanReport(null);
     setErrorMsg(null);
 
@@ -117,6 +121,7 @@ export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
         if (res.data.report) {
           setScanReport(res.data.report);
         }
+        setScanSuccessNotice(true);
         setScanStatusMsg(null);
       } else {
         throw new Error(res.error || "No se pudo extraer el contexto del repositorio.");
@@ -131,8 +136,10 @@ export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
     }
   };
 
+  // Cargar proveedores y perfiles al abrir
   useEffect(() => {
-    // Cargar proveedores personalizados desde settings si existen
+    if (!open) return;
+
     api
       .get<any>("/desktop/settings")
       .then((res) => {
@@ -142,7 +149,6 @@ export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
       })
       .catch(() => {});
 
-    // Cargar perfiles de reglas de proyecto
     api
       .get<{ success: boolean; data: ProjectProfileSummaryDto[] }>("/project-profiles")
       .then((res) => {
@@ -159,6 +165,7 @@ export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
       });
   }, [open]);
 
+  // Inicializar estado del formulario al abrir
   useEffect(() => {
     if (folder) {
       setName(folder.name);
@@ -177,17 +184,23 @@ export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
       setProfileId("generic");
       setCustomApiKey("");
     }
+    setActiveTab(0);
     setErrorMsg(null);
+    setScanStatusMsg(null);
+    setScanSuccessNotice(false);
     setScanReport(null);
   }, [folder, open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (!name.trim()) {
+      setActiveTab(0);
       setErrorMsg("El nombre de la carpeta de proyecto es obligatorio.");
       return;
     }
     if (!technicalContext.trim()) {
+      setActiveTab(0);
       setErrorMsg("El contexto técnico del proyecto es obligatorio para guiar a los agentes de IA.");
       return;
     }
@@ -196,15 +209,18 @@ export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
     setErrorMsg(null);
 
     try {
-      const payload = {
-        name: name.trim(),
-        description: description.trim() || undefined,
-        technicalContext: technicalContext.trim(),
-        defaultProvider: defaultProvider.trim() || undefined,
-        defaultModel: defaultModel.trim() || undefined,
-        customApiKey: customApiKey.trim() || undefined,
-        profileId: profileId.trim() || undefined
-      };
+      const payload = buildFolderPayload(
+        {
+          name,
+          description,
+          technicalContext,
+          defaultProvider,
+          defaultModel,
+          customApiKey,
+          profileId
+        },
+        !!folder
+      );
 
       let res: any;
       if (folder) {
@@ -236,223 +252,72 @@ export const ProjectFolderModal: React.FC<ProjectFolderModalProps> = ({
           </Typography>
         </DialogTitle>
 
-        <DialogContent dividers>
+        <DialogContent dividers sx={{ pb: 3 }}>
+          {/* El Alert de error general queda arriba de las pestañas (visible en cualquiera) */}
           {errorMsg && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {errorMsg}
             </Alert>
           )}
 
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Configura el contexto técnico y las credenciales de este proyecto. Todas las grabaciones y audios asignados a esta "carpeta" usarán automáticamente estas pautas para generar issues optimizadas para agentes de IA, sin tener que configurar las credenciales en cada transcripción.
-          </Typography>
-
-          <TextField
-            fullWidth
-            label="Nombre del Proyecto / Carpeta"
-            placeholder="ej. Proyecto DIAMANTE (Limpieza Inteligente)"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            sx={{ mb: 2 }}
-          />
-
-          <TextField
-            fullWidth
-            label="Descripción breve (opcional)"
-            placeholder="ej. Sistema de gestión de servicios y facturación"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            sx={{ mb: 2.5 }}
-          />
-
-          {/* Sección de auto-escaneo del repositorio con IA */}
-          <Paper
-            variant="outlined"
-            sx={{
-              p: 2,
-              mb: 2.5,
-              borderRadius: 2,
-              bgcolor: (theme) => (theme.palette.mode === "dark" ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)")
-            }}
+          <Tabs
+            value={activeTab}
+            onChange={(_e, val) => setActiveTab(val)}
+            variant="fullWidth"
+            sx={{ borderBottom: 1, borderColor: "divider" }}
           >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-              <AutoAwesomeIcon color="primary" fontSize="small" />
-              <Typography variant="subtitle2" fontWeight={700}>
-                Escanear Repositorio con IA (Auto-generar Contexto Técnico)
-              </Typography>
-            </Box>
+            <Tab label="General" />
+            <Tab label="Escanear con IA" />
+            <Tab label="Configuración de IA" />
+          </Tabs>
 
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-              Selecciona la carpeta local de tu proyecto. El escáner ejecuta un inventario determinístico del código, lee la documentación por orden de prioridad resumiendo archivos extensos, y valida cada dato contra las fuentes antes de generar el contexto técnico.
-            </Typography>
-
-            <Alert severity="warning" sx={{ mb: 1.5, fontSize: "0.85rem", py: 0.5 }}>
-              <strong>Aviso de facturación y consumo de tokens:</strong> Este análisis automático inspecciona la estructura y contenidos clave de tu código. Los documentos largos se resumen por partes y eso hace varias llamadas. Si utilizas un proveedor con API Key de pago (OpenAI, DeepSeek, etc.), esta operación <strong>consumirá tokens adicionales en tu facturación</strong>. Con <em>Cuenta de Google (Gemini Pro - Sin API Key)</em> no genera costos adicionales.
-            </Alert>
-
-            <Alert severity="info" sx={{ mb: 2, fontSize: "0.85rem", py: 0.5 }}>
-              El contenido de los archivos (sin .env, llaves ni secretos detectados) se envía al proveedor elegido:{" "}
-              <strong>
-                {defaultProvider === "google-account"
-                  ? "Cuenta de Google (Antigravity)"
-                  : defaultProvider === "gemini"
-                  ? "Google Gemini API"
-                  : defaultProvider === "groq"
-                  ? "Groq"
-                  : defaultProvider === "openai"
-                  ? "OpenAI"
-                  : customProviders.find((p) => p.id === defaultProvider)?.name || defaultProvider}
-              </strong>.
-            </Alert>
-
-            <Box sx={{ display: "flex", gap: 1, mb: 1.5, alignItems: "center" }}>
-              <TextField
-                fullWidth
-                size="small"
-                label="Ruta de la carpeta del proyecto / repositorio"
-                placeholder="ej. C:\Users\TuUsuario\proyectos\mi-app"
-                value={repoPath}
-                onChange={(e) => setRepoPath(e.target.value)}
-              />
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<BrowseFolderIcon />}
-                onClick={handleBrowseFolder}
-                sx={{ whiteSpace: "nowrap", height: 40 }}
-              >
-                Examinar...
-              </Button>
-            </Box>
-
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-              <Button
-                variant="contained"
-                color="secondary"
-                size="small"
-                startIcon={isScanning ? <CircularProgress size={16} color="inherit" /> : <AutoFixIcon />}
-                onClick={handleScanRepository}
-                disabled={isScanning || !repoPath.trim()}
-              >
-                {isScanning ? "Analizando repositorio con IA..." : "Escanear y Auto-generar Contexto"}
-              </Button>
-              {isScanning && (
-                <Typography variant="caption" color="text.secondary">
-                  Inspeccionando arquitectura, dependencias y reglas de negocio...
-                </Typography>
-              )}
-            </Box>
-
-            {scanStatusMsg && (
-              <Alert severity={scanStatusMsg.type} sx={{ mt: 1.5, fontSize: "0.85rem", py: 0.5 }}>
-                {scanStatusMsg.text}
-              </Alert>
-            )}
-
-            {scanReport && <ContextScanReport report={scanReport} />}
-          </Paper>
-
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
-            <Typography variant="subtitle2" fontWeight={600}>
-              Contexto Técnico del Proyecto (Stack, Arquitectura, Módulos, Convenciones) *
-            </Typography>
-            <Button
-              size="small"
-              startIcon={<AutoFixIcon />}
-              onClick={() => setTechnicalContext(TEMPLATE_CONTEXT)}
-            >
-              Restablecer Plantilla
-            </Button>
-          </Box>
-
-          <TextField
-            fullWidth
-            multiline
-            rows={14}
-            value={technicalContext}
-            onChange={(e) => setTechnicalContext(e.target.value)}
-            placeholder="Describe aquí las tecnologías, arquitectura y convenciones de este proyecto..."
-            helperText={`${technicalContext.length} / 40000 caracteres`}
-            sx={{ mb: 3 }}
-          />
-
-          <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-            Configuración de IA para esta Carpeta (Opcional)
-          </Typography>
-
-          <Box sx={{ mb: 2 }}>
-            <FormControl fullWidth size="small">
-              <InputLabel id="folder-profile-select">Perfil de reglas del proyecto</InputLabel>
-              <Select
-                labelId="folder-profile-select"
-                label="Perfil de reglas del proyecto"
-                value={profileId}
-                onChange={(e) => setProfileId(e.target.value)}
-              >
-                {projectProfiles.length > 0 ? (
-                  projectProfiles.map((p) => (
-                    <MenuItem key={p.id} value={p.id}>
-                      {p.name}
-                    </MenuItem>
-                  ))
-                ) : (
-                  <MenuItem value="generic">Genérico (sin reglas de negocio)</MenuItem>
-                )}
-              </Select>
-            </FormControl>
-            {profilesError && (
-              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
-                No se pudo cargar la lista de perfiles
-              </Typography>
-            )}
-          </Box>
-
-          <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", mb: 2 }}>
-            <FormControl sx={{ minWidth: 260, flex: 1 }}>
-              <InputLabel id="folder-provider-select">Proveedor de IA</InputLabel>
-              <Select
-                labelId="folder-provider-select"
-                label="Proveedor de IA"
-                value={defaultProvider}
-                onChange={(e) => setDefaultProvider(e.target.value)}
-              >
-                <MenuItem value="google-account">Cuenta de Google (Gemini Pro - Sin API Key)</MenuItem>
-                <MenuItem value="gemini">Google Gemini API</MenuItem>
-                <MenuItem value="openai">OpenAI (ChatGPT)</MenuItem>
-                <MenuItem value="groq">Groq Cloud</MenuItem>
-                {customProviders.map((cp) => (
-                  <MenuItem key={cp.id} value={cp.id}>
-                    {cp.name} (Personalizado)
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-
-            <Box sx={{ flex: 1, minWidth: 200 }}>
-              <LlmModelSelector
-                provider={defaultProvider}
-                value={defaultModel}
-                onChange={setDefaultModel}
-                apiKey={customApiKey}
-                baseUrl={customProviders.find((cp) => cp.id === defaultProvider)?.baseUrl}
-                label="Modelo preferido"
-                placeholder="Selecciona o escribe el modelo"
-              />
-            </Box>
-          </Box>
-
-          {defaultProvider !== "google-account" && (
-            <TextField
-              fullWidth
-              type="password"
-              label="API Key específica para este proyecto (opcional)"
-              placeholder={folder?.customApiKey ? "•••• (Guardada)" : "Dejar en blanco para usar la global de Configuración"}
-              value={customApiKey}
-              onChange={(e) => setCustomApiKey(e.target.value)}
-              helperText="Si no introduces una aquí, se utilizará la clave configurada globalmente en Ajustes."
+          {/* Las 3 pestañas permanecen montadas para no perder estado ni re-montar el selector */}
+          <Box sx={{ display: activeTab === 0 ? "block" : "none" }}>
+            <BasicSection
+              name={name}
+              onNameChange={setName}
+              description={description}
+              onDescriptionChange={setDescription}
+              technicalContext={technicalContext}
+              onTechnicalContextChange={setTechnicalContext}
+              onResetTemplate={() => setTechnicalContext(TEMPLATE_CONTEXT)}
             />
-          )}
+          </Box>
+
+          <Box sx={{ display: activeTab === 1 ? "block" : "none" }}>
+            <ScanSection
+              repoPath={repoPath}
+              onRepoPathChange={setRepoPath}
+              onBrowseFolder={handleBrowseFolder}
+              isScanning={isScanning}
+              onScan={handleScanRepository}
+              scanStatusMsg={scanStatusMsg}
+              scanSuccessNotice={scanSuccessNotice}
+              scanReport={scanReport}
+              defaultProvider={defaultProvider}
+              defaultModel={defaultModel}
+              customProviders={customProviders}
+              onNavigateToGeneral={() => setActiveTab(0)}
+              onNavigateToAiConfig={() => setActiveTab(2)}
+            />
+          </Box>
+
+          <Box sx={{ display: activeTab === 2 ? "block" : "none" }}>
+            <AiConfigSection
+              profileId={profileId}
+              onProfileIdChange={setProfileId}
+              projectProfiles={projectProfiles}
+              profilesError={profilesError}
+              defaultProvider={defaultProvider}
+              onProviderChange={handleProviderChange}
+              defaultModel={defaultModel}
+              onModelChange={setDefaultModel}
+              customApiKey={customApiKey}
+              onCustomApiKeyChange={setCustomApiKey}
+              customProviders={customProviders}
+              savedApiKey={Boolean(folder?.customApiKey)}
+            />
+          </Box>
         </DialogContent>
 
         <DialogActions sx={{ px: 3, py: 2 }}>

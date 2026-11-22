@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Autocomplete,
   TextField,
@@ -14,6 +14,22 @@ import {
 import { Refresh as RefreshIcon, CloudDone as LiveIcon } from "@mui/icons-material";
 import { AvailableModelItem, AvailableLlmModelsDto } from "@audio-to-text/shared";
 import { api } from "../../lib/api.js";
+import { shouldAutoSelectModel } from "./modelAutoSelect.js";
+
+/**
+ * Contrato de selección de modelos de IA (LlmModelSelector):
+ * - El selector solo rellena el modelo predeterminado del proveedor cuando el valor actual está vacío.
+ *   Nunca reemplaza un valor no vacío, ni al montarse, ni al cambiar de proveedor, ni al refrescar.
+ * - Quien cambia de proveedor (acción del usuario) es responsable de vaciar el modelo
+ *   (`onChange("")` / `setModel("")`) para que el selector rellene el predeterminado del nuevo proveedor.
+ * - Se usa un `ref` con el último `value` (`valueRef.current = value` en cada render) para decidir
+ *   al llegar la respuesta asíncrona, no el `value` capturado en el closure.
+ * - Se ignoran respuestas viejas mediante un contador de petición (`requestIdRef`); si al llegar
+ *   la respuesta ya hay una petición más nueva, no se tocan `models` ni el valor.
+ * - La lógica pura de auto-selección reside en `shouldAutoSelectModel`.
+ * - El botón de refrescar sigue refrescando la lista sin cambiar el valor existente.
+ * - La normalización («Nombre (id)» → id) se mantiene.
+ */
 
 export interface LlmModelSelectorProps {
   provider: string;
@@ -48,10 +64,24 @@ export const LlmModelSelector: React.FC<LlmModelSelectorProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isLive, setIsLive] = useState(false);
 
+  // Ref con el último value para evitar problemas de stale closure
+  const valueRef = useRef(value);
+  valueRef.current = value;
+
+  // Ref con el último onChange: los padres suelen pasar una función nueva en cada render,
+  // y si fetchModels dependiera de ella el efecto de abajo pediría la lista en cada render.
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  // Contador de peticiones para descartar respuestas que lleguen tarde
+  const requestIdRef = useRef(0);
+
   const fetchModels = useCallback(
-    async (prov: string, key?: string, url?: string, autoSelectDefault: boolean = false) => {
+    async (prov: string, key?: string, url?: string) => {
       if (!prov) return;
+      const requestId = ++requestIdRef.current;
       setIsLoading(true);
+
       try {
         const res = await api.post<{ success: boolean; data: AvailableLlmModelsDto }>(
           "/desktop/settings/llm-models",
@@ -63,32 +93,47 @@ export const LlmModelSelector: React.FC<LlmModelSelectorProps> = ({
           }
         );
 
+        // Si ya hay una petición más reciente en curso, ignorar esta respuesta
+        if (requestId !== requestIdRef.current) return;
+
         if (res.success && res.data) {
           setModels(res.data.models || []);
           setIsLive(!!res.data.isLiveDiscovered);
 
-          // Si el valor actual está vacío o no pertenece a este proveedor, asignar el default del proveedor
-          if (autoSelectDefault || !value.trim()) {
-            onChange(res.data.defaultModel || (res.data.models[0]?.id ?? ""));
+          // Solo auto-seleccionar si la petición sigue vigente y el valor actual está vacío
+          if (
+            shouldAutoSelectModel({
+              latestValue: valueRef.current,
+              requestId,
+              currentRequestId: requestIdRef.current
+            })
+          ) {
+            const defaultChoice = res.data.defaultModel || (res.data.models[0]?.id ?? "");
+            if (defaultChoice) {
+              onChangeRef.current(defaultChoice);
+            }
           }
         }
       } catch (err) {
         console.warn("[LlmModelSelector] No se pudieron cargar modelos vía API:", err);
       } finally {
-        setIsLoading(false);
+        if (requestId === requestIdRef.current) {
+          setIsLoading(false);
+        }
       }
     },
-    [value, onChange]
+    [purpose]
   );
 
-  // Al cambiar de proveedor, refrescar la lista y actualizar el modelo sugerido
+  // Al cambiar de proveedor, refrescar la lista de modelos (solo el proveedor dispara la carga).
   useEffect(() => {
-    fetchModels(provider, apiKey, baseUrl, true);
-  }, [provider]);
+    fetchModels(provider, apiKey, baseUrl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [provider, fetchModels]);
 
   const handleRefreshClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    fetchModels(provider, apiKey, baseUrl, false);
+    fetchModels(provider, apiKey, baseUrl);
   };
 
   // Normalizar el valor eliminando decoraciones de etiqueta "Nombre (id)"
@@ -116,9 +161,6 @@ export const LlmModelSelector: React.FC<LlmModelSelectorProps> = ({
       onChange(normalizedValue);
     }
   }, [normalizedValue, value, onChange]);
-
-  // Encontrar el objeto de modelo actual para tooltip o visualización
-  const currentModelObj = models.find((m) => m.id === normalizedValue);
 
   return (
     <Box sx={{ width: "100%", ...sx }}>

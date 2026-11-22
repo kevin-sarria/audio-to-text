@@ -24,11 +24,11 @@ export class UpdateProjectFolder {
 
     folder.update({
       name: input.name !== undefined ? input.name.trim() : undefined,
-      description: input.description !== undefined ? input.description.trim() : undefined,
+      description: input.description !== undefined ? input.description.trim() || null : undefined,
       technicalContext: input.technicalContext !== undefined ? input.technicalContext.trim() : undefined,
-      defaultProvider: input.defaultProvider !== undefined ? input.defaultProvider.trim() : undefined,
-      defaultModel: input.defaultModel !== undefined ? input.defaultModel.trim() : undefined,
-      customApiKey: input.customApiKey !== undefined ? input.customApiKey.trim() : undefined,
+      defaultProvider: input.defaultProvider !== undefined ? input.defaultProvider.trim() || null : undefined,
+      defaultModel: input.defaultModel !== undefined ? input.defaultModel.trim() || null : undefined,
+      customApiKey: input.customApiKey !== undefined ? input.customApiKey.trim() || undefined : undefined,
       profileId: input.profileId !== undefined ? input.profileId.trim() || null : undefined
     });
 

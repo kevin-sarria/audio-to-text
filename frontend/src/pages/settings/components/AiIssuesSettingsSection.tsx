@@ -71,20 +71,10 @@ export const AiIssuesSettingsSection: React.FC<AiIssuesSettingsSectionProps> = (
               label="Proveedor por Defecto para Issues"
               onChange={(e) => {
                 const newProvider = e.target.value;
-                const matched = settings.customProviders?.find((cp) => cp.id === newProvider);
-                const suggestedModel = matched
-                  ? matched.defaultModel
-                  : newProvider === "google-account"
-                  ? ""
-                  : newProvider === "openai"
-                  ? "gpt-4o-mini"
-                  : newProvider === "groq"
-                  ? "llama-3.3-70b-versatile"
-                  : "gemini-2.5-flash";
                 onChangeSettings({
                   ...settings,
                   issuesDefaultProvider: newProvider,
-                  issuesDefaultModel: suggestedModel
+                  issuesDefaultModel: ""
                 });
               }}
             >

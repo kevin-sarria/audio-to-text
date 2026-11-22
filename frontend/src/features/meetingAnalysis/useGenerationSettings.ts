@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import type {
   CustomAiProviderDto,
   ProjectFolderDto,
@@ -27,6 +27,9 @@ export function useGenerationSettings({
   const [provider, setProviderState] = useState<string>("google-account");
   const [customApiKey, setCustomApiKey] = useState("");
   const [customModel, setCustomModelState] = useState("");
+  // Último modelo, para decidir sin efectos secundarios dentro de un updater de setState.
+  const customModelRef = useRef("");
+  customModelRef.current = customModel;
   const [profileId, setProfileIdState] = useState<string>("generic");
   const [projectContext, setProjectContext] = useState(DEFAULT_PROJECT_CONTEXT);
 
@@ -47,13 +50,19 @@ export function useGenerationSettings({
     setTouched(true);
     setProviderState(val);
     const matched = customProviders.find((cp) => cp.id === val);
-    if (matched) {
-      setCustomModelState(matched.defaultModel || "");
+    if (matched && matched.defaultModel) {
+      setCustomModelState(matched.defaultModel);
+    } else {
+      setCustomModelState("");
     }
   };
 
+  // Marcamos touched solo si el usuario ya tenía un valor y lo modificó/limpió conscientemente.
+  // Si el valor previo estaba vacío y llega un modelo del auto-relleno del selector,
+  // NO marcamos touched para preservar la resolución automática de la carpeta de proyecto.
   const setCustomModel = (val: string) => {
-    setTouched(true);
+    if (customModelRef.current !== "") setTouched(true);
+    customModelRef.current = val;
     setCustomModelState(val);
   };
 
