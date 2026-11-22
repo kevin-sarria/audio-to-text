@@ -4,6 +4,34 @@ export interface RedactSecretsResult {
   byType: Record<string, number>;
 }
 
+const PROSE_ARTICLE_REGEX = /\b(?:del|de|el|la|al|un|una|the|a|an|of)[ \t]+$/i;
+
+/**
+ * true si la «asignación» es en realidad prosa: va tras un artículo y el valor tiene 3+ palabras.
+ *
+ * Esta excepción evita tapar texto de documentación o prosa explicativa en español o inglés
+ * (p. ej. «calcula capacidades a partir del claim "cap" del token: «La app NO usa la lista...»»).
+ * Exige estrictamente dos condiciones simultáneas:
+ * 1. Va precedido de un artículo o preposición completo (del, de, el, la, al, un, una, the, a, an, of)
+ *    inmediatamente antes de la clave en la misma línea.
+ * 2. El valor tiene 3 o más palabras separadas por espacios.
+ *
+ * Si falta cualquiera de las dos condiciones, no se considera prosa y se redacta. Por ejemplo, una
+ * contraseña real de una sola palabra precedida de artículo («el password: MiClave2024!» o
+ * «la password = hunter2») debe seguir redactándose obligatoriamente por seguridad.
+ */
+export function isProseAssignment(textBefore: string, value: string): boolean {
+  if (!PROSE_ARTICLE_REGEX.test(textBefore)) {
+    return false;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return false;
+  }
+  const words = trimmed.split(/\s+/);
+  return words.length >= 3;
+}
+
 export function redactSecrets(text: string): RedactSecretsResult {
   let current = text;
   const byType: Record<string, number> = {};
@@ -86,7 +114,7 @@ export function redactSecrets(text: string): RedactSecretsResult {
 
   current = current.replace(
     assignmentKeyRegex,
-    (match, prefix, quote, val) => {
+    (match, prefix, quote, val, offset: number, fullText: string) => {
       const trimmedVal = val.trim();
       if (!trimmedVal) return match;
       if (trimmedVal.startsWith("[REDACTADO:")) return match;
@@ -102,6 +130,14 @@ export function redactSecrets(text: string): RedactSecretsResult {
         (trimmedVal.startsWith("<") && trimmedVal.endsWith(">")) ||
         (trimmedVal.startsWith("${") && trimmedVal.endsWith("}"))
       ) {
+        return match;
+      }
+
+      // Prosa vs asignación real: no redactar solo cuando va tras artículo/preposición y el valor tiene 3+ palabras
+      // Basta con los últimos caracteres: el artículo tiene que ir pegado a la clave, y así el
+      // regex no recorre todo el texto anterior en cada coincidencia (prompts de cientos de miles).
+      const textBefore = fullText.slice(Math.max(0, offset - 24), offset);
+      if (isProseAssignment(textBefore, trimmedVal)) {
         return match;
       }
 

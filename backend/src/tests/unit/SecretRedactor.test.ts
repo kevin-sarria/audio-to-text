@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { redactSecrets } from "../../infrastructure/analysis/contextScan/SecretRedactor.js";
+import { redactSecrets, isProseAssignment } from "../../infrastructure/analysis/contextScan/SecretRedactor.js";
 
 describe("SecretRedactor - Detección y Redacción de Secretos", () => {
   it("redacta bloques de private-key", () => {
@@ -143,6 +143,61 @@ Notificaciones: no-reply@otrodominio.com
     const res2 = redactSecrets(res1.text);
     expect(res2.text).toBe(res1.text);
     expect(res2.redactions).toBe(0);
+  });
+
+  it("no tapa prosa con «del token:» pero sí asignaciones reales", () => {
+    // 1. No se redactan casos de prosa (redactions === 0)
+    const casoProsa1 =
+      'calcula capacidades a partir del claim "cap" del token: «La app NO usa la lista por rol del panel»';
+    const resProsa1 = redactSecrets(casoProsa1);
+    expect(resProsa1.text).toBe(casoProsa1);
+    expect(resProsa1.redactions).toBe(0);
+
+    const casoProsa2 = "the token: is sent in the Authorization header";
+    const resProsa2 = redactSecrets(casoProsa2);
+    expect(resProsa2.text).toBe(casoProsa2);
+    expect(resProsa2.redactions).toBe(0);
+
+    // 2. Se siguen redactando asignaciones reales aunque lleven artículo
+    const resPass1 = redactSecrets("el password: MiClave2024!");
+    expect(resPass1.text).toBe("el password: [REDACTADO:assignment]");
+    expect(resPass1.redactions).toBe(1);
+
+    const resToken = redactSecrets("token: abc123def456");
+    expect(resToken.text).toBe("token: [REDACTADO:assignment]");
+    expect(resToken.redactions).toBe(1);
+
+    const resPass2 = redactSecrets("la password = hunter2");
+    expect(resPass2.text).toBe("la password = [REDACTADO:assignment]");
+    expect(resPass2.redactions).toBe(1);
+
+    const resApiKey = redactSecrets("api_key = mi_secreto_real_9876");
+    expect(resApiKey.text).toBe("api_key = [REDACTADO:assignment]");
+    expect(resApiKey.redactions).toBe(1);
+
+    // 3. API key y JWT se siguen tapando aunque estén en prosa (por sus pasos previos)
+    const resApiKeyEnProsa = redactSecrets("del token: sk-proj-abcdefghijklmnopqrstuvwxyz123456");
+    expect(resApiKeyEnProsa.text).toBe("del token: [REDACTADO:api-key]");
+    expect(resApiKeyEnProsa.byType["api-key"]).toBe(1);
+
+    const resJwtEnProsa = redactSecrets(
+      "del token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c explicado en el documento"
+    );
+    expect(resJwtEnProsa.text).toContain("del token: [REDACTADO:jwt]");
+    expect(resJwtEnProsa.byType["jwt"]).toBe(1);
+
+    // 4. Pruebas directas de isProseAssignment
+    expect(isProseAssignment("del ", "uno dos tres")).toBe(true);
+    expect(isProseAssignment("del ", "uno")).toBe(false);
+    expect(isProseAssignment("", "uno dos tres cuatro cinco")).toBe(false);
+    expect(isProseAssignment("la casa y ", "uno dos tres cuatro cinco")).toBe(false);
+    expect(isProseAssignment("la casa y token: ", "uno dos tres cuatro cinco")).toBe(false);
+
+    // 5. Idempotencia ante prosa
+    const primeraPasada = redactSecrets(casoProsa1);
+    const segundaPasada = redactSecrets(primeraPasada.text);
+    expect(segundaPasada.text).toBe(casoProsa1);
+    expect(segundaPasada.redactions).toBe(0);
   });
 });
 
