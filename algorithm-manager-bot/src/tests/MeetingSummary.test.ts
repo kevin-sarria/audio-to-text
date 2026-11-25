@@ -9,8 +9,9 @@ import {
   calculateParticipants,
   estimateDurationSec
 } from "../domain/services/SpeakingStatsCalculator.js";
-import { SummaryUtterance } from "../domain/models/MeetingSummary.js";
+import { MeetingSummary, SummaryUtterance } from "../domain/models/MeetingSummary.js";
 import { parseLlmSummary } from "../infrastructure/ai/MeetingSummaryValidator.js";
+import { renderSummaryMarkdown, renderConsoleExcerpt } from "../infrastructure/export/MeetingSummaryMarkdownRenderer.js";
 
 export const FIXTURE: SummaryUtterance[] = [
   { speakerName: "Ana", text: "Vamos a migrar la base de datos el viernes.", offsetSec: 0 },
@@ -226,5 +227,68 @@ describe("MeetingSummaryLlmService", () => {
   it("formatTranscript incluye marca de tiempo solo cuando hay offset", () => {
     expect(formatTranscript([{ speakerName: "Ana", text: "hola", offsetSec: 65 }])).toBe("[01:05] Ana: hola");
     expect(formatTranscript([{ speakerName: "Ana", text: "hola" }])).toBe("Ana: hola");
+  });
+});
+
+describe("MeetingSummaryMarkdownRenderer", () => {
+  const full: MeetingSummary = {
+    sessionId: "s1",
+    generatedAt: "2026-11-25T10:00:00.000Z",
+    language: "es",
+    executiveSummary: "Se acordó migrar la base el viernes.",
+    topics: [{ title: "Migración", summary: "Plan de migración." }],
+    decisions: [{ text: "Migrar el viernes", evidence: "Vamos a migrar" }],
+    actionItems: [
+      { task: "Preparar el script", owner: "Luis", dueDate: "jueves", evidence: "Yo me encargo" },
+      { task: "Revisar costos", evidence: "hay que revisar costos" }
+    ],
+    openQuestions: [{ text: "¿Quién aprueba el presupuesto?", askedBy: "Ana" }],
+    participants: [
+      { name: "Luis", speakingSeconds: 18, speakingPercent: 54.9 },
+      { name: "Ana", speakingSeconds: 15, speakingPercent: 45.1 }
+    ],
+    chapters: [{ title: "Migración", startSec: 0, endSec: 30 }]
+  };
+
+  it("incluye todas las secciones con su contenido", () => {
+    const md = renderSummaryMarkdown(full, "Reunión GOOGLE_MEET");
+    for (const heading of [
+      "# Reunión GOOGLE_MEET",
+      "## Resumen ejecutivo",
+      "## Puntos de acción",
+      "## Decisiones",
+      "## Temas",
+      "## Preguntas abiertas",
+      "## Capítulos",
+      "## Participantes"
+    ]) {
+      expect(md).toContain(heading);
+    }
+    expect(md).toContain("- [ ] **Preparar el script** — Responsable: Luis · Fecha: jueves");
+    expect(md).toContain('> "Yo me encargo"');
+    expect(md).toContain("- [ ] **Revisar costos**");
+    expect(md).toContain("`00:00–00:30` Migración");
+    expect(md).toContain("| Luis | 00:18 | 54.9% |");
+  });
+
+  it("muestra 'Sin elementos' en secciones vacías y la nota si existe", () => {
+    const md = renderSummaryMarkdown({
+      ...full,
+      topics: [],
+      decisions: [],
+      actionItems: [],
+      openQuestions: [],
+      chapters: [],
+      note: "El resumen con IA no se pudo generar: prueba."
+    });
+    expect(md).toContain("_Sin elementos._");
+    expect(md).toContain("> ⚠️ El resumen con IA no se pudo generar: prueba.");
+  });
+
+  it("el extracto de consola resume cantidades y las primeras tareas", () => {
+    const text = renderConsoleExcerpt(full);
+    expect(text).toContain("Se acordó migrar la base el viernes.");
+    expect(text).toContain("2 puntos de acción");
+    expect(text).toContain("Preparar el script");
   });
 });
