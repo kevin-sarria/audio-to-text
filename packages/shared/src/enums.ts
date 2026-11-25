@@ -22,5 +22,6 @@ export enum ExportFormat {
   TXT = "txt",
   MD = "md",
   DOCX = "docx",
-  PDF = "pdf"
+  PDF = "pdf",
+  XLSX = "xlsx"
 }

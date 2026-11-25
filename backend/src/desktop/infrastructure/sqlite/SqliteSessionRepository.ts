@@ -116,6 +116,12 @@ export class SqliteSessionRepository implements ISessionRepository {
   }
 
   public async delete(id: string): Promise<void> {
+    // Una reunión del bot borrada no debe reimportarse desde su reunion_*.json (que nunca se toca)
+    this.db
+      .prepare(
+        "INSERT OR IGNORE INTO bot_import_exclusions (external_id, excluded_at) SELECT external_id, ? FROM transcription_sessions WHERE id = ? AND source = 'BOT' AND external_id IS NOT NULL"
+      )
+      .run(new Date().toISOString(), id);
     this.db.prepare("DELETE FROM transcription_sessions WHERE id = ?").run(id);
   }
 

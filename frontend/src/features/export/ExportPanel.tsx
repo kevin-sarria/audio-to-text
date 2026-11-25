@@ -22,7 +22,8 @@ const FORMATS: { format: ExportFormat; label: string }[] = [
   { format: ExportFormat.TXT, label: "TXT" },
   { format: ExportFormat.MD, label: "Markdown" },
   { format: ExportFormat.DOCX, label: "Word (.docx)" },
-  { format: ExportFormat.PDF, label: "PDF" }
+  { format: ExportFormat.PDF, label: "PDF" },
+  { format: ExportFormat.XLSX, label: "Excel (.xlsx)" }
 ];
 
 export const ExportPanel: React.FC<ExportPanelProps> = ({ sessionId }) => {

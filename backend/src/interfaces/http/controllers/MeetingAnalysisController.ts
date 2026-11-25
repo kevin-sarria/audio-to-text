@@ -3,6 +3,7 @@ import { Request, Response, NextFunction } from "express";
 import { GenerateMeetingAnalysis } from "../../../application/use-cases/meetingAnalysis/GenerateMeetingAnalysis.js";
 import { GetMeetingAnalysis } from "../../../application/use-cases/meetingAnalysis/GetMeetingAnalysis.js";
 import { UpdateMeetingAnalysisTitle } from "../../../application/use-cases/meetingAnalysis/UpdateMeetingAnalysisTitle.js";
+import { IssuesExcelExporter } from "../../../infrastructure/export/IssuesExcelExporter.js";
 import { MeetingAnalysisJobs } from "../../../application/services/MeetingAnalysisJobs.js";
 import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
 import type { MeetingAnalysis } from "../../../domain/entities/MeetingAnalysis.js";
@@ -195,6 +196,51 @@ export class MeetingAnalysisController {
           title: result.title
         }
       });
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  public exportExcel = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const sessionId = req.params["id"]!;
+      const userId = req.user?.userId || null;
+      const guestToken = req.guestToken;
+      const guestTokenHash = guestToken
+        ? crypto.createHash("sha256").update(guestToken).digest("hex")
+        : null;
+
+      const analysis = await this.getMeetingAnalysis.execute({
+        sessionId,
+        userId,
+        guestTokenHash
+      });
+
+      if (!analysis) {
+        res.status(404).json({
+          success: false,
+          error: "No existe análisis de reunión generado para esta sesión."
+        });
+        return;
+      }
+
+      const exporter = new IssuesExcelExporter();
+      const buffer = await exporter.exportToBuffer(analysis, analysis.title || "Issues");
+
+      const safeTitle = (analysis.title || "issues")
+        .replace(/[^a-zA-Z0-9_\-]/g, "_")
+        .slice(0, 50);
+      const filename = `issues_${safeTitle}.xlsx`;
+
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`
+      );
+      res.send(buffer);
     } catch (err) {
       next(err);
     }

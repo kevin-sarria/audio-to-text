@@ -42,7 +42,7 @@ El tipo y su esquema zod viven en `packages/shared` (`BotMeetingDeliverySchema`)
 4. Si no existe, crea todo en **una transacción**: sesión, hablantes, segmentos, resumen y puntos de acción. Si falla, no queda nada a medias.
 5. Nunca modifica, mueve ni borra los archivos de origen.
 
-Se dispara al arrancar la app (sin bloquearla; un fallo se registra en el log) y con `POST /sessions/bot-meetings/import`. Las sesiones importadas pertenecen al usuario local de la app.
+Se dispara al arrancar la app (sin bloquearla; un fallo se registra en el log) y con `POST /api/desktop/library/import`. Las sesiones importadas pertenecen al usuario local de la app.
 
 **Cómo se construye la sesión:**
 - `original_file_name` = `Reunión <plataforma> <fecha local dd/mm/aaaa hh:mm>` (la columna es obligatoria y es lo que muestra el Historial).
@@ -75,15 +75,16 @@ Todo es aditivo; no toca filas existentes.
 
 ## 5. API
 
-Todo bajo `/sessions`, con la misma autenticación que el resto (`optionalAuth`; cada consulta se limita a sesiones accesibles para quien pregunta). El listado conserva `page` y `limit`.
+Todo bajo `/api/desktop/library/*` (rutas solo de escritorio, autenticadas con la cookie local; cada consulta se limita al usuario local). El listado conserva `page` y `limit`. En modo web el Historial sigue usando `/sessions`.
 
 | Endpoint | Función |
 |---|---|
-| `POST /sessions/bot-meetings/import` | Ejecuta el importador y devuelve su resultado. |
-| `GET /sessions` | Filtros nuevos: `source` (`AUDIO`/`BOT`), `q`, `from`, `to` (instantes ISO sobre la fecha de la reunión), `participant` (coincidencia normalizada con el nombre del hablante), `folderId`. Cada ítem añade `source`, `occurredAt` y, con `q`, `snippet` y `matchCount`. |
-| `GET /sessions/:id/meeting-summary` | Resumen con los puntos de acción (con `id` y `done`), o `null` si no hay. |
-| `GET /action-items` | Filtros `status` (`open`/`done`/`all`), `owner`, `sessionId`; cada ítem incluye título y fecha de su reunión. |
-| `PATCH /action-items/:id` | Cuerpo `{ done: boolean }`; fija o limpia `done_at`. |
+| `POST /library/import` | Ejecuta el importador y devuelve su resultado. |
+| `GET /library/sessions` | Filtros nuevos: `source` (`AUDIO`/`BOT`), `q`, `from`, `to` (instantes ISO sobre la fecha de la reunión), `participant` (coincidencia normalizada con el nombre del hablante), `folderId`. Cada ítem añade `source`, `occurredAt` y, con `q`, `snippet` y `matchCount`. |
+| `GET /library/sessions/:id/meeting-summary` | Resumen con los puntos de acción (con `id` y `done`), o `null` si no hay. |
+| `GET /library/action-items` | Filtros `status` (`open`/`done`/`all`), `owner`, `sessionId`; cada ítem incluye título y fecha de su reunión. |
+| `PATCH /library/action-items/:id` | Cuerpo `{ done: boolean }`; fija o limpia `done_at`. |
+| `GET /library/participants` | Nombres de los participantes de las reuniones (sin tiempo de habla). |
 
 Los tipos de respuesta y los esquemas zod de entrada van en `packages/shared`. El validador ya devuelve el detalle del campo que falla.
 
@@ -98,9 +99,9 @@ Los tipos de respuesta y los esquemas zod de entrada van en `packages/shared`. E
 
 Cada fase funciona y se prueba sola.
 - **F1 Importar:** contrato en `packages/shared`, el bot escribe `reunion_*.json`, migración 6, importador, endpoint, botón, etiqueta Bot, sin reproductor, ajuste `botOutputDir`.
-- **F2 Resumen:** `GET /sessions/:id/meeting-summary` y la pestaña "Resumen de reunión".
+- **F2 Resumen:** `GET /library/sessions/:id/meeting-summary`, `PATCH /library/action-items/:id` y la pestaña "Resumen de reunión".
 - **F3 Búsqueda:** `session_search`, índice perezoso, parámetro `q` y buscador.
-- **F4 Filtros y pendientes:** filtros `source`, `from`/`to`, `participant`, `folderId`; `GET`/`PATCH /action-items` y la página Pendientes.
+- **F4 Filtros y pendientes:** filtros `source`, `from`/`to`, `participant`, `folderId`; `GET /library/action-items` y la página Pendientes; `GET /library/participants`.
 
 ## 8. Errores
 

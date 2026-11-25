@@ -6,12 +6,13 @@ import { HomePage } from "./pages/HomePage.js";
 import { SessionPage } from "./pages/SessionPage.js";
 import { HistoryPage } from "./pages/HistoryPage.js";
 import { LoginPage } from "./pages/LoginPage.js";
+import { PendientesPage } from "./pages/PendientesPage.js";
 import { SettingsPage } from "./pages/SettingsPage.js";
 import { useAppStore } from "./store/index.js";
 import { api } from "./lib/api.js";
 import { isDesktopApp } from "./lib/runtime.js";
 
-type Page = "home" | "history" | "session" | "login" | "settings";
+type Page = "home" | "history" | "session" | "login" | "settings" | "pendientes";
 
 export const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<Page>("home");
@@ -66,6 +67,7 @@ export const App: React.FC = () => {
           {currentPage === "login" && (
             <LoginPage onSuccess={() => setCurrentPage("home")} />
           )}
+          {currentPage === "pendientes" && <PendientesPage onSelectSession={handleSelectSession} />}
           {currentPage === "settings" && <SettingsPage />}
         </ErrorBoundary>
       </AppShell>

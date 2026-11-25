@@ -16,7 +16,8 @@ import {
   Code as CodeIcon,
   ContentCopy as ContentCopyIcon,
   Check as CheckIcon,
-  Download as DownloadIcon
+  Download as DownloadIcon,
+  TableChart as TableChartIcon
 } from "@mui/icons-material";
 import { DevIssueDto } from "@audio-to-text/shared";
 import { DevIssueCard } from "./DevIssueCard.js";
@@ -34,6 +35,7 @@ interface DevIssuesSectionProps {
   onCopyAllIssues: () => void;
   onDownloadMarkdown: () => void;
   onDownloadJson: () => void;
+  onDownloadExcel?: () => void;
   onCopyPrompt: (prompt: string, id: string) => void;
 }
 
@@ -50,6 +52,7 @@ export const DevIssuesSection: React.FC<DevIssuesSectionProps> = ({
   onCopyAllIssues,
   onDownloadMarkdown,
   onDownloadJson,
+  onDownloadExcel,
   onCopyPrompt
 }) => {
   return (
@@ -132,6 +135,22 @@ export const DevIssuesSection: React.FC<DevIssuesSectionProps> = ({
             >
               Copiar Todo (Markdown)
             </Button>
+
+            {/* Botón Descargar Excel */}
+            {onDownloadExcel && (
+              <Tooltip title="Descargar matriz de issues en Excel (.xlsx)">
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="success"
+                  startIcon={<TableChartIcon fontSize="small" />}
+                  onClick={onDownloadExcel}
+                  sx={{ textTransform: "none", fontWeight: 600 }}
+                >
+                  Excel (.xlsx)
+                </Button>
+              </Tooltip>
+            )}
 
             {/* Botón Descargar */}
             <Tooltip title="Descargar documento completo estructurado en Markdown">

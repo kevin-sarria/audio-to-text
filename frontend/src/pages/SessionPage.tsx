@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Box,
   Typography,
@@ -15,12 +15,16 @@ import {
 import {
   Description as TranscriptIcon,
   AutoAwesome as AiIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  Summarize as SummaryIcon
 } from "@mui/icons-material";
 import { SessionStatus } from "@audio-to-text/shared";
 import { api } from "../lib/api.js";
 import { connectSessionSse } from "../lib/sse.js";
 import { useAppStore } from "../store/index.js";
+import { MeetingSummaryTab } from "../features/library/MeetingSummaryTab.js";
+import { useMeetingSummary } from "../features/library/useMeetingSummary.js";
+import { effectiveTab, findSegmentIdAtSeconds, findSegmentIdByQuote, type SessionTab } from "../features/library/summaryHelpers.js";
 import { useActiveSegment } from "../features/player/useActiveSegment.js";
 import { AudioPlayer } from "../features/player/AudioPlayer.js";
 import { SegmentList } from "../features/player/SegmentList.js";
@@ -34,7 +38,7 @@ interface SessionPageProps {
 export const SessionPage: React.FC<SessionPageProps> = ({ sessionId }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<number>(0);
+  const [activeTab, setActiveTab] = useState<SessionTab>("transcript");
 
   const {
     currentSession,
@@ -110,6 +114,32 @@ export const SessionPage: React.FC<SessionPageProps> = ({ sessionId }) => {
     currentSession?.segments || [],
     currentTimeMs
   );
+
+  const isBotSession = currentSession?.fileFormat === "bot";
+  const { summary, toggleActionItem, pendingItemIds, toggleError, clearToggleError } = useMeetingSummary(sessionId, Boolean(isBotSession));
+
+  // El usuario eligió pestaña a mano en esta sesión: no se le fuerza la de resumen
+  const userChoseTab = useRef(false);
+  useEffect(() => {
+    userChoseTab.current = false;
+    setActiveTab("transcript");
+  }, [sessionId]);
+
+  // Cuando llega el resumen de una reunión del bot, esa pestaña pasa a ser la primera vista
+  useEffect(() => {
+    if (summary && !userChoseTab.current) setActiveTab("summary");
+  }, [summary?.sessionId]);
+
+  const shownTab = effectiveTab(activeTab, Boolean(summary));
+
+  const jumpToSegment = (segmentId: string | null) => {
+    if (!segmentId) return;
+    userChoseTab.current = true;
+    setActiveTab("transcript");
+    setTimeout(() => {
+      document.getElementById(`segment-${segmentId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 80);
+  };
 
   if (isLoading) {
     return (
@@ -209,19 +239,32 @@ export const SessionPage: React.FC<SessionPageProps> = ({ sessionId }) => {
         <Box sx={{ mt: 3 }}>
           <Paper sx={{ mb: 3, borderRadius: 2 }}>
             <Tabs
-              value={activeTab}
-              onChange={(_, newValue) => setActiveTab(newValue)}
+              value={shownTab}
+              onChange={(_, newValue) => {
+                userChoseTab.current = true;
+                setActiveTab(newValue);
+              }}
               indicatorColor="primary"
               textColor="primary"
               variant="fullWidth"
               sx={{ borderBottom: 1, borderColor: "divider" }}
             >
+              {summary && (
+                <Tab
+                  value="summary"
+                  icon={<SummaryIcon />}
+                  iconPosition="start"
+                  label="Resumen de reunión"
+                />
+              )}
               <Tab
+                value="transcript"
                 icon={<TranscriptIcon />}
                 iconPosition="start"
                 label={`Transcripción (${currentSession.segments.length})`}
               />
               <Tab
+                value="analysis"
                 icon={<AiIcon />}
                 iconPosition="start"
                 label="Resumen & Issues IA"
@@ -229,7 +272,19 @@ export const SessionPage: React.FC<SessionPageProps> = ({ sessionId }) => {
             </Tabs>
           </Paper>
 
-          {activeTab === 0 && (
+          {shownTab === "summary" && summary && (
+            <MeetingSummaryTab
+              summary={summary}
+              pendingItemIds={pendingItemIds}
+              toggleError={toggleError}
+              onDismissError={clearToggleError}
+              onToggleItem={toggleActionItem}
+              onOpenQuote={(quote) => jumpToSegment(findSegmentIdByQuote(currentSession.segments, quote))}
+              onOpenChapter={(startSec) => jumpToSegment(findSegmentIdAtSeconds(currentSession.segments, startSec))}
+            />
+          )}
+
+          {shownTab === "transcript" && (
             <>
               <ExportPanel sessionId={sessionId} />
               <Divider sx={{ my: 3 }} />
@@ -242,11 +297,11 @@ export const SessionPage: React.FC<SessionPageProps> = ({ sessionId }) => {
                 speakers={currentSession.speakers}
                 activeSegmentId={activeSegment?.id || null}
               />
-              <AudioPlayer />
+              {currentSession.fileFormat !== "bot" && <AudioPlayer />}
             </>
           )}
 
-          {activeTab === 1 && (
+          {shownTab === "analysis" && (
             <MeetingAnalysisPanel sessionId={sessionId} />
           )}
         </Box>

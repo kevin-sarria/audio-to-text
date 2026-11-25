@@ -3,7 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 export const LOCAL_USER_ID = "00000000-0000-4000-8000-000000000001";
 export const LOCAL_USER_EMAIL = "local@desktop.invalid";
 
-const MIGRATIONS: string[] = [
+export const MIGRATIONS: string[] = [
   // Migración 1: Esquema base 3FN alineado con schema.prisma
   `
   CREATE TABLE IF NOT EXISTS users (
@@ -136,6 +136,56 @@ const MIGRATIONS: string[] = [
   ALTER TABLE meeting_analyses ADD COLUMN generation_meta TEXT;
   ALTER TABLE project_folders ADD COLUMN profile_id TEXT;
   UPDATE project_folders SET profile_id = 'diamante' WHERE lower(technical_context) LIKE '%diamante%' OR lower(name) LIKE '%diamante%';
+  `,
+  // Migración 6: biblioteca de reuniones (origen de sesión, resumen de reunión, puntos de acción e índice de búsqueda)
+  `
+  ALTER TABLE transcription_sessions ADD COLUMN source TEXT NOT NULL DEFAULT 'AUDIO';
+  ALTER TABLE transcription_sessions ADD COLUMN external_id TEXT;
+  ALTER TABLE transcription_sessions ADD COLUMN occurred_at TEXT;
+  ALTER TABLE transcription_sessions ADD COLUMN source_meta TEXT;
+  CREATE UNIQUE INDEX IF NOT EXISTS uq_sessions_source_external ON transcription_sessions (source, external_id) WHERE external_id IS NOT NULL;
+
+  CREATE TABLE IF NOT EXISTS meeting_summaries (
+    id TEXT PRIMARY KEY,
+    session_id TEXT UNIQUE NOT NULL REFERENCES transcription_sessions(id) ON DELETE CASCADE,
+    language TEXT NOT NULL,
+    executive_summary TEXT NOT NULL,
+    note TEXT,
+    generated_at TEXT NOT NULL,
+    topics TEXT NOT NULL,
+    decisions TEXT NOT NULL,
+    open_questions TEXT NOT NULL,
+    participants TEXT NOT NULL,
+    chapters TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS action_items (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES transcription_sessions(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL,
+    task TEXT NOT NULL,
+    owner TEXT,
+    due_date TEXT,
+    evidence TEXT NOT NULL,
+    done INTEGER NOT NULL DEFAULT 0,
+    done_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_action_items_session ON action_items (session_id);
+  CREATE INDEX IF NOT EXISTS idx_action_items_done ON action_items (done);
+
+  CREATE TABLE IF NOT EXISTS session_search (
+    session_id TEXT PRIMARY KEY REFERENCES transcription_sessions(id) ON DELETE CASCADE,
+    title_text TEXT NOT NULL,
+    body_text TEXT NOT NULL,
+    indexed_at TEXT NOT NULL
+  );
+  `,
+  // 7: reuniones del bot borradas por el usuario; la importación no las recrea
+  `
+  CREATE TABLE IF NOT EXISTS bot_import_exclusions (
+    external_id TEXT PRIMARY KEY,
+    excluded_at TEXT NOT NULL
+  );
   `
 ];
 

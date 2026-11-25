@@ -110,6 +110,15 @@ describe("Persistencia SQLite de generationMeta y profileId", () => {
   it("la migración 5 marca como diamante solo las carpetas existentes de DIAMANTE", () => {
     db = openSqliteDatabase({ dbPath: ":memory:" });
     // Volver al estado de la versión 4 (sin las columnas nuevas) e insertar carpetas antiguas
+    // (incluye deshacer la migración 6, que se reaplica en runMigrations)
+    db.exec("DROP INDEX uq_sessions_source_external");
+    for (const col of ["source", "external_id", "occurred_at", "source_meta"]) {
+      db.exec(`ALTER TABLE transcription_sessions DROP COLUMN ${col}`);
+    }
+    db.exec("DROP TABLE meeting_summaries");
+    db.exec("DROP TABLE action_items");
+    db.exec("DROP TABLE session_search");
+    db.exec("DROP TABLE bot_import_exclusions");
     db.exec("ALTER TABLE meeting_analyses DROP COLUMN generation_meta");
     db.exec("ALTER TABLE project_folders DROP COLUMN profile_id");
     db.exec("PRAGMA user_version = 4");

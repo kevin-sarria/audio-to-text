@@ -7,10 +7,14 @@
     "packages/*",
     "backend",
     "frontend",
-    "desktop"
+    "desktop",
+    "algorithm-manager-bot"
   ],
   "scripts": {
     "dev": "npm run dev --workspaces --if-present",
+    "bot": "tsx algorithm-manager-bot/src/cli.ts",
+    "bot:login": "tsx algorithm-manager-bot/src/login.ts",
+    "bot:test": "npm test --prefix algorithm-manager-bot",
     "dev:api": "npm run dev --workspace=@audio-to-text/api",
     "dev:web": "npm run dev --workspace=@audio-to-text/web",
     "dev:worker": "npm run dev:worker --workspace=@audio-to-text/api",

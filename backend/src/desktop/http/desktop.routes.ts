@@ -8,6 +8,10 @@ import { createSettingsRoutes } from "./routes/settings.routes.js";
 import { createCustomProvidersRoutes } from "./routes/customProviders.routes.js";
 import { createLlmModelsRoutes } from "./routes/llmModels.routes.js";
 import { createModelsRoutes } from "./routes/models.routes.js";
+import { createBotRoutes } from "../../interfaces/http/routes/bot.routes.js";
+import { createLibraryRoutes } from "./routes/library.routes.js";
+import type { ImportBotMeetings } from "../library/ImportBotMeetings.js";
+import type { SqliteLibraryRepository } from "../infrastructure/sqlite/SqliteLibraryRepository.js";
 
 export interface DesktopRoutesDeps {
   settingsStore: SettingsStore;
@@ -17,6 +21,8 @@ export interface DesktopRoutesDeps {
   whisperBinaryPath: string;
   ffmpegBinaryPath?: string;
   resourcesDir: string;
+  importBotMeetings: ImportBotMeetings;
+  libraryRepository: SqliteLibraryRepository;
 }
 
 export function createDesktopRoutes(deps: DesktopRoutesDeps): Router {
@@ -30,6 +36,8 @@ export function createDesktopRoutes(deps: DesktopRoutesDeps): Router {
   router.use(createCustomProvidersRoutes(deps));
   router.use(createLlmModelsRoutes(deps));
   router.use(createModelsRoutes(deps));
+  router.use("/bot", createBotRoutes());
+  router.use(createLibraryRoutes(deps));
 
   return router;
 }

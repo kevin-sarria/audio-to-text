@@ -5,6 +5,7 @@ import {
   Typography,
   Container,
   Box,
+  Badge,
   Button,
   Chip
 } from "@mui/material";
@@ -17,8 +18,8 @@ import { isDesktopApp } from "../lib/runtime.js";
 
 interface AppShellProps {
   children: React.ReactNode;
-  currentPage: "home" | "history" | "session" | "login" | "settings";
-  onNavigate: (page: "home" | "history" | "session" | "login" | "settings") => void;
+  currentPage: "home" | "history" | "session" | "login" | "settings" | "pendientes";
+  onNavigate: (page: "home" | "history" | "session" | "login" | "settings" | "pendientes") => void;
 }
 
 export const AppShell: React.FC<AppShellProps> = ({ children, currentPage, onNavigate }) => {
@@ -37,6 +38,24 @@ export const AppShell: React.FC<AppShellProps> = ({ children, currentPage, onNav
         })
         .catch(() => {});
     }
+  }, [isDesktop, currentPage]);
+
+  const [openCount, setOpenCount] = useState(0);
+
+  // Contador de pendientes del menú: se refresca al cambiar de pantalla y al emitirse `library:changed`
+  useEffect(() => {
+    if (!isDesktop) return;
+    const refreshOpenCount = () => {
+      api
+        .get<any>("/desktop/library/action-items", { params: { status: "open", limit: 1 } })
+        .then((res) => {
+          if (res.success) setOpenCount(res.meta?.openTotal ?? 0);
+        })
+        .catch(() => {});
+    };
+    refreshOpenCount();
+    window.addEventListener("library:changed", refreshOpenCount);
+    return () => window.removeEventListener("library:changed", refreshOpenCount);
   }, [isDesktop, currentPage]);
 
   const handleLogout = async () => {
@@ -100,6 +119,18 @@ export const AppShell: React.FC<AppShellProps> = ({ children, currentPage, onNav
                   size="small"
                 >
                   Historial
+                </Button>
+              )}
+
+              {isDesktop && (
+                <Button
+                  color={currentPage === "pendientes" ? "primary" : "inherit"}
+                  onClick={() => onNavigate("pendientes")}
+                  size="small"
+                >
+                  <Badge badgeContent={openCount} color="error" max={99} sx={{ "& .MuiBadge-badge": { right: -14, top: 2 } }}>
+                    Pendientes
+                  </Badge>
                 </Button>
               )}
 

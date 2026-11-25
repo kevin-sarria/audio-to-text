@@ -39,6 +39,9 @@ export interface TranscriptionSessionDto {
   errorMessage?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Solo en el modo escritorio con biblioteca: origen de la sesión y fecha real de la reunión. */
+  source?: "AUDIO" | "BOT";
+  occurredAt?: string;
   speakers?: SpeakerDto[];
   segments?: TranscriptionSegmentDto[];
 }

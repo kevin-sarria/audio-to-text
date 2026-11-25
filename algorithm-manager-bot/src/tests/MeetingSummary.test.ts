@@ -20,7 +20,7 @@ import { MeetingClassifierLlmService } from "../infrastructure/ai/MeetingClassif
 import { parseTranscriptLines } from "../application/transcriptParsing.js";
 import { ProcessMeetingSessionUseCase } from "../application/ProcessMeetingSessionUseCase.js";
 import { CommercialProposalLlmService } from "../infrastructure/ai/CommercialProposalLlmService.js";
-import { HeadlessMeetingBotConnector } from "../infrastructure/connectors/HeadlessMeetingBotConnector.js";
+import { stubConnector } from "./helpers/stubConnector.js";
 import { IMeetingSummarizer } from "../domain/services/IMeetingSummarizer.js";
 
 export const FIXTURE: SummaryUtterance[] = [
@@ -345,17 +345,6 @@ describe("AutonomousMeetingBotService + resumen", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
-
-  function stubConnector(): void {
-    vi.spyOn(HeadlessMeetingBotConnector.prototype, "connectToMeeting").mockResolvedValue({
-      sessionId: "stub",
-      platform: "GOOGLE_MEET",
-      connectedAt: new Date().toISOString(),
-      status: "CONNECTED_AND_RECORDING",
-      message: "stub"
-    });
-    vi.spyOn(HeadlessMeetingBotConnector.prototype, "leaveMeeting").mockResolvedValue({ success: true });
-  }
 
   function newBot(summarizer: IMeetingSummarizer): AutonomousMeetingBotService {
     return new AutonomousMeetingBotService(

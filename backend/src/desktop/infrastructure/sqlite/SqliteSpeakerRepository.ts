@@ -64,6 +64,8 @@ export class SqliteSpeakerRepository implements ISpeakerRepository {
     `);
 
     stmt.run(speaker.customName ?? null, speaker.id);
+    // El nombre forma parte del texto buscable: se descarta el índice de la sesión para que se reconstruya
+    this.db.prepare("DELETE FROM session_search WHERE session_id = ?").run(speaker.sessionId);
     return (await this.findById(speaker.id))!;
   }
 

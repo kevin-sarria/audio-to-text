@@ -73,7 +73,9 @@ export async function startDesktopServer(
     modelManager: container.modelManager,
     tokenService: container.tokenService,
     whisperBinaryPath: container.whisperBinaryPath,
-    resourcesDir
+    resourcesDir,
+    importBotMeetings: container.importBotMeetings,
+    libraryRepository: container.libraryRepository
   });
   app.use("/api/desktop", desktopRoutes);
 
@@ -95,6 +97,20 @@ export async function startDesktopServer(
       console.log(`[DesktopServer] Servidor Express local activo en http://127.0.0.1:${boundPort}`);
       resolve();
     });
+  });
+
+  // Importa las reuniones que el bot dejó mientras la app estaba cerrada (no bloquea el arranque)
+  setImmediate(() => {
+    try {
+      const r = container.importBotMeetings.execute();
+      if (r.imported > 0 || r.failed.length > 0) {
+        console.log(
+          `[Library] Importación al arrancar: ${r.imported} nuevas, ${r.alreadyImported} ya importadas, ${r.failed.length} con error.`
+        );
+      }
+    } catch (err) {
+      console.error("[Library] Error importando reuniones del bot al arrancar:", err);
+    }
   });
 
   return {

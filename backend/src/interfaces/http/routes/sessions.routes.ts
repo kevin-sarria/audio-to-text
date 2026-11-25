@@ -74,6 +74,11 @@ export function createSessionRoutes(
       validateBody(UpdateMeetingAnalysisTitleSchema),
       meetingAnalysisController.updateTitle
     );
+    router.get(
+      "/:id/meeting-analysis/export-excel",
+      optionalAuth,
+      meetingAnalysisController.exportExcel
+    );
   }
 
   return router;

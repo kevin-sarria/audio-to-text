@@ -64,3 +64,8 @@ desktop/resources/bin/*
 
 # Resultados de la evaluación del escáner de contexto (contienen el contexto generado)
 /backend/eval-results/
+
+# Bot session and output artifacts
+.bot-chrome-session/
+**/output/
+output/

@@ -44,6 +44,9 @@ import { MeetingAnalysisController } from "../interfaces/http/controllers/Meetin
 import { ProjectFolderController } from "../interfaces/http/controllers/ProjectFolderController.js";
 import { ContextScanJobs } from "../application/services/ContextScanJobs.js";
 import { setupDesktopPipeline, runStartupRecovery } from "./pipeline.js";
+import { SqliteLibraryRepository } from "./infrastructure/sqlite/SqliteLibraryRepository.js";
+import { ImportBotMeetings } from "./library/ImportBotMeetings.js";
+import { resolveBotOutputDir } from "../infrastructure/bot/botOutputDir.js";
 
 export interface CreateDesktopContainerOptions {
   userDataDir: string;
@@ -169,6 +172,8 @@ export function createDesktopContainer(options: CreateDesktopContainerOptions) {
     meetingAnalysisService,
     contextScanJobs
   );
+  const libraryRepository = new SqliteLibraryRepository(db);
+  const importBotMeetings = new ImportBotMeetings(db, () => resolveBotOutputDir());
 
   // 7. Pipeline en proceso y handlers
   setupDesktopPipeline({
@@ -221,6 +226,8 @@ export function createDesktopContainer(options: CreateDesktopContainerOptions) {
     eventsController,
     meetingAnalysisController,
     projectFolderController,
+    libraryRepository,
+    importBotMeetings,
     whisperBinaryPath,
     resourcesDir,
     async close() {

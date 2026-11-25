@@ -7,6 +7,7 @@ import {
   Snackbar
 } from "@mui/material";
 import type { MeetingAnalysisProvider } from "@audio-to-text/shared";
+import { api } from "../../lib/api.js";
 import { useAppStore } from "../../store/index.js";
 import { useProjectFolders } from "../projectFolders/useProjectFolders.js";
 import { CustomProviderModal } from "../customAi/CustomProviderModal.js";
@@ -30,7 +31,7 @@ interface MeetingAnalysisPanelProps {
 }
 
 export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sessionId }) => {
-  const { currentSession } = useAppStore();
+  const { currentSession, guestToken } = useAppStore();
   const { folders } = useProjectFolders();
 
   const {
@@ -155,6 +156,27 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
     a.download = `${(editableTitle || "meeting-issues").toLowerCase().replace(/[^a-z0-9]/g, "-")}.json`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadExcel = async () => {
+    if (!analysis) return;
+    try {
+      const headers: Record<string, string> = {};
+      if (guestToken) {
+        headers["x-guest-token"] = guestToken;
+      }
+      const blob = await api.get<Blob>(`/sessions/${sessionId}/meeting-analysis/export-excel`, {
+        headers
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `issues-${(editableTitle || "meeting").toLowerCase().replace(/[^a-z0-9]/g, "-")}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setSnackMessage("Error al descargar el archivo Excel.");
+    }
   };
 
   const filteredIssues = useMemo(() => {
@@ -286,6 +308,7 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
                 onCopyAllIssues={handleCopyAllIssues}
                 onDownloadMarkdown={handleDownloadMarkdown}
                 onDownloadJson={handleDownloadJson}
+                onDownloadExcel={handleDownloadExcel}
                 onCopyPrompt={(prompt, id) =>
                   copyToClipboard(prompt, id, `¡Prompt de ${id} copiado al portapapeles!`)
                 }

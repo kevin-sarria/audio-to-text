@@ -5,7 +5,8 @@ import {
   Mic as MicIcon,
   VpnKey as KeyIcon,
   FolderSpecial as FolderSpecialIcon,
-  AutoAwesome as AutoAwesomeIcon
+  AutoAwesome as AutoAwesomeIcon,
+  SmartToy as BotIcon
 } from "@mui/icons-material";
 import { ProjectFolderDto } from "@audio-to-text/shared";
 import { api } from "../lib/api.js";
@@ -24,6 +25,7 @@ import { WhisperModelsSection } from "./settings/components/WhisperModelsSection
 import { ApiKeysSection } from "./settings/components/ApiKeysSection.js";
 import { AiIssuesSettingsSection } from "./settings/components/AiIssuesSettingsSection.js";
 import { ProjectFoldersSection } from "./settings/components/ProjectFoldersSection.js";
+import { MeetingBotSettingsSection } from "./settings/components/MeetingBotSettingsSection.js";
 import { RecommendedProvidersModal } from "./settings/components/RecommendedProvidersModal.js";
 
 export const SettingsPage: React.FC = () => {
@@ -367,6 +369,31 @@ export const SettingsPage: React.FC = () => {
               }
             }}
           />
+          <Tab
+            disableRipple
+            icon={<BotIcon fontSize="small" />}
+            iconPosition="start"
+            label="Bot Asistente (Meet & Teams)"
+            sx={{
+              textTransform: "none",
+              fontSize: "0.9rem",
+              fontWeight: 600,
+              minHeight: 44,
+              borderRadius: "10px",
+              transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+              color: "text.secondary",
+              "&.Mui-selected": {
+                backgroundColor: "background.paper",
+                color: "primary.main",
+                fontWeight: 700,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.07)"
+              },
+              "&:hover:not(.Mui-selected)": {
+                backgroundColor: "rgba(0,0,0,0.03)",
+                color: "text.primary"
+              }
+            }}
+          />
         </Tabs>
       </Box>
 
@@ -437,6 +464,9 @@ export const SettingsPage: React.FC = () => {
           }}
         />
       )}
+
+      {/* Pestaña 3: Configuración del Bot Asistente de Reuniones */}
+      {activeTab === 3 && <MeetingBotSettingsSection />}
 
       {/* Modal elegante de Proveedores Recomendados (sin saturar la pantalla principal) */}
       <RecommendedProvidersModal

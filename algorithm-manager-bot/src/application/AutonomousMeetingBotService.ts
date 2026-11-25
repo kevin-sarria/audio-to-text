@@ -9,6 +9,8 @@ import { TranscriptDocxExporter, TranscriptUtterance } from "../infrastructure/e
 import { ExtractedUtterance } from "../infrastructure/connectors/PlatformSpeakerExtractor.js";
 import { IMeetingSummarizer } from "../domain/services/IMeetingSummarizer.js";
 import { MeetingSummaryLlmService } from "../infrastructure/ai/MeetingSummaryLlmService.js";
+import type { MeetingSummary } from "../domain/models/MeetingSummary.js";
+import { writeBotMeetingDelivery } from "../infrastructure/export/BotMeetingDeliveryWriter.js";
 import {
   renderConsoleExcerpt,
   renderSummaryMarkdown
@@ -36,6 +38,7 @@ export interface AutonomousMeetingRecord {
   proposalMarkdownPath?: string;
   summaryMarkdownPath?: string;
   summaryJsonPath?: string;
+  deliveryFilePath?: string;
   utterancesCount: number;
 }
 
@@ -211,6 +214,7 @@ export class AutonomousMeetingBotService {
     // 5. Resumen estilo Fireflies (nunca bloquea los demás entregables)
     let summaryMarkdownPath: string | undefined;
     let summaryJsonPath: string | undefined;
+    let summaryForDelivery: MeetingSummary | undefined;
     try {
       const summary = await this.summarizer.summarize({
         sessionId,
@@ -220,6 +224,7 @@ export class AutonomousMeetingBotService {
           offsetSec: u.offsetSec
         }))
       });
+      summaryForDelivery = summary;
       const mdPath = path.join(outputDir, `Resumen_${sessionId}.md`);
       const jsonPath = path.join(outputDir, `Resumen_${sessionId}.json`);
       fs.writeFileSync(mdPath, renderSummaryMarkdown(summary, `Reunión ${platform}`), "utf-8");
@@ -230,6 +235,35 @@ export class AutonomousMeetingBotService {
 ${renderConsoleExcerpt(summary)}`);
     } catch (err) {
       console.warn("[AutonomousBot] No se pudo generar el resumen; los demás entregables siguen disponibles:", err);
+    }
+
+    // 6. Archivo de entrega para la biblioteca de la app (nunca bloquea los demás entregables)
+    let deliveryFilePath: string | undefined;
+    const deliveryUtterances = this.activeUtterances
+      .filter((u) => u.content.trim().length > 0)
+      .map((u) => ({
+        speakerName: u.speakerName.trim() || "Participante",
+        text: u.content,
+        offsetSec: u.offsetSec ?? 0
+      }));
+    if (summaryForDelivery && deliveryUtterances.length > 0) {
+      try {
+        deliveryFilePath = writeBotMeetingDelivery(outputDir, {
+          schemaVersion: 1,
+          sessionId,
+          platform,
+          meetingUrl,
+          startedAt: new Date(this.startTime).toISOString(),
+          endedAt,
+          meetingType: classification.type,
+          classificationReason: classification.reason,
+          utterances: deliveryUtterances,
+          summary: summaryForDelivery
+        });
+        console.info(`[AutonomousBot] Archivo de entrega para la biblioteca: ${deliveryFilePath}`);
+      } catch (err) {
+        console.warn("[AutonomousBot] No se pudo escribir el archivo de entrega; los demás entregables siguen disponibles:", err);
+      }
     }
 
     return {
@@ -246,6 +280,7 @@ ${renderConsoleExcerpt(summary)}`);
       proposalMarkdownPath,
       summaryMarkdownPath,
       summaryJsonPath,
+      deliveryFilePath,
       utterancesCount: this.activeUtterances.length
     };
   }

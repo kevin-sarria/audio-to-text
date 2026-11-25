@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import {
   Box,
   Typography,
@@ -15,9 +15,15 @@ import { Delete as DeleteIcon, OpenInNew as OpenIcon, Folder as FolderIcon } fro
 import { SessionStatus } from "@audio-to-text/shared";
 import { api } from "../../lib/api.js";
 import { useAppStore } from "../../store/index.js";
+import { isDesktopApp } from "../../lib/runtime.js";
+import { splitHighlight } from "./searchHelpers.js";
+import { buildLibraryParams, EMPTY_FILTERS, hasActiveFilters, type HistoryFilters } from "./historyFilters.js";
 
 interface HistoryListProps {
   onSelectSession: (id: string) => void;
+  refreshKey?: number;
+  query?: string;
+  filters?: HistoryFilters;
 }
 
 const statusColorMap: Record<SessionStatus, "default" | "primary" | "success" | "error"> = {
@@ -27,7 +33,7 @@ const statusColorMap: Record<SessionStatus, "default" | "primary" | "success" | 
   [SessionStatus.FAILED]: "error"
 };
 
-export const HistoryList: React.FC<HistoryListProps> = ({ onSelectSession }) => {
+export const HistoryList: React.FC<HistoryListProps> = ({ onSelectSession, refreshKey, query, filters = EMPTY_FILTERS }) => {
   const {
     sessions,
     total,
@@ -40,25 +46,37 @@ export const HistoryList: React.FC<HistoryListProps> = ({ onSelectSession }) => 
     removeSession
   } = useAppStore();
 
+  const requestCounter = useRef(0);
+  const filtersKey = JSON.stringify(filters);
+
   const fetchHistory = async (targetPage: number) => {
+    const requestId = ++requestCounter.current;
     setIsLoading(true);
     try {
-      const response = await api.get<any>("/sessions", {
-        params: { page: targetPage, limit }
+      const endpoint = isDesktopApp() ? "/desktop/library/sessions" : "/sessions";
+      const response = await api.get<any>(endpoint, {
+        params: isDesktopApp() ? buildLibraryParams(filters, query, targetPage, limit) : { page: targetPage, limit }
       });
+      // descarta respuestas de una búsqueda anterior que llegan tarde
+      if (requestId !== requestCounter.current) return;
       if (response.success && response.data) {
         setSessions(response.data, response.meta.total);
       }
     } catch (err) {
       console.error("Error al cargar historial:", err);
     } finally {
-      setIsLoading(false);
+      if (requestId === requestCounter.current) setIsLoading(false);
     }
   };
 
+  // al cambiar la búsqueda se vuelve a la primera página
+  useEffect(() => {
+    if (page !== 1) setPage(1);
+  }, [query, filtersKey]);
+
   useEffect(() => {
     fetchHistory(page);
-  }, [page]);
+  }, [page, refreshKey, query, filtersKey]);
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -83,7 +101,13 @@ export const HistoryList: React.FC<HistoryListProps> = ({ onSelectSession }) => 
   if (sessions.length === 0) {
     return (
       <Typography variant="body1" color="text.secondary" sx={{ textAlign: "center", py: 6 }}>
-        No tienes transcripciones previas. ¡Sube un archivo para comenzar!
+        {hasActiveFilters(filters) || query
+          ? query
+            ? `Sin resultados para «${query}».`
+            : "No hay resultados con estos filtros."
+          : isDesktopApp()
+          ? "No tienes transcripciones ni reuniones del bot. Sube un archivo, o ejecuta el bot (`npm run bot`) y pulsa «Importar reuniones del bot»."
+          : "No tienes transcripciones previas. ¡Sube un archivo para comenzar!"}
       </Typography>
     );
   }
@@ -141,6 +165,12 @@ export const HistoryList: React.FC<HistoryListProps> = ({ onSelectSession }) => 
                       label={sess.status}
                       color={statusColorMap[sess.status as SessionStatus] || "default"}
                     />
+                    {sess.source === "BOT" && (
+                      <Chip size="small" label="Bot" color="secondary" variant="outlined" sx={{ fontSize: "0.75rem", height: 22 }} />
+                    )}
+                    {sess.source === "AUDIO" && (
+                      <Chip size="small" label="Audio" variant="outlined" sx={{ fontSize: "0.75rem", height: 22 }} />
+                    )}
                     {sess.projectFolderId && (
                       <Chip
                         size="small"
@@ -154,10 +184,25 @@ export const HistoryList: React.FC<HistoryListProps> = ({ onSelectSession }) => 
                   </Box>
                 }
                 secondary={
-                  <Typography variant="caption" color="text.secondary">
-                    Fecha: {new Date(sess.createdAt).toLocaleDateString()} | Duración:{" "}
-                    {sess.durationSeconds ? `${sess.durationSeconds}s` : "N/A"}
-                  </Typography>
+                  <>
+                    <Typography variant="caption" color="text.secondary" component="span" sx={{ display: "block" }}>
+                      Fecha: {new Date(sess.occurredAt ?? sess.createdAt).toLocaleDateString()} | Duración:{" "}
+                      {sess.durationSeconds ? `${sess.durationSeconds}s` : "N/A"}
+                    </Typography>
+                    {(sess as any).snippet && (
+                      <Typography variant="body2" component="span" sx={{ display: "block", mt: 0.5 }}>
+                        {splitHighlight((sess as any).snippet).map((part, i) =>
+                          part.highlight ? (
+                            <Box key={i} component="mark" sx={{ bgcolor: "warning.light", color: "inherit", borderRadius: 0.5, px: 0.25 }}>
+                              {part.text}
+                            </Box>
+                          ) : (
+                            <React.Fragment key={i}>{part.text}</React.Fragment>
+                          )
+                        )}
+                      </Typography>
+                    )}
+                  </>
                 }
               />
             </ListItem>

@@ -11,6 +11,7 @@ import { createSessionRoutes } from "./sessions.routes.js";
 import { createExportRoutes } from "./export.routes.js";
 import { createEventsRoutes } from "./events.routes.js";
 import { createProjectFolderRoutes } from "./projectFolder.routes.js";
+import { createBotRoutes } from "./bot.routes.js";
 import { ProfileRegistry } from "../../../infrastructure/analysis/profiles/ProfileRegistry.js";
 
 export interface ApiRoutesDependencies {
@@ -39,6 +40,9 @@ export function createApiRouter(deps: ApiRoutesDependencies): Router {
   if (deps.projectFolderController) {
     router.use("/project-folders", createProjectFolderRoutes(deps.projectFolderController, deps.tokenService));
   }
+
+  // Rutas del Bot Autónomo de Reuniones (Meet & Teams)
+  router.use("/bot", createBotRoutes());
 
   // Perfiles de reglas de negocio disponibles (Parte B del prompt). Lista estática, sin datos del usuario.
   router.get("/project-profiles", (_req, res) => {

@@ -48,6 +48,7 @@ export const SegmentList: React.FC<SegmentListProps> = ({
         return (
           <Paper
             key={seg.id}
+            id={`segment-${seg.id}`}
             onClick={() => seekTo(seg.startTimeMs)}
             sx={{
               p: 2,

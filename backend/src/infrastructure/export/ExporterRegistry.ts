@@ -6,6 +6,7 @@ import { TxtExporter } from "./TxtExporter.js";
 import { MarkdownExporter } from "./MarkdownExporter.js";
 import { DocxExporter } from "./DocxExporter.js";
 import { PdfExporter } from "./PdfExporter.js";
+import { XlsxExporter } from "./XlsxExporter.js";
 
 export function createExporterRegistry(): Map<ExportFormat, IExporter> {
   const map = new Map<ExportFormat, IExporter>();
@@ -16,6 +17,7 @@ export function createExporterRegistry(): Map<ExportFormat, IExporter> {
   map.set(ExportFormat.MD, new MarkdownExporter());
   map.set(ExportFormat.DOCX, new DocxExporter());
   map.set(ExportFormat.PDF, new PdfExporter());
+  map.set(ExportFormat.XLSX, new XlsxExporter());
 
   return map;
 }
