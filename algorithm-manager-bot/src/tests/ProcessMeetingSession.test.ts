@@ -1,9 +1,13 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, it, expect, vi } from "vitest";
 import { MeetingClassifierLlmService } from "../infrastructure/ai/MeetingClassifierLlmService.js";
 import { CommercialProposalLlmService } from "../infrastructure/ai/CommercialProposalLlmService.js";
 import { ProcessMeetingSessionUseCase } from "../application/ProcessMeetingSessionUseCase.js";
 import { HeadlessMeetingBotConnector } from "../infrastructure/connectors/HeadlessMeetingBotConnector.js";
 import { LocalAudioCaptureConnector } from "../infrastructure/connectors/LocalAudioCaptureConnector.js";
+import { PlatformSpeakerExtractor } from "../infrastructure/connectors/PlatformSpeakerExtractor.js";
+import { AutonomousMeetingBotService } from "../application/AutonomousMeetingBotService.js";
 
 describe("Algorithm Manager Bot - Dual Meeting Agent", () => {
   describe("Conectores Duales (Bot Remoto vs Captura Local)", () => {
@@ -137,8 +141,50 @@ describe("Algorithm Manager Bot - Dual Meeting Agent", () => {
 
       expect(output.classification.type).toBe("INTERNAL");
       expect(output.commercialProposal).toBeUndefined();
-      expect(output.internalSummary).toBeDefined();
-      expect(output.internalSummary?.actionItemsSuggested).toBe(true);
+      expect(output.summary).toBeDefined();
+      expect(output.summary.sessionId).toBe(output.sessionId);
     });
+  });
+
+  describe("AutonomousMeetingBotService & Exportadores Autónomos", () => {
+    it("extrae y sanitiza adecuadamente el nombre del orador en captions de Meet y Teams", () => {
+      expect(PlatformSpeakerExtractor.sanitizeSpeakerName("Carlos Gómez (Invitado)")).toBe("Carlos Gómez");
+      expect(PlatformSpeakerExtractor.sanitizeSpeakerName("Ana Torres (Tú)")).toBe("Ana Torres");
+
+      const parsed = PlatformSpeakerExtractor.parseMeetCaption("Juan Pérez: Hola a todos");
+      expect(parsed?.speakerName).toBe("Juan Pérez");
+      expect(parsed?.content).toBe("Hola a todos");
+    });
+
+    it("ejecuta la sesión autónoma y genera entregables sin preguntar al usuario", async () => {
+      const classifier = new MeetingClassifierLlmService();
+      const proposalService = new CommercialProposalLlmService();
+      const bot = new AutonomousMeetingBotService(classifier, proposalService);
+
+      const sessionId = await bot.startAutonomousMeeting({
+        meetingUrl: "https://meet.google.com/test-room",
+        headless: true
+      });
+
+      bot.recordUtterance({
+        speakerName: "David Tech Lead",
+        content: "Equipo, en este sprint vamos a refactorizar el backend y cerrar los bugs de auth.",
+        timestamp: "09:00:00",
+        platform: "GOOGLE_MEET"
+      });
+
+      const tempOut = path.resolve(process.cwd(), "temp-test-output");
+      const result = await bot.finalizeAndGenerateDeliverables(sessionId, "https://meet.google.com/test-room", tempOut);
+
+      expect(result.meetingType).toBe("INTERNAL");
+      expect(result.speakers).toContain("David Tech Lead");
+      expect(result.transcriptDocxPath).toContain(".docx");
+      expect(result.issuesExcelPath).toContain(".xlsx");
+
+      // Limpieza de carpeta temporal
+      if (fs.existsSync(tempOut)) {
+        fs.rmSync(tempOut, { recursive: true, force: true });
+      }
+    }, 15000);
   });
 });

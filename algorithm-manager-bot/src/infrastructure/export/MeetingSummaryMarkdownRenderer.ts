@@ -3,6 +3,10 @@ import { formatOffset } from "../../domain/timeFormat.js";
 
 const EMPTY = "_Sin elementos._";
 
+function oneLine(s: string): string {
+  return String(s ?? "").replace(/\s+/g, " ").trim();
+}
+
 function section<T>(title: string, items: T[], renderItem: (item: T) => string): string {
   const body = items.length > 0 ? items.map(renderItem).join("\n") : EMPTY;
   return `## ${title}\n\n${body}`;
@@ -14,37 +18,40 @@ export function renderSummaryMarkdown(summary: MeetingSummary, title = "Resumen 
     `_Generado: ${summary.generatedAt} · Sesión: ${summary.sessionId} · Idioma: ${summary.language}_`
   ];
 
-  if (summary.note) parts.push(`> ⚠️ ${summary.note}`);
+  if (summary.note) parts.push(`> ⚠️ ${oneLine(summary.note)}`);
 
-  parts.push(`## Resumen ejecutivo\n\n${summary.executiveSummary}`);
+  parts.push(`## Resumen ejecutivo\n\n${oneLine(summary.executiveSummary)}`);
 
   parts.push(
     section("Puntos de acción", summary.actionItems, (a) => {
-      const meta = [a.owner ? `Responsable: ${a.owner}` : "", a.dueDate ? `Fecha: ${a.dueDate}` : ""]
+      const meta = [
+        a.owner ? `Responsable: ${oneLine(a.owner)}` : "",
+        a.dueDate ? `Fecha: ${oneLine(a.dueDate)}` : ""
+      ]
         .filter(Boolean)
         .join(" · ");
-      const head = `- [ ] **${a.task}**${meta ? ` — ${meta}` : ""}`;
-      return `${head}\n  > "${a.evidence}"`;
+      const head = `- [ ] **${oneLine(a.task)}**${meta ? ` — ${meta}` : ""}`;
+      return `${head}\n  > "${oneLine(a.evidence)}"`;
     })
   );
 
-  parts.push(section("Decisiones", summary.decisions, (d) => `- ${d.text}\n  > "${d.evidence}"`));
-  parts.push(section("Temas", summary.topics, (t) => `- **${t.title}**: ${t.summary}`));
+  parts.push(section("Decisiones", summary.decisions, (d) => `- ${oneLine(d.text)}\n  > "${oneLine(d.evidence)}"`));
+  parts.push(section("Temas", summary.topics, (t) => `- **${oneLine(t.title)}**: ${oneLine(t.summary)}`));
   parts.push(
     section("Preguntas abiertas", summary.openQuestions, (q) =>
-      `- ${q.text}${q.askedBy ? ` _(${q.askedBy})_` : ""}`
+      `- ${oneLine(q.text)}${q.askedBy ? ` _(${oneLine(q.askedBy)})_` : ""}`
     )
   );
   parts.push(
     section(
       "Capítulos",
       summary.chapters,
-      (c) => `- \`${formatOffset(c.startSec)}–${formatOffset(c.endSec)}\` ${c.title}`
+      (c) => `- \`${formatOffset(c.startSec)}–${formatOffset(c.endSec)}\` ${oneLine(c.title)}`
     )
   );
 
   const rows = summary.participants.map(
-    (p) => `| ${p.name} | ${formatOffset(p.speakingSeconds)} | ${p.speakingPercent}% |`
+    (p) => `| ${oneLine(p.name).replace(/\|/g, "\\|")} | ${formatOffset(p.speakingSeconds)} | ${p.speakingPercent}% |`
   );
   parts.push(
     `## Participantes\n\n${

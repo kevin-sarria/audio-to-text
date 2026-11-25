@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { formatOffset } from "../domain/timeFormat.js";
 import {
   MeetingSummaryLlmService,
@@ -12,6 +12,16 @@ import {
 import { MeetingSummary, SummaryUtterance } from "../domain/models/MeetingSummary.js";
 import { parseLlmSummary } from "../infrastructure/ai/MeetingSummaryValidator.js";
 import { renderSummaryMarkdown, renderConsoleExcerpt } from "../infrastructure/export/MeetingSummaryMarkdownRenderer.js";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { AutonomousMeetingBotService } from "../application/AutonomousMeetingBotService.js";
+import { MeetingClassifierLlmService } from "../infrastructure/ai/MeetingClassifierLlmService.js";
+import { parseTranscriptLines } from "../application/transcriptParsing.js";
+import { ProcessMeetingSessionUseCase } from "../application/ProcessMeetingSessionUseCase.js";
+import { CommercialProposalLlmService } from "../infrastructure/ai/CommercialProposalLlmService.js";
+import { HeadlessMeetingBotConnector } from "../infrastructure/connectors/HeadlessMeetingBotConnector.js";
+import { IMeetingSummarizer } from "../domain/services/IMeetingSummarizer.js";
 
 export const FIXTURE: SummaryUtterance[] = [
   { speakerName: "Ana", text: "Vamos a migrar la base de datos el viernes.", offsetSec: 0 },
@@ -196,6 +206,18 @@ describe("MeetingSummaryLlmService", () => {
     expect(summary.participants).toHaveLength(2);
   });
 
+  it("nunca lanza error aunque una intervención venga malformada", async () => {
+    const service = new MeetingSummaryLlmService(vi.fn());
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const summary = await service.summarize({
+      sessionId: "s-bad",
+      utterances: [{ speakerName: "A" } as any]
+    });
+    expect(summary.note).toBeDefined();
+    expect(summary.sessionId).toBe("s-bad");
+    vi.restoreAllMocks();
+  });
+
   it("devuelve resumen mínimo sin llamar a nada cuando no hay LLM configurado", async () => {
     const service = new MeetingSummaryLlmService();
     const summary = await service.summarize({ sessionId: "s4", utterances: FIXTURE });
@@ -290,5 +312,240 @@ describe("MeetingSummaryMarkdownRenderer", () => {
     expect(text).toContain("Se acordó migrar la base el viernes.");
     expect(text).toContain("2 puntos de acción");
     expect(text).toContain("Preparar el script");
+  });
+});
+
+describe("MeetingSummaryMarkdownRenderer robustez", () => {
+  const base: MeetingSummary = {
+    sessionId: "s1",
+    generatedAt: "2026-11-25T10:00:00.000Z",
+    language: "es",
+    executiveSummary: "Resumen.",
+    topics: [],
+    decisions: [],
+    actionItems: [{ task: "Tarea", evidence: "linea uno\nlinea dos" }],
+    openQuestions: [],
+    participants: [{ name: "Ana | Co", speakingSeconds: 10, speakingPercent: 100 }],
+    chapters: []
+  };
+
+  it("colapsa la evidencia multilínea en una sola línea de cita", () => {
+    const md = renderSummaryMarkdown(base);
+    expect(md).toContain('  > "linea uno linea dos"');
+    expect(md).not.toContain("linea uno\nlinea dos");
+  });
+
+  it("escapa | en el nombre del participante", () => {
+    const md = renderSummaryMarkdown(base);
+    expect(md).toContain("| Ana \\| Co |");
+  });
+});
+
+describe("AutonomousMeetingBotService + resumen", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function stubConnector(): void {
+    vi.spyOn(HeadlessMeetingBotConnector.prototype, "connectToMeeting").mockResolvedValue({
+      sessionId: "stub",
+      platform: "GOOGLE_MEET",
+      connectedAt: new Date().toISOString(),
+      status: "CONNECTED_AND_RECORDING",
+      message: "stub"
+    });
+    vi.spyOn(HeadlessMeetingBotConnector.prototype, "leaveMeeting").mockResolvedValue({ success: true });
+  }
+
+  function newBot(summarizer: IMeetingSummarizer): AutonomousMeetingBotService {
+    return new AutonomousMeetingBotService(
+      new MeetingClassifierLlmService(),
+      new CommercialProposalLlmService(),
+      undefined,
+      undefined,
+      summarizer
+    );
+  }
+
+  it("asigna offsetSec y escribe Resumen_<id>.md y .json junto a los demás entregables", async () => {
+    stubConnector();
+    const bot = newBot(new MeetingSummaryLlmService());
+
+    const sessionId = await bot.startAutonomousMeeting({
+      meetingUrl: "https://meet.google.com/test-room",
+      headless: true
+    });
+    bot.recordUtterance({
+      speakerName: "David",
+      content: "Vamos a cerrar los bugs de auth en este sprint.",
+      timestamp: "09:00:00",
+      platform: "GOOGLE_MEET"
+    });
+    bot.recordUtterance({
+      speakerName: "Marta",
+      content: "Yo reviso el PR del backend.",
+      timestamp: "09:00:05",
+      platform: "GOOGLE_MEET"
+    });
+
+    expect(typeof bot.getActiveUtterances()[0]?.offsetSec).toBe("number");
+
+    const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "bot-summary-"));
+    try {
+      const record = await bot.finalizeAndGenerateDeliverables(
+        sessionId,
+        "https://meet.google.com/test-room",
+        outDir
+      );
+
+      expect(record.transcriptDocxPath).toContain(".docx");
+      expect(record.summaryMarkdownPath).toBe(path.join(outDir, `Resumen_${sessionId}.md`));
+      expect(record.summaryJsonPath).toBe(path.join(outDir, `Resumen_${sessionId}.json`));
+
+      const json = JSON.parse(fs.readFileSync(record.summaryJsonPath!, "utf-8"));
+      expect(json.sessionId).toBe(sessionId);
+      expect(json.participants.map((p: { name: string }) => p.name).sort()).toEqual(["David", "Marta"]);
+      expect(fs.readFileSync(record.summaryMarkdownPath!, "utf-8")).toContain("## Resumen ejecutivo");
+    } finally {
+      fs.rmSync(outDir, { recursive: true, force: true });
+    }
+  }, 10000);
+
+  it("un resumidor que lanza error no bloquea los demás entregables", async () => {
+    stubConnector();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const bot = newBot({ summarize: vi.fn().mockRejectedValue(new Error("boom")) });
+    const sessionId = await bot.startAutonomousMeeting({
+      meetingUrl: "https://meet.google.com/test-room",
+      headless: true
+    });
+    bot.recordUtterance({
+      speakerName: "David",
+      content: "Vamos a cerrar los bugs de auth en este sprint.",
+      timestamp: "09:00:00",
+      platform: "GOOGLE_MEET"
+    });
+    const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "bot-summary-"));
+    try {
+      const record = await bot.finalizeAndGenerateDeliverables(
+        sessionId,
+        "https://meet.google.com/test-room",
+        outDir
+      );
+      expect(record.transcriptDocxPath).toContain(".docx");
+      expect(record.summaryMarkdownPath).toBeUndefined();
+    } finally {
+      fs.rmSync(outDir, { recursive: true, force: true });
+    }
+  }, 10000);
+
+  it("recordUtterance fusiona subtítulos parciales crecientes del mismo hablante", async () => {
+    stubConnector();
+    const bot = newBot(new MeetingSummaryLlmService());
+    await bot.startAutonomousMeeting({ meetingUrl: "https://meet.google.com/test-room", headless: true });
+    const mk = (speakerName: string, content: string, timestamp: string) => ({
+      speakerName,
+      content,
+      timestamp,
+      platform: "GOOGLE_MEET" as const
+    });
+    bot.recordUtterance(mk("Ana", "Hola", "09:00:00"));
+    bot.recordUtterance(mk("Ana", "Hola a", "09:00:01"));
+    bot.recordUtterance(mk("Ana", "Hola a todos", "09:00:02"));
+    bot.recordUtterance(mk("Luis", "Buenas", "09:00:03"));
+
+    let list = bot.getActiveUtterances();
+    expect(list).toHaveLength(2);
+    expect(list[0]?.speakerName).toBe("Ana");
+    expect(list[0]?.content).toBe("Hola a todos");
+    expect(list[0]?.timestamp).toBe("09:00:00");
+    expect(typeof list[0]?.offsetSec).toBe("number");
+
+    bot.recordUtterance(mk("Ana", "Otra cosa distinta", "09:00:05"));
+    list = bot.getActiveUtterances();
+    expect(list).toHaveLength(3);
+    expect(list[2]?.content).toBe("Otra cosa distinta");
+    expect(list[2]?.timestamp).toBe("09:00:05");
+  });
+});
+
+describe("ProcessMeetingSessionUseCase + resumen", () => {
+  it("parseTranscriptLines extrae hablante y texto, con o sin marca de tiempo", () => {
+    const result = parseTranscriptLines(
+      "[00:10] Ana: Hola a todos\nLuis: Buenas, ¿cómo están?\n\nuna línea sin hablante"
+    );
+    expect(result).toEqual([
+      { speakerName: "Ana", text: "Hola a todos" },
+      { speakerName: "Luis", text: "Buenas, ¿cómo están?" },
+      { speakerName: "Participante", text: "una línea sin hablante" }
+    ]);
+  });
+
+  it("parseTranscriptLines trata casos límite sin inventar hablantes", () => {
+    const result = parseTranscriptLines(
+      [
+        "[00:10] una línea sin nombre",
+        "10:30 reunión con el cliente",
+        "https://x.com/a",
+        "http://x.com",
+        "a/b: texto con barra",
+        " : texto sin nombre"
+      ].join("\n")
+    );
+    expect(result).toEqual([
+      { speakerName: "Participante", text: "[00:10] una línea sin nombre" },
+      { speakerName: "Participante", text: "10:30 reunión con el cliente" },
+      { speakerName: "Participante", text: "https://x.com/a" },
+      { speakerName: "Participante", text: "http://x.com" },
+      { speakerName: "Participante", text: "a/b: texto con barra" },
+      { speakerName: "Participante", text: ": texto sin nombre" }
+    ]);
+  });
+
+  it("un resumidor que lanza error no bloquea la propuesta comercial", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const useCase = new ProcessMeetingSessionUseCase(
+      new MeetingClassifierLlmService(),
+      new CommercialProposalLlmService(),
+      { summarize: vi.fn().mockRejectedValue(new Error("boom")) }
+    );
+    const out = await useCase.execute({
+      transcript:
+        "Cliente: necesitamos una propuesta y una cotización con presupuesto y plazo de entrega para nuestros servicios."
+    });
+    expect(out.commercialProposal).toBeDefined();
+    expect(out.summary.note).toBeDefined();
+    vi.restoreAllMocks();
+  });
+
+  it("devuelve el resumen tanto en reuniones internas como comerciales", async () => {
+    const useCase = new ProcessMeetingSessionUseCase(
+      new MeetingClassifierLlmService(),
+      new CommercialProposalLlmService()
+    );
+
+    const internal = await useCase.execute({
+      transcript: "Ana: Sprint Planning, vamos a refactorizar el módulo de auth y preparar el PR del backend."
+    });
+    expect(internal.classification.type).toBe("INTERNAL");
+    expect(internal.summary.sessionId).toBe(internal.sessionId);
+    expect(internal.summary.participants[0]?.name).toBe("Ana");
+
+    const commercial = await useCase.execute({
+      transcript:
+        "Cliente: necesitamos una propuesta y una cotización con presupuesto y plazo de entrega para nuestros servicios."
+    });
+    expect(commercial.classification.type).toBe("COMMERCIAL_CLIENT");
+    expect(commercial.commercialProposal).toBeDefined();
+    expect(commercial.summary).toBeDefined();
+  });
+
+  it("usa las utterances con offsets si se entregan en lugar de parsear el texto", async () => {
+    const useCase = new ProcessMeetingSessionUseCase(
+      new MeetingClassifierLlmService(),
+      new CommercialProposalLlmService()
+    );
+    const out = await useCase.execute({ transcript: "ignorado", utterances: FIXTURE });
+    expect(out.summary.participants.map((p) => p.name)).toEqual(["Luis", "Ana"]);
   });
 });

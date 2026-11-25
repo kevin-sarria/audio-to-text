@@ -5,6 +5,8 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
+    "start": "tsx src/cli.ts",
+    "bot": "tsx src/cli.ts",
     "build": "tsc",
     "test": "vitest run"
   },
@@ -18,5 +20,11 @@
     "transcription"
   ],
   "author": "Audio-to-Text Team",
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@types/exceljs": "^0.5.3"
+  },
+  "dependencies": {
+    "puppeteer-core": "^25.18.1"
+  }
 }

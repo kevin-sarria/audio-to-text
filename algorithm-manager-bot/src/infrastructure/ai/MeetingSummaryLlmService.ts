@@ -1,4 +1,4 @@
-import { MeetingSummary, SummaryUtterance } from "../../domain/models/MeetingSummary.js";
+import { MeetingSummary, SummaryParticipant, SummaryUtterance } from "../../domain/models/MeetingSummary.js";
 import { IMeetingSummarizer, SummarizeInput } from "../../domain/services/IMeetingSummarizer.js";
 import {
   calculateParticipants,
@@ -77,19 +77,31 @@ export class MeetingSummaryLlmService implements IMeetingSummarizer {
   ) {}
 
   public async summarize(input: SummarizeInput): Promise<MeetingSummary> {
-    const participants = calculateParticipants(input.utterances);
-    const base = { sessionId: input.sessionId, generatedAt: new Date().toISOString() };
+    let participants: SummaryParticipant[] = [];
+    try {
+      participants = calculateParticipants(input.utterances);
+    } catch (err) {
+      console.warn("[MeetingSummaryLlmService] No se pudieron calcular los participantes:", err);
+    }
 
-    if (!this.callLlm || input.utterances.length === 0) {
-      return this.minimalSummary(base, participants, "no hay un modelo de IA configurado o la reunión no tiene intervenciones");
+    if (!this.callLlm || !Array.isArray(input.utterances) || input.utterances.length === 0) {
+      return createMinimalSummary(
+        input.sessionId,
+        participants,
+        "no hay un modelo de IA configurado o la reunión no tiene intervenciones"
+      );
     }
 
     try {
       const parts = await this.generateWithRetry(input.utterances);
-      return { ...base, ...parts, participants };
+      return { sessionId: input.sessionId, generatedAt: new Date().toISOString(), ...parts, participants };
     } catch (err) {
       console.warn("[MeetingSummaryLlmService] No se pudo generar el resumen con IA:", err);
-      return this.minimalSummary(base, participants, "el modelo de IA falló o devolvió una respuesta inválida");
+      return createMinimalSummary(
+        input.sessionId,
+        participants,
+        "el modelo de IA falló o devolvió una respuesta inválida"
+      );
     }
   }
 
@@ -126,23 +138,24 @@ export class MeetingSummaryLlmService implements IMeetingSummarizer {
     const mergeUser = `${durationLine(durationSec)}\n\nA continuación están los resúmenes parciales (JSON) de cada parte de la reunión, en orden. Fusiónalos en UN solo resumen final: elimina duplicados, conserva las citas "evidence" tal cual y reconstruye capítulos coherentes.\n\n${partials.join("\n")}\n\nDevuelve el resumen final en JSON estricto.${suffix}`;
     return parseLlmSummary(await call(SYSTEM_PROMPT, mergeUser), fullText, durationSec);
   }
+}
 
-  private minimalSummary(
-    base: { sessionId: string; generatedAt: string },
-    participants: MeetingSummary["participants"],
-    reason: string
-  ): MeetingSummary {
-    return {
-      ...base,
-      language: "es",
-      executiveSummary: "El resumen con IA no está disponible para esta reunión.",
-      topics: [],
-      decisions: [],
-      actionItems: [],
-      openQuestions: [],
-      participants,
-      chapters: [],
-      note: `El resumen con IA no se pudo generar: ${reason}. Se muestran solo los participantes y su tiempo de habla.`
-    };
-  }
+export function createMinimalSummary(
+  sessionId: string,
+  participants: SummaryParticipant[],
+  reason: string
+): MeetingSummary {
+  return {
+    sessionId,
+    generatedAt: new Date().toISOString(),
+    language: "es",
+    executiveSummary: "El resumen con IA no está disponible para esta reunión.",
+    topics: [],
+    decisions: [],
+    actionItems: [],
+    openQuestions: [],
+    participants,
+    chapters: [],
+    note: `El resumen con IA no se pudo generar: ${reason}. Se muestran solo los participantes y su tiempo de habla.`
+  };
 }

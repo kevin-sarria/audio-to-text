@@ -1,11 +1,17 @@
-import { MeetingClassification, MeetingType, BotConnectionMode } from "../domain/models/MeetingTypes.js";
+import { MeetingClassification, BotConnectionMode } from "../domain/models/MeetingTypes.js";
 import { CommercialProposal } from "../domain/models/CommercialProposal.js";
+import { MeetingSummary, SummaryUtterance } from "../domain/models/MeetingSummary.js";
 import { IMeetingClassifier } from "../domain/services/IMeetingClassifier.js";
 import { ICommercialProposalGenerator } from "../domain/services/ICommercialProposalGenerator.js";
+import { IMeetingSummarizer } from "../domain/services/IMeetingSummarizer.js";
+import { MeetingSummaryLlmService, createMinimalSummary } from "../infrastructure/ai/MeetingSummaryLlmService.js";
+import { parseTranscriptLines } from "./transcriptParsing.js";
 
 export interface ProcessMeetingInput {
   sessionId?: string;
   transcript: string;
+  /** Si se entregan, se usan en lugar de parsear `transcript` (traen offsets de tiempo). */
+  utterances?: SummaryUtterance[];
   mode?: BotConnectionMode;
   clientHint?: string;
   companyContext?: string;
@@ -15,17 +21,15 @@ export interface ProcessMeetingOutput {
   sessionId: string;
   classification: MeetingClassification;
   mode: BotConnectionMode;
+  summary: MeetingSummary;
   commercialProposal?: CommercialProposal;
-  internalSummary?: {
-    notes: string;
-    actionItemsSuggested: boolean;
-  };
 }
 
 export class ProcessMeetingSessionUseCase {
   constructor(
     private meetingClassifier: IMeetingClassifier,
-    private proposalGenerator: ICommercialProposalGenerator
+    private proposalGenerator: ICommercialProposalGenerator,
+    private summarizer: IMeetingSummarizer = new MeetingSummaryLlmService()
   ) {}
 
   public async execute(input: ProcessMeetingInput): Promise<ProcessMeetingOutput> {
@@ -44,31 +48,28 @@ export class ProcessMeetingSessionUseCase {
       classification.clientName = input.clientHint;
     }
 
-    // 2. Ejecución según el tipo de reunión clasificado
+    // 2. Resumen estilo Fireflies para toda reunión
+    let summary: MeetingSummary;
+    try {
+      summary = await this.summarizer.summarize({
+        sessionId,
+        utterances: input.utterances ?? parseTranscriptLines(input.transcript)
+      });
+    } catch (err) {
+      console.warn("[ProcessMeetingSession] El resumen falló; se continúa con los demás entregables:", err);
+      summary = createMinimalSummary(sessionId, [], "el resumidor lanzó un error inesperado");
+    }
+
+    // 3. Entregable adicional según el tipo de reunión
     if (classification.type === "COMMERCIAL_CLIENT") {
       const commercialProposal = await this.proposalGenerator.generateProposal(
         input.transcript,
         classification,
         input.companyContext
       );
-
-      return {
-        sessionId,
-        classification,
-        mode,
-        commercialProposal
-      };
+      return { sessionId, classification, mode, summary, commercialProposal };
     }
 
-    // En caso de reunión interna técnica
-    return {
-      sessionId,
-      classification,
-      mode,
-      internalSummary: {
-        notes: `Reunión clasificada como Interna (${classification.reason}). Lista para extracción de issues técnicas de desarrollo.`,
-        actionItemsSuggested: true
-      }
-    };
+    return { sessionId, classification, mode, summary };
   }
 }
