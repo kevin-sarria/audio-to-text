@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { AppThemeProvider } from "./theme/ThemeProvider.js";
 import { AppShell } from "./components/AppShell.js";
+import { ErrorBoundary } from "./components/ErrorBoundary.js";
 import { HomePage } from "./pages/HomePage.js";
 import { SessionPage } from "./pages/SessionPage.js";
 import { HistoryPage } from "./pages/HistoryPage.js";
@@ -51,19 +52,22 @@ export const App: React.FC = () => {
           setCurrentPage(page);
         }}
       >
-        {currentPage === "home" && (
-          <HomePage onSessionCreated={handleSessionCreated} onNavigateSettings={() => setCurrentPage("settings")} />
-        )}
-        {currentPage === "session" && activeSessionId && (
-          <SessionPage sessionId={activeSessionId} />
-        )}
-        {currentPage === "history" && (
-          <HistoryPage onSelectSession={handleSelectSession} />
-        )}
-        {currentPage === "login" && (
-          <LoginPage onSuccess={() => setCurrentPage("home")} />
-        )}
-        {currentPage === "settings" && <SettingsPage />}
+        {/* Un fallo de renderizado en una pantalla no debe dejar la app en blanco: el menú sigue usable */}
+        <ErrorBoundary allowRetry resetKeys={[currentPage, activeSessionId]}>
+          {currentPage === "home" && (
+            <HomePage onSessionCreated={handleSessionCreated} onNavigateSettings={() => setCurrentPage("settings")} />
+          )}
+          {currentPage === "session" && activeSessionId && (
+            <SessionPage sessionId={activeSessionId} />
+          )}
+          {currentPage === "history" && (
+            <HistoryPage onSelectSession={handleSelectSession} />
+          )}
+          {currentPage === "login" && (
+            <LoginPage onSuccess={() => setCurrentPage("home")} />
+          )}
+          {currentPage === "settings" && <SettingsPage />}
+        </ErrorBoundary>
       </AppShell>
     </AppThemeProvider>
   );
