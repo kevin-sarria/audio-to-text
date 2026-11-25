@@ -1,5 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { formatOffset } from "../domain/timeFormat.js";
+import {
+  MeetingSummaryLlmService,
+  splitIntoChunks,
+  formatTranscript
+} from "../infrastructure/ai/MeetingSummaryLlmService.js";
 import {
   calculateParticipants,
   estimateDurationSec
@@ -132,5 +137,94 @@ describe("MeetingSummaryValidator", () => {
   it("lanza error si no hay JSON o falta el resumen ejecutivo", () => {
     expect(() => parseLlmSummary("no es json", transcript, 40)).toThrow();
     expect(() => parseLlmSummary(JSON.stringify({ topics: [] }), transcript, 40)).toThrow();
+  });
+});
+
+describe("MeetingSummaryLlmService", () => {
+  const VALID = JSON.stringify({
+    language: "es",
+    executiveSummary: "Se acordó migrar la base de datos el viernes.",
+    topics: [{ title: "Migración", summary: "Plan de migración." }],
+    decisions: [{ text: "Migrar el viernes", evidence: "Vamos a migrar la base de datos el viernes." }],
+    actionItems: [
+      { task: "Preparar el script", owner: "Luis", evidence: "Yo me encargo de preparar el script de migración." },
+      { task: "Contratar a alguien", evidence: "frase que nadie dijo" }
+    ],
+    openQuestions: [{ text: "¿Quién aprueba el presupuesto?", askedBy: "Ana" }],
+    chapters: [
+      { title: "Migración", startSec: 0, endSec: 30 },
+      { title: "Fuera de rango", startSec: 500, endSec: 600 }
+    ]
+  });
+
+  it("genera el resumen: texto del LLM validado y participantes calculados por código", async () => {
+    const callLlm = vi.fn().mockResolvedValue(VALID);
+    const service = new MeetingSummaryLlmService(callLlm);
+
+    const summary = await service.summarize({ sessionId: "s1", utterances: FIXTURE });
+
+    expect(callLlm).toHaveBeenCalledTimes(1);
+    expect(summary.sessionId).toBe("s1");
+    expect(summary.executiveSummary).toContain("migrar");
+    expect(summary.actionItems).toHaveLength(1);
+    expect(summary.chapters).toEqual([{ title: "Migración", startSec: 0, endSec: 30 }]);
+    expect(summary.participants.map((p) => p.name)).toEqual(["Luis", "Ana"]);
+    expect(summary.note).toBeUndefined();
+  });
+
+  it("reintenta una vez cuando la primera respuesta no es JSON válido", async () => {
+    const callLlm = vi.fn().mockResolvedValueOnce("lo siento, no puedo").mockResolvedValueOnce(VALID);
+    const service = new MeetingSummaryLlmService(callLlm);
+
+    const summary = await service.summarize({ sessionId: "s2", utterances: FIXTURE });
+
+    expect(callLlm).toHaveBeenCalledTimes(2);
+    expect(String(callLlm.mock.calls[1]?.[1])).toContain("no fue un JSON válido");
+    expect(summary.executiveSummary).toContain("migrar");
+  });
+
+  it("devuelve un resumen mínimo con nota si el LLM falla dos veces", async () => {
+    const callLlm = vi.fn().mockResolvedValue("basura");
+    const service = new MeetingSummaryLlmService(callLlm);
+
+    const summary = await service.summarize({ sessionId: "s3", utterances: FIXTURE });
+
+    expect(callLlm).toHaveBeenCalledTimes(2);
+    expect(summary.note).toContain("no se pudo generar");
+    expect(summary.topics).toEqual([]);
+    expect(summary.participants).toHaveLength(2);
+  });
+
+  it("devuelve resumen mínimo sin llamar a nada cuando no hay LLM configurado", async () => {
+    const service = new MeetingSummaryLlmService();
+    const summary = await service.summarize({ sessionId: "s4", utterances: FIXTURE });
+    expect(summary.note).toBeDefined();
+    expect(summary.participants).toHaveLength(2);
+  });
+
+  it("divide las transcripciones largas en bloques y fusiona los parciales", async () => {
+    const empty = JSON.stringify({ executiveSummary: "Parcial.", language: "es" });
+    const callLlm = vi.fn().mockResolvedValue(empty);
+    const maxChunkChars = 90;
+    const chunks = splitIntoChunks(FIXTURE, maxChunkChars);
+    expect(chunks.length).toBeGreaterThan(1);
+
+    const service = new MeetingSummaryLlmService(callLlm, { maxChunkChars });
+    const summary = await service.summarize({ sessionId: "s5", utterances: FIXTURE });
+
+    expect(callLlm).toHaveBeenCalledTimes(chunks.length + 1);
+    expect(summary.executiveSummary).toBe("Parcial.");
+  });
+
+  it("splitIntoChunks conserva el orden y no pierde intervenciones", () => {
+    const chunks = splitIntoChunks(FIXTURE, 90);
+    expect(chunks.flat()).toEqual(FIXTURE);
+    expect(splitIntoChunks(FIXTURE, 100000)).toHaveLength(1);
+    expect(splitIntoChunks([], 100)).toEqual([]);
+  });
+
+  it("formatTranscript incluye marca de tiempo solo cuando hay offset", () => {
+    expect(formatTranscript([{ speakerName: "Ana", text: "hola", offsetSec: 65 }])).toBe("[01:05] Ana: hola");
+    expect(formatTranscript([{ speakerName: "Ana", text: "hola" }])).toBe("Ana: hola");
   });
 });
