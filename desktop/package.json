@@ -10,6 +10,9 @@
     "build:main": "node scripts/build-main.mjs",
     "fetch:binaries": "node scripts/fetch-binaries.mjs",
     "dev": "node scripts/build-main.mjs && electron .",
+    "predist": "npm run build -w @audio-to-text/shared && npm run build -w @audio-to-text/web && node scripts/build-main.mjs",
+    "predist:win": "npm run predist",
+    "predist:linux": "npm run predist",
     "dist:win": "electron-builder --win",
     "dist:linux": "electron-builder --linux",
     "dist": "electron-builder"
