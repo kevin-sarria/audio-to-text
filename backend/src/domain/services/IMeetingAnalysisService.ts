@@ -12,6 +12,8 @@ export interface GenerateAnalysisOptions {
   model?: string;
   baseUrl?: string;
   profileId?: string;
+  /** Avisa de la etapa en curso; opcional, solo para mostrar avance. */
+  onProgress?: (msg: string) => void;
 }
 
 export interface GeneratedMeetingData {

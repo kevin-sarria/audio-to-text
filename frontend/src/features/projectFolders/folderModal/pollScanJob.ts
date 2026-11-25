@@ -1,14 +1,21 @@
 import type { ContextScanJobDto } from "@audio-to-text/shared";
 
-export async function pollScanJob(opts: {
+/** Estado mínimo que comparten los trabajos en segundo plano (escaneo de contexto, análisis de reunión). */
+export interface PollableJob {
+  status: "running" | "done" | "error";
+  progress?: string;
+  error?: string;
+}
+
+export async function pollScanJob<T extends PollableJob = ContextScanJobDto>(opts: {
   jobId: string;
-  fetchJob: (jobId: string) => Promise<ContextScanJobDto>;
-  onProgress: (job: ContextScanJobDto) => void;
+  fetchJob: (jobId: string) => Promise<T>;
+  onProgress: (job: T) => void;
   sleep?: (ms: number) => Promise<void>;
   intervalMs?: number;         // 2000
   maxConsecutiveErrors?: number; // 3
   isCancelled?: () => boolean;
-}): Promise<ContextScanJobDto> {
+}): Promise<T> {
   const sleepFn = opts.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
   const interval = opts.intervalMs ?? 2000;
   const maxErrors = opts.maxConsecutiveErrors ?? 3;
@@ -20,7 +27,7 @@ export async function pollScanJob(opts: {
       throw new Error("Escaneo cancelado.");
     }
 
-    let job: ContextScanJobDto | null = null;
+    let job: T | null = null;
     try {
       job = await opts.fetchJob(opts.jobId);
       consecutiveErrors = 0;

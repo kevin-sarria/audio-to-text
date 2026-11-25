@@ -58,6 +58,16 @@ export function createSessionRoutes(
       optionalAuth,
       meetingAnalysisController.get
     );
+    router.get(
+      "/:id/meeting-analysis/job",
+      optionalAuth,
+      meetingAnalysisController.getActiveJob
+    );
+    router.get(
+      "/:id/meeting-analysis/job/:jobId",
+      optionalAuth,
+      meetingAnalysisController.getJob
+    );
     router.patch(
       "/:id/meeting-analysis/title",
       optionalAuth,

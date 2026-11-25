@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import type { MeetingAnalysisDto, MeetingAnalysisProvider } from "@audio-to-text/shared";
+import type { MeetingAnalysisDto, MeetingAnalysisJobDto, MeetingAnalysisProvider } from "@audio-to-text/shared";
 import { api } from "../../lib/api.js";
 import { useAppStore } from "../../store/index.js";
+import { followAnalysisJob } from "./followAnalysisJob.js";
 
 interface UseMeetingAnalysisParams {
   sessionId: string;
@@ -33,14 +34,25 @@ export function useMeetingAnalysis({ sessionId }: UseMeetingAnalysisParams) {
 
   // Temporizador de segundos transcurridos durante generación
   const [generationSeconds, setGenerationSeconds] = useState(0);
+  const [generationProgress, setGenerationProgress] = useState("");
   const timerRef = useRef<any>(null);
+  const generationStartRef = useRef<number>(0);
+  // true cuando se sale de la página o cambia la sesión: deja de consultar el trabajo
+  const cancelledRef = useRef(false);
+
+  useEffect(() => {
+    cancelledRef.current = false;
+    return () => {
+      cancelledRef.current = true;
+    };
+  }, [sessionId]);
 
   useEffect(() => {
     if (isGenerating) {
-      setGenerationSeconds(0);
-      timerRef.current = setInterval(() => {
-        setGenerationSeconds((prev) => prev + 1);
-      }, 1000);
+      const tick = () =>
+        setGenerationSeconds(Math.max(0, Math.floor((Date.now() - generationStartRef.current) / 1000)));
+      tick();
+      timerRef.current = setInterval(tick, 1000);
     } else {
       if (timerRef.current) {
         clearInterval(timerRef.current);
@@ -82,7 +94,73 @@ export function useMeetingAnalysis({ sessionId }: UseMeetingAnalysisParams) {
     fetchAnalysis();
   }, [fetchAnalysis]);
 
+  /** Sigue un trabajo de análisis en segundo plano; true si terminó con un análisis nuevo. */
+  const followJob = async (jobId: string): Promise<boolean> => {
+    const headers: Record<string, string> = guestToken ? { "x-guest-token": guestToken } : {};
+    try {
+      const result = await followAnalysisJob({
+        jobId,
+        fetchJob: async (id) => {
+          const check = await api.get<{ success: boolean; data?: MeetingAnalysisJobDto; error?: string }>(
+            `/sessions/${sessionId}/meeting-analysis/job/${id}`,
+            { headers }
+          );
+          if (!check || !check.success || !check.data) {
+            throw new Error(check?.error || "Error al consultar el estado del análisis.");
+          }
+          return check.data;
+        },
+        onProgress: (job) => {
+          if (!cancelledRef.current && job.progress) setGenerationProgress(job.progress);
+        },
+        isCancelled: () => cancelledRef.current
+      });
+
+      if (cancelledRef.current) return false;
+      setAnalysis(result);
+      setEditableTitle(result.title || `Análisis: ${currentSession?.originalFileName || "Reunión"}`);
+      setSnackMessage("¡Resumen e issues generadas exitosamente!");
+      return true;
+    } catch (err: any) {
+      if (cancelledRef.current) return false;
+      setErrorMsg(err.message || "Error al generar el análisis con IA.");
+      return false;
+    }
+  };
+
+  // Al abrir la sesión, si hay un análisis corriendo en segundo plano se retoma su seguimiento
+  useEffect(() => {
+    let active = true;
+    const headers: Record<string, string> = guestToken ? { "x-guest-token": guestToken } : {};
+    (async () => {
+      try {
+        const res = await api.get<{ success: boolean; data: MeetingAnalysisJobDto | null }>(
+          `/sessions/${sessionId}/meeting-analysis/job`,
+          { headers }
+        );
+        const job = res?.data;
+        if (!active || cancelledRef.current || !res.success || !job || job.status !== "running") return;
+
+        generationStartRef.current = new Date(job.startedAt).getTime();
+        setGenerationProgress(job.progress);
+        setErrorMsg(null);
+        setIsGenerating(true);
+        await followJob(job.jobId);
+      } catch {
+        // Sin trabajo activo o sin conexión: no es un error que mostrar
+      } finally {
+        if (active) setIsGenerating(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, guestToken]);
+
   const handleGenerate = async (payload: GeneratePayload): Promise<boolean> => {
+    generationStartRef.current = Date.now();
+    setGenerationProgress("");
     setIsGenerating(true);
     setErrorMsg(null);
     try {
@@ -97,20 +175,16 @@ export function useMeetingAnalysis({ sessionId }: UseMeetingAnalysisParams) {
         profileId: payload.profileId?.trim() || undefined
       };
 
-      const res = await api.post<{ success: boolean; data: MeetingAnalysisDto }>(
+      const res = await api.post<{ success: boolean; data?: { jobId: string } }>(
         `/sessions/${sessionId}/meeting-analysis`,
         body,
         { headers }
       );
 
-      if (res.success && res.data) {
-        setAnalysis(res.data);
-        setEditableTitle(res.data.title || `Análisis: ${currentSession?.originalFileName || "Reunión"}`);
-        setSnackMessage("¡Resumen e issues generadas exitosamente!");
-        return true;
-      }
-      return false;
+      if (!res.success || !res.data?.jobId) return false;
+      return await followJob(res.data.jobId);
     } catch (err: any) {
+      if (cancelledRef.current) return false;
       setErrorMsg(err.message || "Error al generar el análisis con IA.");
       return false;
     } finally {
@@ -173,6 +247,7 @@ export function useMeetingAnalysis({ sessionId }: UseMeetingAnalysisParams) {
     setEditableTitle,
     isSavingTitle,
     generationSeconds,
+    generationProgress,
     fetchAnalysis,
     handleGenerate,
     handleSaveTitle,

@@ -86,6 +86,21 @@ export interface MeetingAnalysisDto {
   updatedAt: string;
 }
 
+export type MeetingAnalysisJobStatus = "running" | "done" | "error";
+
+/** Trabajo en segundo plano que genera el resumen e issues de una sesión. */
+export interface MeetingAnalysisJobDto {
+  jobId: string;
+  sessionId: string;
+  status: MeetingAnalysisJobStatus;
+  /** Etapa actual en español, para mostrar al usuario. */
+  progress: string;
+  startedAt: string;   // ISO
+  finishedAt?: string; // ISO
+  result?: MeetingAnalysisDto;
+  error?: string;
+}
+
 export const UpdateMeetingAnalysisTitleSchema = z.object({
   title: z.string().trim().min(1, "El título no puede estar vacío").max(150)
 });
@@ -102,7 +117,7 @@ export interface GenerateMeetingAnalysisRequestDto {
 }
 
 export const GenerateMeetingAnalysisSchema = z.object({
-  projectContext: z.string().max(10000, "El contexto del proyecto no puede superar 10000 caracteres").optional(),
+  projectContext: z.string().max(60000, "El contexto del proyecto no puede superar 60000 caracteres").optional(),
   provider: z.string().max(100).optional(),
   apiKey: z.string().max(256).optional(),
   model: z.string().max(100).optional(),

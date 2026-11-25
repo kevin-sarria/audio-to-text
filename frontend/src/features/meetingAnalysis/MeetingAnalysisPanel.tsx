@@ -47,6 +47,7 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
     setEditableTitle,
     isSavingTitle,
     generationSeconds,
+    generationProgress,
     handleGenerate,
     handleSaveTitle,
     handleLinkFolder
@@ -250,7 +251,7 @@ export const MeetingAnalysisPanel: React.FC<MeetingAnalysisPanelProps> = ({ sess
                 Generando con {selectedProviderLabel} · {modelTextForProgress}… {progressTimeStr}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                Extrayendo puntos de la reunión y redactando issues; puede tardar 1–3 minutos.
+                {generationProgress || "Preparando el análisis"}. En reuniones largas puede tardar más de 10 minutos; puedes salir de esta página y volver, el análisis sigue en curso.
               </Typography>
             </Box>
           </Box>

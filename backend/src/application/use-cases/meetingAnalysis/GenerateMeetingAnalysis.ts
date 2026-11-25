@@ -11,10 +11,13 @@ import { SessionStatus } from "../../../domain/value-objects/SessionStatus.js";
 
 import { MeetingAnalysisProvider } from "@audio-to-text/shared";
 
-export interface GenerateMeetingAnalysisInput {
+export interface GenerateMeetingAnalysisAccessInput {
   sessionId: string;
   userId?: string | null;
   guestTokenHash?: string | null;
+}
+
+export interface GenerateMeetingAnalysisInput extends GenerateMeetingAnalysisAccessInput {
   title?: string;
   projectContext?: string;
   provider?: MeetingAnalysisProvider;
@@ -23,6 +26,8 @@ export interface GenerateMeetingAnalysisInput {
   baseUrl?: string;
   /** Perfil de reglas del proyecto. Si no llega, se usa el de la carpeta vinculada y si no, "generic". */
   profileId?: string;
+  /** Avisa de la etapa en curso (para el seguimiento del trabajo en segundo plano). */
+  onProgress?: (msg: string) => void;
 }
 
 export class GenerateMeetingAnalysis {
@@ -33,7 +38,17 @@ export class GenerateMeetingAnalysis {
     private projectFolderRepository?: IProjectFolderRepository
   ) {}
 
-  public async execute(input: GenerateMeetingAnalysisInput): Promise<MeetingAnalysis> {
+  /** Comprueba que la sesión existe y que quien pregunta tiene acceso a ella. */
+  public async assertCanAccess(input: GenerateMeetingAnalysisAccessInput): Promise<void> {
+    await this.loadAccessibleSession(input);
+  }
+
+  /** Validaciones previas a generar (acceso, estado y segmentos), sin llamar a la IA. */
+  public async assertCanGenerate(input: GenerateMeetingAnalysisAccessInput): Promise<void> {
+    await this.loadGeneratableSession(input);
+  }
+
+  private async loadAccessibleSession(input: GenerateMeetingAnalysisAccessInput) {
     const session = await this.sessionRepository.findById(input.sessionId);
     if (!session) {
       throw new NotFoundError("Sesión de transcripción", input.sessionId);
@@ -42,6 +57,12 @@ export class GenerateMeetingAnalysis {
     if (!session.canAccess(input.userId, input.guestTokenHash)) {
       throw new ForbiddenError("No tiene permisos para acceder a esta sesión.");
     }
+
+    return session;
+  }
+
+  private async loadGeneratableSession(input: GenerateMeetingAnalysisAccessInput) {
+    const session = await this.loadAccessibleSession(input);
 
     if (session.status !== SessionStatus.COMPLETED) {
       throw new ValidationError(
@@ -55,6 +76,13 @@ export class GenerateMeetingAnalysis {
         "La sesión no cuenta con segmentos transcritos para poder procesar la reunión."
       );
     }
+
+    return session;
+  }
+
+  public async execute(input: GenerateMeetingAnalysisInput): Promise<MeetingAnalysis> {
+    const session = await this.loadGeneratableSession(input);
+    const segments = session.segments!;
 
     // Si la sesión está asociada a una carpeta de proyecto y no se especificó contexto o credenciales, cargarlas
     let resolvedProjectContext = input.projectContext;
@@ -107,7 +135,8 @@ export class GenerateMeetingAnalysis {
         apiKey: resolvedApiKey,
         model: resolvedModel,
         baseUrl: input.baseUrl,
-        profileId: resolvedProfileId || "generic"
+        profileId: resolvedProfileId || "generic",
+        onProgress: input.onProgress
       }
     );
 

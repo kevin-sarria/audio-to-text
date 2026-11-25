@@ -104,6 +104,7 @@ export class LlmMeetingAnalysisService implements IMeetingAnalysisService {
 
     try {
       // ETAPA 1: Extracción estructurada y clasificación rigurosa
+      options?.onProgress?.("Etapa 1: extrayendo y clasificando los puntos de la reunión");
       let rawStep1 = await this.executeLlmCall(step1SystemPrompt, step1UserPrompt, provider, apiKey, model, baseUrl);
       let step1Data = MeetingAnalysisResponseParser.parseStep1Extraction(rawStep1);
 
@@ -124,6 +125,7 @@ export class LlmMeetingAnalysisService implements IMeetingAnalysisService {
       );
 
       if (missingMatrixItems.length > 0) {
+        options?.onProgress?.("Etapa 1: reintento por puntos sin cubrir");
         const retryStep1UserPrompt = `${step1UserPrompt}\n\n[ÍTEMS OMITIDOS EN TU EXTRACCIÓN PREVIA - INCLÚYELOS]:\n${missingMatrixItems
           .map((m) => `- [${m.timestamp}] ${m.text}`)
           .join("\n")}`;
@@ -207,6 +209,11 @@ export class LlmMeetingAnalysisService implements IMeetingAnalysisService {
 
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         attemptsCount = attempt + 1;
+        options?.onProgress?.(
+          attempt === 0
+            ? "Etapa 2: redactando los issues"
+            : `Etapa 2: reintento ${attempt}/${maxRetries} por validación`
+        );
         const rawStep2 = await this.executeLlmCall(step2SystemPrompt, step2UserPrompt, provider, apiKey, model, baseUrl);
         const step2Clean = this.cleanJsonString(rawStep2);
         let parsedStep2: any;
