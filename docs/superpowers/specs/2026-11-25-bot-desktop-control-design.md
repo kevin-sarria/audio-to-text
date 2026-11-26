@@ -74,7 +74,7 @@ Autenticación y aislamiento igual que el resto de `/api/desktop/*`.
 ### 3.7 Escritorio (Electron)
 
 - Notificaciones del sistema: admitido, necesita iniciar sesión, reunión terminada e importada (con título), error.
-- Bandeja: icono según estado; menú con "Terminar reunión" (solo con sesión activa), "Abrir app" y "Salir". Con sesión activa, cerrar la ventana la oculta a la bandeja en lugar de cerrar la app; "Salir" termina la sesión del bot antes de cerrar.
+- Bandeja: el estado se ve en el tooltip y en la primera línea del menú (un solo icono, el de la app); menú con "Terminar reunión" (solo con sesión activa), "Abrir app" y "Salir". Con sesión activa, cerrar la ventana la oculta a la bandeja en lugar de cerrar la app; "Salir" termina la sesión del bot antes de cerrar.
 - Si la bandeja no está disponible, solo se omiten el icono y el menú; las notificaciones siguen.
 
 ### 3.8 Interfaz (Ajustes → bot)
