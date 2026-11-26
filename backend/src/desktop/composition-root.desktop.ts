@@ -46,13 +46,23 @@ import { ContextScanJobs } from "../application/services/ContextScanJobs.js";
 import { setupDesktopPipeline, runStartupRecovery } from "./pipeline.js";
 import { SqliteLibraryRepository } from "./infrastructure/sqlite/SqliteLibraryRepository.js";
 import { ImportBotMeetings } from "./library/ImportBotMeetings.js";
-import { resolveBotOutputDir } from "../infrastructure/bot/botOutputDir.js";
+import type { BotSessionDto, BotSessionState } from "@audio-to-text/shared";
+import { resolveBotPaths } from "./bot/BotPaths.js";
+import { BotSettingsStore } from "./bot/BotSettingsStore.js";
+import { BotLoginService, type BotLoginDeps } from "./bot/BotLoginService.js";
+import { BotSessionService, type BotEngine } from "./bot/BotSessionService.js";
 
 export interface CreateDesktopContainerOptions {
   userDataDir: string;
   resourcesDir: string;
   vault: ISecretVault;
   launchToken: string;
+  botEngine: BotEngine;
+  locateBrowser: (preferred: string) => string;
+  browserDisplayName: (browserPath: string) => string;
+  probeAccount: BotLoginDeps["probeAccount"];
+  killBotBrowser: () => void;
+  onBotEvent?: (session: BotSessionDto, previous: BotSessionState) => void;
 }
 
 export function createDesktopContainer(options: CreateDesktopContainerOptions) {
@@ -173,7 +183,26 @@ export function createDesktopContainer(options: CreateDesktopContainerOptions) {
     contextScanJobs
   );
   const libraryRepository = new SqliteLibraryRepository(db);
-  const importBotMeetings = new ImportBotMeetings(db, () => resolveBotOutputDir());
+  const botPaths = resolveBotPaths(userDataDir);
+  const botSettings = new BotSettingsStore(botPaths);
+  const importBotMeetings = new ImportBotMeetings(db, () => botSettings.effectiveOutputDir());
+  const botLogin = new BotLoginService({
+    paths: botPaths,
+    getPreferredBrowser: () => botSettings.get().botPreferredBrowser,
+    locateBrowser: options.locateBrowser,
+    displayName: options.browserDisplayName,
+    probeAccount: options.probeAccount,
+    killBotBrowser: options.killBotBrowser
+  });
+  const botSessions = new BotSessionService({
+    engine: options.botEngine,
+    getConfig: () => botSettings.get(),
+    resolveBrowserPath: options.locateBrowser,
+    profileDir: botPaths.profileDir,
+    outputDir: () => botSettings.effectiveOutputDir(),
+    importMeetings: () => importBotMeetings.execute(),
+    onEvent: options.onBotEvent
+  });
 
   // 7. Pipeline en proceso y handlers
   setupDesktopPipeline({
@@ -228,9 +257,13 @@ export function createDesktopContainer(options: CreateDesktopContainerOptions) {
     projectFolderController,
     libraryRepository,
     importBotMeetings,
+    botSettings,
+    botLogin,
+    botSessions,
     whisperBinaryPath,
     resourcesDir,
     async close() {
+      await botSessions.dispose();
       await jobQueue.close();
       try {
         db.close();

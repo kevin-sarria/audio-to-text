@@ -25,6 +25,9 @@ export * from "./infrastructure/ai/LlmClientFactory.js";
 export * from "./infrastructure/ai/MeetingSummaryLlmService.js";
 export * from "./infrastructure/ai/MeetingSummaryValidator.js";
 
+export * from "./domain/models/LiveSession.js";
+export * from "./domain/services/MeetingEndDetector.js";
+
 // Aplicación / Casos de Uso
 export * from "./application/ProcessMeetingSessionUseCase.js";
 export * from "./application/AutonomousMeetingBotService.js";

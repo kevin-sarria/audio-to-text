@@ -66,15 +66,19 @@ async function runAutonomousBot(
     summarizer
   );
 
-  console.log("🚀 El bot se ha unido a la sala como invitado y ha iniciado la captura...");
   const sessionId = await botService.startAutonomousMeeting({
     meetingUrl,
     headless: !isVisible,
+    skipConnection: !isLive,
+    onStatus: isLive ? (state, message) => console.log(` [${state}] ${message}`) : undefined,
     onUtterance: (u) => {
       console.log(` [${u.timestamp}] 🗣️ ${u.speakerName}`);
       console.log(`    ↳ "${u.content}"\n`);
     }
   });
+  if (isLive) {
+    console.log("🚀 El bot se ha unido a la sala como invitado y ha iniciado la captura...");
+  }
 
   console.log(`📡 Sesión activa: [${sessionId}]`);
   console.log("🎙️ Escuchando y reconociendo a los participantes en tiempo real:\n");

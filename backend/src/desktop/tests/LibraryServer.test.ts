@@ -17,6 +17,15 @@ describe("Biblioteca en el servidor de escritorio", () => {
       resourcesDir: tempDir,
       vault: new InMemorySecretVault(),
       launchToken,
+      botEngine: {
+        start: async () => "s",
+        finalize: async () => ({ utterances: 0, deliveryFile: null }),
+        abort: async () => {}
+      },
+      locateBrowser: () => "C:/brave.exe",
+      browserDisplayName: () => "Brave",
+      probeAccount: async () => ({ url: "https://myaccount.google.com/", text: "" }),
+      killBotBrowser: () => {},
       port: 0
     });
   });

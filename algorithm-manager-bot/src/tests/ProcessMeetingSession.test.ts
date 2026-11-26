@@ -163,7 +163,8 @@ describe("Algorithm Manager Bot - Dual Meeting Agent", () => {
 
       const sessionId = await bot.startAutonomousMeeting({
         meetingUrl: "https://meet.google.com/test-room",
-        headless: true
+        headless: true,
+        skipConnection: true
       });
 
       bot.recordUtterance({

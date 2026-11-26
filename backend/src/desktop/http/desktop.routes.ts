@@ -8,7 +8,10 @@ import { createSettingsRoutes } from "./routes/settings.routes.js";
 import { createCustomProvidersRoutes } from "./routes/customProviders.routes.js";
 import { createLlmModelsRoutes } from "./routes/llmModels.routes.js";
 import { createModelsRoutes } from "./routes/models.routes.js";
-import { createBotRoutes } from "../../interfaces/http/routes/bot.routes.js";
+import { createDesktopBotRoutes } from "./routes/bot.routes.js";
+import type { BotSessionService } from "../bot/BotSessionService.js";
+import type { BotSettingsStore } from "../bot/BotSettingsStore.js";
+import type { BotLoginService } from "../bot/BotLoginService.js";
 import { createLibraryRoutes } from "./routes/library.routes.js";
 import type { ImportBotMeetings } from "../library/ImportBotMeetings.js";
 import type { SqliteLibraryRepository } from "../infrastructure/sqlite/SqliteLibraryRepository.js";
@@ -23,6 +26,9 @@ export interface DesktopRoutesDeps {
   resourcesDir: string;
   importBotMeetings: ImportBotMeetings;
   libraryRepository: SqliteLibraryRepository;
+  botSessions: BotSessionService;
+  botSettings: BotSettingsStore;
+  botLogin: BotLoginService;
 }
 
 export function createDesktopRoutes(deps: DesktopRoutesDeps): Router {
@@ -36,7 +42,10 @@ export function createDesktopRoutes(deps: DesktopRoutesDeps): Router {
   router.use(createCustomProvidersRoutes(deps));
   router.use(createLlmModelsRoutes(deps));
   router.use(createModelsRoutes(deps));
-  router.use("/bot", createBotRoutes());
+  router.use(
+    "/bot",
+    createDesktopBotRoutes({ sessions: deps.botSessions, settings: deps.botSettings, login: deps.botLogin })
+  );
   router.use(createLibraryRoutes(deps));
 
   return router;

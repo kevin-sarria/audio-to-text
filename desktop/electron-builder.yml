@@ -21,6 +21,8 @@ extraResources:
       - "**/*"
   - from: "../backend/src/desktop/infrastructure/settings/recommendations.json"
     to: "recommendations.json"
+  - from: "build/icon.png"
+    to: "icon.png"
 
 directories:
   output: "release"

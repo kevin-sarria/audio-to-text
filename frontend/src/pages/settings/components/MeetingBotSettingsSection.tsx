@@ -29,8 +29,18 @@ import {
   Description as DocxIcon,
   TableChart as ExcelIcon
 } from "@mui/icons-material";
-import { MeetingBotConfigDto, MeetingBotStatusDto } from "@audio-to-text/shared";
+import {
+  MeetingBotConfigDto,
+  MeetingBotStatusDto,
+  BotLoginCheckDto,
+  BOT_PLATFORMS,
+  DEFAULT_BOT_ALLOWED_DOMAINS
+} from "@audio-to-text/shared";
 import { api } from "../../../lib/api.js";
+import { isDesktopApp } from "../../../lib/runtime.js";
+import { botBase, isLoginChecked } from "../../../features/bot/botApi.js";
+import { LiveMeetingCard } from "../../../features/bot/LiveMeetingCard.js";
+import { AllowedSitesEditor } from "../../../features/bot/AllowedSitesEditor.js";
 
 const PRESET_AVATARS = [
   { id: "algo", label: "Algorithm AI", url: "https://api.dicebear.com/7.x/bottts/svg?seed=AlgorithmBot" },
@@ -53,7 +63,9 @@ export const MeetingBotSettingsSection: React.FC = () => {
     botGenerateExcel: true,
     botDefaultPlatform: "AUTO",
     botLanguage: "es",
-    botOutputDir: ""
+    botOutputDir: "",
+    botAllowedPlatforms: [...BOT_PLATFORMS],
+    botAllowedDomains: [...DEFAULT_BOT_ALLOWED_DOMAINS]
   });
 
   const [status, setStatus] = useState<MeetingBotStatusDto | null>(null);
@@ -61,11 +73,15 @@ export const MeetingBotSettingsSection: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error" | "info"; msg: string } | null>(null);
+  const [loginCheck, setLoginCheck] = useState<BotLoginCheckDto | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  const desktop = isDesktopApp();
+  const loginChecked = isLoginChecked(desktop, status?.loginChecked);
 
   const fetchBotStatus = async () => {
     setLoading(true);
     try {
-      const res = await api.get<any>("/bot/status");
+      const res = await api.get<any>(`${botBase()}/status`);
       if (res.success && res.data) {
         setStatus(res.data);
         if (res.data.config) {
@@ -87,7 +103,7 @@ export const MeetingBotSettingsSection: React.FC = () => {
     setSaving(true);
     setFeedback(null);
     try {
-      const res = await api.put<any>("/bot/config", config);
+      const res = await api.put<any>(`${botBase()}/config`, config);
       if (res.success) {
         setFeedback({ type: "success", msg: "¡Configuración del bot guardada exitosamente!" });
         await fetchBotStatus();
@@ -103,8 +119,9 @@ export const MeetingBotSettingsSection: React.FC = () => {
     setLoginLoading(true);
     setFeedback(null);
     try {
-      const res = await api.post<any>("/bot/login");
+      const res = await api.post<any>(`${botBase()}/login`);
       if (res.success) {
+        setLoginCheck(null);
         setFeedback({
           type: "info",
           msg: res.message || "Se ha abierto el navegador para iniciar sesión con tu cuenta de Google."
@@ -118,13 +135,30 @@ export const MeetingBotSettingsSection: React.FC = () => {
     }
   };
 
+  const handleVerifyLogin = async () => {
+    setVerifying(true);
+    setFeedback(null);
+    try {
+      const res = await api.post<{ success: boolean; data: BotLoginCheckDto }>(`${botBase()}/login/verify`);
+      if (res.success) {
+        setLoginCheck(res.data);
+        await fetchBotStatus();
+      }
+    } catch (err: any) {
+      setFeedback({ type: "error", msg: `No se pudo verificar la sesión: ${err.message}` });
+    } finally {
+      setVerifying(false);
+    }
+  };
+
   const handleUnlinkGoogle = async () => {
     if (!window.confirm("¿Seguro que deseas desvincular la cuenta de Google del bot?")) return;
     setLoading(true);
     setFeedback(null);
     try {
-      const res = await api.post<any>("/bot/unlink");
+      const res = await api.post<any>(`${botBase()}/unlink`);
       if (res.success) {
+        setLoginCheck(null);
         setFeedback({ type: "success", msg: "Cuenta de Google desvinculada del bot." });
         await fetchBotStatus();
       }
@@ -142,6 +176,8 @@ export const MeetingBotSettingsSection: React.FC = () => {
           {feedback.msg}
         </Alert>
       )}
+
+      {desktop && <LiveMeetingCard />}
 
       {/* 1. Tarjeta de Vista Previa y Datos de Identidad */}
       <Paper sx={{ p: 3, mb: 4, borderRadius: 3 }}>
@@ -274,12 +310,13 @@ export const MeetingBotSettingsSection: React.FC = () => {
                 <Typography variant="subtitle2" fontWeight={700}>
                   Cuenta de Google del Bot
                 </Typography>
-                <Chip
-                  size="small"
-                  label={status?.isGoogleAccountLinked ? "Vinculada" : "Sin Vincular"}
-                  color={status?.isGoogleAccountLinked ? "success" : "warning"}
-                  icon={status?.isGoogleAccountLinked ? <CheckCircleIcon /> : <WarningIcon />}
-                />
+                {!loginChecked ? (
+                  <Chip size="small" label="Sin verificar" color="default" />
+                ) : status?.isGoogleAccountLinked ? (
+                  <Chip size="small" label="Vinculada" color="success" icon={<CheckCircleIcon />} />
+                ) : (
+                  <Chip size="small" label="Sin vincular" color="warning" icon={<WarningIcon />} />
+                )}
               </Box>
 
               <Typography variant="body2" sx={{ mb: 2 }}>
@@ -288,28 +325,41 @@ export const MeetingBotSettingsSection: React.FC = () => {
                     Correo actual: <strong>{status.linkedGoogleEmail}</strong>
                   </>
                 ) : (
-                  "Aún no hay una sesión de Google activa en el perfil del bot."
+                  desktop
+                    ? loginCheck?.message ?? "Pulsa «Verificar sesión» para comprobar si el bot tiene una cuenta de Google iniciada."
+                    : "Aún no hay una sesión de Google activa en el perfil del bot."
                 )}
               </Typography>
 
-              <Box sx={{ display: "flex", gap: 1.5 }}>
+              <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap" }}>
                 <Button
                   variant="contained"
                   size="small"
                   startIcon={loginLoading ? <CircularProgress size={16} color="inherit" /> : <OpenInNewIcon />}
                   onClick={handleLaunchGoogleLogin}
-                  disabled={loginLoading}
+                  disabled={loginLoading || !!status?.isMeetingActive}
                 >
-                  {status?.isGoogleAccountLinked ? "Cambiar Cuenta en Navegador" : "Vincular con Brave / Navegador"}
+                  {loginChecked && status?.isGoogleAccountLinked ? "Cambiar Cuenta en Navegador" : "Vincular con Brave / Navegador"}
                 </Button>
-                {status?.isGoogleAccountLinked && (
+                {desktop && (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={verifying ? <CircularProgress size={16} color="inherit" /> : undefined}
+                    onClick={handleVerifyLogin}
+                    disabled={verifying || !!status?.isMeetingActive}
+                  >
+                    Verificar sesión
+                  </Button>
+                )}
+                {loginChecked && status?.isGoogleAccountLinked && (
                   <Button
                     variant="outlined"
                     color="error"
                     size="small"
                     startIcon={<LinkOffIcon />}
                     onClick={handleUnlinkGoogle}
-                    disabled={loading}
+                    disabled={loading || !!status?.isMeetingActive}
                   >
                     Desvincular
                   </Button>
@@ -356,6 +406,25 @@ export const MeetingBotSettingsSection: React.FC = () => {
           </Grid>
         </Grid>
       </Paper>
+
+      {desktop && (
+        <>
+        {/* Dónde puede entrar el bot */}
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3 }}>
+          <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>
+            Dónde puede entrar el bot
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            El bot solo abrirá enlaces de las plataformas y dominios que permitas aquí. Se guarda con el botón de abajo.
+          </Typography>
+          <AllowedSitesEditor
+            platforms={config.botAllowedPlatforms ?? [...BOT_PLATFORMS]}
+            domains={config.botAllowedDomains ?? [...DEFAULT_BOT_ALLOWED_DOMAINS]}
+            onChange={({ platforms, domains }) => setConfig({ ...config, botAllowedPlatforms: platforms, botAllowedDomains: domains })}
+          />
+        </Paper>
+        </>
+      )}
 
       {/* 3. Tarjeta de Automatizaciones en Llamadas */}
       <Paper sx={{ p: 3, mb: 4, borderRadius: 3 }}>

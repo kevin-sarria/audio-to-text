@@ -1749,6 +1749,7 @@ function harness(opts: { startFails?: Error; utterances?: number; hold?: boolean
   const svc = new BotSessionService({
     engine,
     getConfig: () => config,
+    resolveBrowserPath: () => "C:/brave.exe",
     profileDir: "C:/profile",
     outputDir: () => "C:/out",
     importMeetings,
@@ -1777,7 +1778,13 @@ describe("BotSessionService", () => {
     expect(s.platform).toBe("GOOGLE_MEET");
     await flush();
     expect(h.svc.current().state).toBe("LISTENING");
-    expect(h.input()).toMatchObject({ meetingUrl: URL_OK, botDisplayName: "Bot", profileDir: "C:/profile", headless: false });
+    expect(h.input()).toMatchObject({
+      meetingUrl: URL_OK,
+      botDisplayName: "Bot",
+      profileDir: "C:/profile",
+      browserPath: "C:/brave.exe",
+      headless: false
+    });
   });
 
   it("no permite una segunda sesión mientras hay una activa", async () => {
@@ -1918,6 +1925,8 @@ export interface BotEngineStartInput {
   botDisplayName: string;
   autoRecord: boolean;
   headless: false;
+  /** Ejecutable del navegador elegido en los ajustes (el mismo que usa el login). */
+  browserPath: string;
   profileDir: string;
   onStatus: (state: EngineState, message: string) => void;
   onEnded: (reason: Exclude<EndReason, "USER">) => void;
@@ -1950,6 +1959,8 @@ export class BotSessionError extends Error {
 export interface BotSessionServiceDeps {
   engine: BotEngine;
   getConfig: () => MeetingBotConfigDto;
+  /** Ruta del navegador según la preferencia de los ajustes ('auto', 'brave', 'chrome', 'msedge'). */
+  resolveBrowserPath: (preferred: string) => string;
   profileDir: string;
   outputDir: () => string;
   importMeetings: () => ImportBotMeetingsResultDto;
@@ -2038,6 +2049,7 @@ export class BotSessionService {
         botDisplayName: cfg.botDisplayName,
         autoRecord: cfg.botAutoRecord,
         headless: false,
+        browserPath: this.deps.resolveBrowserPath(cfg.botPreferredBrowser),
         profileDir: this.deps.profileDir,
         onStatus: (state, message) => {
           if (this.cancelled || !this.isActive() || this.session.state === "ENDING") return;
@@ -2203,6 +2215,7 @@ describe("bot.routes (escritorio)", () => {
     const sessions = new BotSessionService({
       engine,
       getConfig: () => settings.get(),
+      resolveBrowserPath: () => "C:/brave.exe",
       profileDir: paths.profileDir,
       outputDir: () => settings.effectiveOutputDir(),
       importMeetings: () => ({ imported: 1, alreadyImported: 0, failed: [], folderMissing: false, folder: "C:/out" })
@@ -2612,6 +2625,7 @@ Expected: FAIL (opciones y propiedad `bot` inexistentes).
   const botSessions = new BotSessionService({
     engine: options.botEngine,
     getConfig: () => botSettings.get(),
+    resolveBrowserPath: options.locateBrowser,
     profileDir: botPaths.profileDir,
     outputDir: () => botSettings.effectiveOutputDir(),
     importMeetings: () => importBotMeetings.execute(),
@@ -2698,25 +2712,39 @@ async function createLlmCaller(vault: ISecretVault) {
 
 export function createBotEngine(vault: ISecretVault): BotEngine {
   let service: AutonomousMeetingBotService | null = null;
+  // Cada start() toma una época; abort() la invalida, así un start cancelado en vuelo
+  // cierra lo suyo en vez de dejar un navegador huérfano dentro de la reunión.
+  let epoch = 0;
+  const CANCELLED = "La entrada del bot fue cancelada.";
 
   return {
     async start(input: BotEngineStartInput): Promise<string> {
+      const myEpoch = ++epoch;
       const callLlm = await createLlmCaller(vault);
-      service = new AutonomousMeetingBotService(
+      if (myEpoch !== epoch) throw new Error(CANCELLED);
+
+      const mine = new AutonomousMeetingBotService(
         new MeetingClassifierLlmService(callLlm),
         new CommercialProposalLlmService(callLlm),
         undefined,
         undefined,
         new MeetingSummaryLlmService(callLlm)
       );
-      return service.startAutonomousMeeting({
+      service = mine;
+      const id = await mine.startAutonomousMeeting({
         meetingUrl: input.meetingUrl,
         headless: input.headless,
         settings: { botDisplayName: input.botDisplayName, autoRecord: input.autoRecord },
         profileDir: input.profileDir,
+        chromePath: input.browserPath,
         onStatus: input.onStatus,
         onEnded: input.onEnded
       });
+      if (myEpoch !== epoch) {
+        await mine.abort().catch(() => {});
+        throw new Error(CANCELLED);
+      }
+      return id;
     },
 
     async finalize(sessionId, meetingUrl, outputDir) {
@@ -2727,6 +2755,7 @@ export function createBotEngine(vault: ISecretVault): BotEngine {
     },
 
     async abort() {
+      epoch++;
       const current = service;
       service = null;
       await current?.abort();

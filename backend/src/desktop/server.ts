@@ -7,6 +7,9 @@ import { createApp } from "../interfaces/http/app.js";
 import { createDesktopContainer } from "./composition-root.desktop.js";
 import { createDesktopRoutes } from "./http/desktop.routes.js";
 import { ISecretVault } from "./infrastructure/settings/ISecretVault.js";
+import type { BotSessionDto, BotSessionState } from "@audio-to-text/shared";
+import type { BotEngine } from "./bot/BotSessionService.js";
+import type { BotLoginDeps } from "./bot/BotLoginService.js";
 
 export interface StartDesktopServerOptions {
   userDataDir: string;
@@ -14,11 +17,22 @@ export interface StartDesktopServerOptions {
   vault: ISecretVault;
   launchToken: string;
   port?: number;
+  botEngine: BotEngine;
+  locateBrowser: (preferred: string) => string;
+  browserDisplayName: (browserPath: string) => string;
+  probeAccount: BotLoginDeps["probeAccount"];
+  killBotBrowser: () => void;
+  onBotEvent?: (session: BotSessionDto, previous: BotSessionState) => void;
 }
 
 export interface DesktopServerInstance {
   port: number;
   close: () => Promise<void>;
+  bot: {
+    current: () => BotSessionDto;
+    isActive: () => boolean;
+    leave: () => Promise<BotSessionDto>;
+  };
 }
 
 export async function startDesktopServer(
@@ -31,7 +45,13 @@ export async function startDesktopServer(
     userDataDir,
     resourcesDir,
     vault,
-    launchToken
+    launchToken,
+    botEngine: options.botEngine,
+    locateBrowser: options.locateBrowser,
+    browserDisplayName: options.browserDisplayName,
+    probeAccount: options.probeAccount,
+    killBotBrowser: options.killBotBrowser,
+    onBotEvent: options.onBotEvent
   });
 
   // 2. Directorio de distribución frontend estático
@@ -56,7 +76,8 @@ export async function startDesktopServer(
       eventsController: container.eventsController,
       meetingAnalysisController: container.meetingAnalysisController,
       projectFolderController: container.projectFolderController,
-      tokenService: container.tokenService
+      tokenService: container.tokenService,
+      disableLegacyBotRoutes: true
     },
     {
       serveStaticDir: fs.existsSync(serveStaticDir) ? serveStaticDir : undefined,
@@ -75,7 +96,10 @@ export async function startDesktopServer(
     whisperBinaryPath: container.whisperBinaryPath,
     resourcesDir,
     importBotMeetings: container.importBotMeetings,
-    libraryRepository: container.libraryRepository
+    libraryRepository: container.libraryRepository,
+    botSessions: container.botSessions,
+    botSettings: container.botSettings,
+    botLogin: container.botLogin
   });
   app.use("/api/desktop", desktopRoutes);
 
@@ -115,6 +139,11 @@ export async function startDesktopServer(
 
   return {
     port: boundPort,
+    bot: {
+      current: () => container.botSessions.current(),
+      isActive: () => container.botSessions.isActive(),
+      leave: () => container.botSessions.leave()
+    },
     close: async () => {
       console.log("[DesktopServer] Cerrando servidor HTTP y dependencias locales...");
       await new Promise<void>((resolve) => {

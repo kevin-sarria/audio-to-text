@@ -2,10 +2,14 @@
 import "../../backend/src/desktop/bootstrapEnv.js";
 import crypto from "node:crypto";
 import path from "node:path";
-import { app, BrowserWindow, Menu, ipcMain, shell, session, dialog } from "electron";
+import { app, BrowserWindow, Menu, Notification, ipcMain, shell, session, dialog } from "electron";
 import { resolveDesktopPaths } from "./paths.js";
 import { ElectronSecretVault } from "./secretVault.js";
 import { configureWindowSecurity } from "./windowSecurity.js";
+import puppeteer from "puppeteer-core";
+import { createBotEngine } from "./botEngine.js";
+import { createBotTray, type BotTray } from "./botTray.js";
+import { BrowserLauncher } from "../../algorithm-manager-bot/src/infrastructure/connectors/live/BrowserLauncher.js";
 import {
   startDesktopServer,
   DesktopServerInstance
@@ -20,8 +24,13 @@ if (!gotTheLock) {
 
 let mainWindow: BrowserWindow | null = null;
 let desktopServer: DesktopServerInstance | null = null;
+let botTray: BotTray | null = null;
+let isQuitting = false;
+let shutdownPromise: Promise<void> | null = null;
+const SHUTDOWN_LIMIT_MS = 120_000;
 
 async function bootstrap() {
+  app.setAppUserModelId("com.audio2text.app");
   // 2. Resolver rutas y binarios
   const paths = resolveDesktopPaths();
 
@@ -37,12 +46,49 @@ async function bootstrap() {
   // 4. Bóveda segura de claves
   const vault = new ElectronSecretVault(paths.userDataDir);
 
+  // 4b. Bandeja y notificaciones del bot (la ventana aún no existe: showWindow usa mainWindow de forma perezosa)
+  botTray = createBotTray({
+    // En desarrollo el icono está en desktop/build; empaquetado va en resources (extraResources).
+    iconPath: app.isPackaged ? path.join(process.resourcesPath, "icon.png") : path.join(__dirname, "../build/icon.png"),
+    showWindow: () => {
+      if (!mainWindow) return;
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    },
+    leaveMeeting: () => (desktopServer ? desktopServer.bot.leave() : Promise.resolve()),
+    quit: () => app.quit()
+  });
+
   // 5. Iniciar servidor Express embebido en puerto aleatorio
   desktopServer = await startDesktopServer({
     userDataDir: paths.userDataDir,
     resourcesDir: paths.resourcesDir,
     vault,
-    launchToken
+    launchToken,
+    botEngine: createBotEngine(vault),
+    locateBrowser: (preferred) => BrowserLauncher.findSystemBrowserExecutable(preferred),
+    browserDisplayName: (p) => BrowserLauncher.getBrowserDisplayName(p),
+    killBotBrowser: () => BrowserLauncher.killOrphanedBotChrome(path.join(app.getPath("userData"), "bot", "profile")),
+    probeAccount: async ({ profileDir, browserPath }) => {
+      BrowserLauncher.cleanStaleLocks(profileDir);
+      const browser = await puppeteer.launch({
+        executablePath: browserPath,
+        headless: true,
+        userDataDir: profileDir,
+        args: ["--no-first-run", "--no-default-browser-check"]
+      });
+      try {
+        const page = await browser.newPage();
+        await page.goto("https://myaccount.google.com/", { waitUntil: "domcontentloaded", timeout: 30000 });
+        await new Promise((r) => setTimeout(r, 2000));
+        const text = await page.evaluate(() => document.body?.innerText ?? "");
+        return { url: page.url(), text };
+      } finally {
+        await browser.close().catch(() => {});
+      }
+    },
+    onBotEvent: (session, previous) => botTray?.onBotEvent(session, previous)
   });
 
   const serverUrl = `http://127.0.0.1:${desktopServer.port}`;
@@ -72,6 +118,14 @@ async function bootstrap() {
       webSecurity: true,
       // El preload (sandbox) no puede leer package.json: la versión real llega como argumento
       additionalArguments: [`--app-version=${app.getVersion()}`]
+    }
+  });
+
+  // Ocultar a la bandeja solo con una sesión del bot activa y sin estar saliendo
+  mainWindow.on("close", (event) => {
+    if (shutdownPromise || (!isQuitting && desktopServer?.bot.isActive())) {
+      event.preventDefault();
+      mainWindow?.hide();
     }
   });
 
@@ -154,6 +208,7 @@ async function bootstrap() {
 app.on("second-instance", () => {
   if (mainWindow) {
     if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
     mainWindow.focus();
   }
 });
@@ -161,18 +216,40 @@ app.on("second-instance", () => {
 app.whenReady().then(bootstrap);
 
 // Cierre ordenado
-app.on("before-quit", async (event) => {
-  if (desktopServer) {
+app.on("before-quit", (event) => {
+  isQuitting = true;
+  // Mientras haya un apagado en curso, cualquier otra petición de salida se ignora.
+  if (shutdownPromise) {
     event.preventDefault();
-    const serverToClose = desktopServer;
-    desktopServer = null;
+    return;
+  }
+  const serverToClose = desktopServer;
+  if (!serverToClose) return;
+  event.preventDefault();
+  desktopServer = null;
+
+  const shutdown = async () => {
     try {
+      if (serverToClose.bot.isActive()) {
+        try {
+          if (Notification.isSupported()) {
+            new Notification({ title: "Audio2Text", body: "Guardando la reunión antes de cerrar…" }).show();
+          }
+        } catch {}
+        await serverToClose.bot.leave().catch(() => {});
+      }
       await serverToClose.close();
     } catch (err) {
       console.error("Error al cerrar servidor desktop:", err);
     }
-    app.quit();
-  }
+  };
+
+  // Un único tope global: si algo se cuelga, la app sale igualmente.
+  shutdownPromise = Promise.race([shutdown(), new Promise<void>((r) => setTimeout(r, SHUTDOWN_LIMIT_MS))]).then(() => {
+    botTray?.destroy();
+    botTray = null;
+    app.exit(0);
+  });
 });
 
 app.on("window-all-closed", () => {

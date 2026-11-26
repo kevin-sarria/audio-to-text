@@ -27,6 +27,15 @@ describe("DesktopServer", () => {
       resourcesDir: tempDir,
       vault,
       launchToken,
+      botEngine: {
+        start: async () => "s",
+        finalize: async () => ({ utterances: 0, deliveryFile: null }),
+        abort: async () => {}
+      },
+      locateBrowser: () => "C:/brave.exe",
+      browserDisplayName: () => "Brave",
+      probeAccount: async () => ({ url: "https://myaccount.google.com/", text: "" }),
+      killBotBrowser: () => {},
       port: 0
     });
   });
@@ -48,6 +57,14 @@ describe("DesktopServer", () => {
   it("responde 401 en /api/sessions si no se envía la cookie accessToken", async () => {
     const res = await fetch(`http://127.0.0.1:${serverInstance.port}/api/sessions`);
     expect(res.status).toBe(401);
+  });
+
+  it("R-11: el router web /api/bot no está montado en escritorio (404) y /api/desktop/bot exige autenticación", async () => {
+    const base = `http://127.0.0.1:${serverInstance.port}`;
+    const legacy = await fetch(`${base}/api/bot/status`);
+    expect(legacy.status).toBe(404);
+    const desktop = await fetch(`${base}/api/desktop/bot/status`);
+    expect(desktop.status).toBe(401);
   });
 
   it("responde 403 si la cabecera Host no coincide con las permitidas (anti DNS-rebinding)", async () => {

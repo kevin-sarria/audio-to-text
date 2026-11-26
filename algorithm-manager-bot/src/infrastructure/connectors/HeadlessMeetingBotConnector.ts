@@ -2,6 +2,32 @@ import { MeetingBotConnectionConfig, MeetingPlatform } from "../../domain/models
 import { GoogleMeetLiveDriver } from "./live/GoogleMeetLiveDriver.js";
 import { TeamsLiveDriver } from "./live/TeamsLiveDriver.js";
 import { ExtractedUtterance } from "./PlatformSpeakerExtractor.js";
+import type { BrowserLaunchConfig } from "./live/BrowserLauncher.js";
+import type { LiveStatusCallback } from "../../domain/models/LiveSession.js";
+import type { EndReason } from "../../domain/services/MeetingEndDetector.js";
+
+export interface LiveDriver {
+  joinAndListen(
+    meetingUrl: string,
+    config: BrowserLaunchConfig,
+    onUtterance: (utterance: ExtractedUtterance) => void
+  ): Promise<void>;
+  leave(): Promise<void>;
+}
+
+export interface LiveDriverFactories {
+  meet?: (profileDir?: string) => LiveDriver;
+  teams?: () => LiveDriver;
+}
+
+export interface ConnectOptions {
+  chromePath?: string;
+  headless?: boolean;
+  profileDir?: string;
+  onStatus?: LiveStatusCallback;
+  onEnded?: (reason: EndReason) => void;
+  admissionLimitMs?: number;
+}
 
 export interface BotJoinResult {
   sessionId: string;
@@ -12,8 +38,9 @@ export interface BotJoinResult {
 }
 
 export class HeadlessMeetingBotConnector {
-  private meetDriver: GoogleMeetLiveDriver | null = null;
-  private teamsDriver: TeamsLiveDriver | null = null;
+  private active: LiveDriver | null = null;
+
+  constructor(private drivers: LiveDriverFactories = {}) {}
 
   public static detectPlatform(url: string): MeetingPlatform {
     const lower = url.toLowerCase();
@@ -26,7 +53,7 @@ export class HeadlessMeetingBotConnector {
   public async connectToMeeting(
     config: MeetingBotConnectionConfig,
     onUtterance?: (utterance: ExtractedUtterance) => void,
-    options?: { headless?: boolean }
+    options: ConnectOptions = {}
   ): Promise<BotJoinResult> {
     if (!config.meetingUrl) {
       throw new Error("Se requiere una URL válida de reunión (Google Meet, MS Teams o Zoom) para el modo bot remoto.");
@@ -34,32 +61,21 @@ export class HeadlessMeetingBotConnector {
 
     const platform = HeadlessMeetingBotConnector.detectPlatform(config.meetingUrl);
     const sessionId = `bot-session-${Date.now()}`;
-    const isHeadless = options?.headless ?? true;
-
-    console.info(
-      `[HeadlessMeetingBot] Conectando asistente '${config.botDisplayName}' hacia ${platform} (${config.meetingUrl}) [Headless: ${isHeadless}]`
-    );
+    console.info(`[HeadlessMeetingBot] Conectando asistente '${config.botDisplayName}' hacia ${platform} (${config.meetingUrl})`);
 
     if (onUtterance) {
-      try {
-        if (platform === "GOOGLE_MEET") {
-          this.meetDriver = new GoogleMeetLiveDriver();
-          await this.meetDriver.joinAndListen(
-            config.meetingUrl,
-            { headless: isHeadless, botDisplayName: config.botDisplayName },
-            onUtterance
-          );
-        } else if (platform === "MICROSOFT_TEAMS") {
-          this.teamsDriver = new TeamsLiveDriver();
-          await this.teamsDriver.joinAndListen(
-            config.meetingUrl,
-            { headless: isHeadless, botDisplayName: config.botDisplayName },
-            onUtterance
-          );
-        }
-      } catch (err: any) {
-        console.warn(`[HeadlessMeetingBot] Advertencia en inicialización del navegador: ${err.message}`);
-      }
+      const driver = this.createDriver(platform, options.profileDir);
+      const launchConfig: BrowserLaunchConfig = {
+        headless: options.headless ?? true,
+        botDisplayName: config.botDisplayName,
+        chromePath: options.chromePath,
+        profileDir: options.profileDir,
+        onStatus: options.onStatus,
+        onEnded: options.onEnded,
+        admissionLimitMs: options.admissionLimitMs
+      };
+      this.active = driver;
+      await driver.joinAndListen(config.meetingUrl, launchConfig, onUtterance);
     }
 
     return {
@@ -67,23 +83,22 @@ export class HeadlessMeetingBotConnector {
       platform,
       connectedAt: new Date().toISOString(),
       status: "CONNECTED_AND_RECORDING",
-      message: `El bot '${config.botDisplayName}' se unió exitosamente a la sala de ${platform}. Captura de audio y subtítulos activa.`
+      message: `El bot '${config.botDisplayName}' está en la sala de ${platform} y capta la conversación.`
     };
   }
 
+  private createDriver(platform: MeetingPlatform, profileDir?: string): LiveDriver {
+    if (platform === "GOOGLE_MEET") return (this.drivers.meet ?? ((p) => new GoogleMeetLiveDriver(p)))(profileDir);
+    if (platform === "MICROSOFT_TEAMS") return (this.drivers.teams ?? (() => new TeamsLiveDriver()))();
+    throw new Error(`La entrada automática no está soportada para la plataforma ${platform}.`);
+  }
+
   public async leaveMeeting(sessionId: string): Promise<{ success: boolean; recordedAudioPath?: string }> {
-    console.info(`[HeadlessMeetingBot] Cerrando sesión y guardando grabación para: ${sessionId}`);
-    if (this.meetDriver) {
-      await this.meetDriver.leave();
-      this.meetDriver = null;
+    console.info(`[HeadlessMeetingBot] Cerrando sesión para: ${sessionId}`);
+    if (this.active) {
+      await this.active.leave();
+      this.active = null;
     }
-    if (this.teamsDriver) {
-      await this.teamsDriver.leave();
-      this.teamsDriver = null;
-    }
-    return {
-      success: true,
-      recordedAudioPath: `temp/audio-capture-${sessionId}.wav`
-    };
+    return { success: true, recordedAudioPath: `temp/audio-capture-${sessionId}.wav` };
   }
 }

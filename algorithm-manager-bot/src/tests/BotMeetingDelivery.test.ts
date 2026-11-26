@@ -110,6 +110,31 @@ describe("BotMeetingDeliveryWriter", () => {
     expect(parsed.utterances[0]).toMatchObject({ speakerName: "Participante", text: "Hola a todos." });
   }, 10000);
 
+  it("R-5: si fallan el docx y el excel, el archivo de entrega a la biblioteca se escribe igualmente", async () => {
+    stubConnector();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const boom = {
+      exportTranscript: async () => { throw new Error("docx roto"); },
+      exportIssues: async () => { throw new Error("excel roto"); }
+    };
+    const bot = new AutonomousMeetingBotService(
+      new MeetingClassifierLlmService(),
+      new CommercialProposalLlmService(),
+      boom as any,
+      boom as any,
+      new MeetingSummaryLlmService()
+    );
+    const sessionId = await bot.startAutonomousMeeting({ meetingUrl: "https://meet.google.com/test-room", headless: true });
+    bot.recordUtterance({ speakerName: "David", content: "Vamos a cerrar los bugs de auth.", timestamp: "09:00:00", platform: "GOOGLE_MEET" });
+
+    const dir = tmp();
+    const record = await bot.finalizeAndGenerateDeliverables(sessionId, "https://meet.google.com/test-room", dir);
+
+    expect(record.deliveryFilePath).toBe(path.join(dir, `reunion_${sessionId}.json`));
+    expect(fs.existsSync(record.deliveryFilePath!)).toBe(true);
+    expect(fs.readdirSync(dir).some((f) => f.endsWith(".docx") || f.endsWith(".xlsx"))).toBe(false);
+  }, 10000);
+
   it("sin intervenciones no escribe archivo de entrega", async () => {
     stubConnector();
     const bot = new AutonomousMeetingBotService(

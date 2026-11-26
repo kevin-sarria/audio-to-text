@@ -1,16 +1,27 @@
 import fs from "node:fs";
-import path from "node:path";
 import puppeteer, { Browser, Page } from "puppeteer-core";
 import { BrowserLauncher, BrowserLaunchConfig } from "./BrowserLauncher.js";
 import { ExtractedUtterance, PlatformSpeakerExtractor } from "../PlatformSpeakerExtractor.js";
+import { BotJoinError } from "../../../domain/models/LiveSession.js";
+import { ADMISSION_LIMIT_MS } from "../../../domain/services/MeetingEndDetector.js";
+import { LiveRoomMonitor } from "./LiveRoomMonitor.js";
+import { createPuppeteerProbe } from "./PuppeteerRoomProbe.js";
+
+const LOGIN_BLOCK = /no puedes unirte a esta videollamada|you can(?:'|’)?t join this video call/i;
+const REJECTED = /se rechaz[oó] tu solicitud|denegaron|no te han permitido|denied your request|someone in the call denied/i;
+const ADMITTED_SELECTOR = 'button[aria-label*="Salir de la llamada" i], button[aria-label*="Leave call" i]';
+const COUNT_SELECTOR = 'button[aria-label*="Mostrar a todos" i], button[aria-label*="Show everyone" i]';
+const LOGIN_WAIT_MS = 90_000;
 
 export class GoogleMeetLiveDriver {
   private browser: Browser | null = null;
   private page: Page | null = null;
+  private monitor: LiveRoomMonitor | null = null;
+  private aborted = false;
   private profileDir: string;
 
-  constructor() {
-    this.profileDir = BrowserLauncher.getProfileDir();
+  constructor(profileDir?: string) {
+    this.profileDir = profileDir ?? BrowserLauncher.getProfileDir();
     if (!fs.existsSync(this.profileDir)) {
       fs.mkdirSync(this.profileDir, { recursive: true });
     }
@@ -21,187 +32,129 @@ export class GoogleMeetLiveDriver {
     config: BrowserLaunchConfig,
     onUtterance: (utterance: ExtractedUtterance) => void
   ): Promise<void> {
-    const executablePath = config.chromePath || BrowserLauncher.findSystemBrowserExecutable();
-    const browserDisplayName = BrowserLauncher.getBrowserDisplayName(executablePath);
+    try {
+      await this.run(meetingUrl, config, onUtterance);
+    } catch (err) {
+      await this.leave();
+      throw err;
+    }
+  }
+
+  private async run(
+    meetingUrl: string,
+    config: BrowserLaunchConfig,
+    onUtterance: (utterance: ExtractedUtterance) => void
+  ): Promise<void> {
+    const status = config.onStatus ?? (() => {});
     const isHeadless = config.headless ?? false;
     const botName = config.botDisplayName || "Algorithm Assistant Bot";
+    const executablePath = config.chromePath || BrowserLauncher.findSystemBrowserExecutable();
 
-    console.info(`[GoogleMeetLiveDriver] Abriendo ${browserDisplayName} (${executablePath})`);
-    console.info(`[GoogleMeetLiveDriver] Modo Visible: ${!isHeadless} | Perfil: ${this.profileDir}`);
-
-    BrowserLauncher.killOrphanedBotChrome();
+    status("OPENING", `Abriendo ${BrowserLauncher.getBrowserDisplayName(executablePath)}…`);
+    BrowserLauncher.killOrphanedBotChrome(this.profileDir);
     BrowserLauncher.cleanStaleLocks(this.profileDir);
 
-    this.browser = await puppeteer.launch({
-      executablePath,
-      headless: isHeadless,
-      userDataDir: this.profileDir,
-      args: [
-        ...BrowserLauncher.getChromeArgs(),
-        "--no-first-run",
-        "--no-default-browser-check"
-      ],
-      ignoreDefaultArgs: ["--enable-automation"],
-      defaultViewport: null
-    });
+    try {
+      this.browser = await puppeteer.launch({
+        executablePath,
+        headless: isHeadless,
+        userDataDir: this.profileDir,
+        args: [...BrowserLauncher.getChromeArgs(), "--no-first-run", "--no-default-browser-check"],
+        ignoreDefaultArgs: ["--enable-automation"],
+        defaultViewport: null
+      });
+    } catch (err) {
+      throw new BotJoinError(
+        "BROWSER_FAILED",
+        `No se pudo abrir el navegador del bot: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+
+    if (this.aborted) {
+      await this.browser.close().catch(() => {});
+      this.browser = null;
+      throw new BotJoinError("ROOM_UNAVAILABLE", "La entrada del bot fue cancelada.");
+    }
 
     const pages = await this.browser.pages();
     this.page = pages[0] || (await this.browser.newPage());
+    const page = this.page;
 
-    await this.page.setUserAgent(
+    await page.setUserAgent(
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
     );
-
-    await this.page.evaluateOnNewDocument(() => {
+    await page.evaluateOnNewDocument(() => {
       Object.defineProperty(navigator, "webdriver", { get: () => undefined });
     });
+    await this.browser.defaultBrowserContext().overridePermissions("https://meet.google.com", ["microphone", "camera"]);
 
-    const context = this.browser.defaultBrowserContext();
-    await context.overridePermissions("https://meet.google.com", ["microphone", "camera"]);
+    await page.goto(meetingUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
 
-    console.info(`[GoogleMeetLiveDriver] Navegando a sala: ${meetingUrl}`);
-    await this.page.goto(meetingUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
-
-    // Exponer emisión de eventos a Node
-    await this.page.exposeFunction(
-      "__emitMeetUtterance",
-      (rawSpeaker: string, text: string) => {
-        const parsed = PlatformSpeakerExtractor.parseMeetCaption(`${rawSpeaker}: ${text}`);
-        if (parsed) {
-          onUtterance(parsed);
-        } else {
-          onUtterance({
-            speakerName: PlatformSpeakerExtractor.sanitizeSpeakerName(rawSpeaker),
-            content: text,
-            timestamp: new Date().toLocaleTimeString(),
-            platform: "GOOGLE_MEET"
-          });
+    await page.exposeFunction("__emitMeetUtterance", (rawSpeaker: string, text: string) => {
+      const parsed = PlatformSpeakerExtractor.parseMeetCaption(`${rawSpeaker}: ${text}`);
+      onUtterance(
+        parsed ?? {
+          speakerName: PlatformSpeakerExtractor.sanitizeSpeakerName(rawSpeaker),
+          content: text,
+          timestamp: new Date().toLocaleTimeString(),
+          platform: "GOOGLE_MEET"
         }
-      }
-    );
-
-    await new Promise((r) => setTimeout(r, 2500));
-
-    // Si aparece diálogo "Continuar sin micrófono y cámara", hacer clic
-    await this.page.evaluate(() => {
-      const btn = Array.from(document.querySelectorAll("button")).find((b) =>
-        (b.innerText || "").includes("Continuar sin")
       );
-      if (btn) btn.click();
     });
 
+    await new Promise((r) => setTimeout(r, 2500));
+    await page.evaluate(() => {
+      const btn = Array.from(document.querySelectorAll("button")).find((b) => (b.innerText || "").includes("Continuar sin"));
+      if (btn) (btn as HTMLButtonElement).click();
+    });
     await new Promise((r) => setTimeout(r, 1500));
 
-    // Comprobar si Google Meet exige cuenta de Google o si redirigió
-    let pageText = await this.page.evaluate(() => document.body.innerText || "");
-    let currentUrl = this.page.url();
-
-    if (currentUrl.includes("workspace.google.com") || currentUrl.includes("/unsupported")) {
-      console.warn("\n" + "!".repeat(70));
-      console.warn("⚠️  GOOGLE MEET REDIRIGIÓ FUERA DE LA SALA");
-      console.warn("!".repeat(70));
-      console.warn(` URL actual: ${currentUrl}`);
-      console.warn(" Esto ocurre si el código de reunión ha caducado, la sala no existe");
-      console.warn(" o el anfitrión cerró la videollamada.");
-      console.warn(" 👉 Asegúrate de que la reunión esté abierta y sea un enlace activo.");
-      console.warn("!".repeat(70) + "\n");
+    const url = page.url();
+    if (url.includes("workspace.google.com") || url.includes("/unsupported")) {
+      throw new BotJoinError(
+        "ROOM_UNAVAILABLE",
+        "Google Meet redirigió fuera de la sala: el código caducó, la sala no existe o el anfitrión cerró la llamada."
+      );
     }
 
-    if (pageText.includes("No puedes unirte a esta videollamada")) {
-      console.warn("\n" + "!".repeat(70));
-      console.warn("⚠️  GOOGLE MEET EXIGE INICIAR SESIÓN CON UNA CUENTA DE GOOGLE");
-      console.warn("!".repeat(70));
-      console.warn(" Esta sala fue creada desde una cuenta personal de Gmail.");
-      console.warn(" Google bloquea a invitados anónimos y exige tener una cuenta iniciada.");
-      console.warn("");
-      console.warn(" 👉 Si ves la ventana de Brave abierta, haz clic en 'Iniciar sesión'.");
-      console.warn("    O ejecuta en tu terminal: npm run bot:login");
-      console.warn("!".repeat(70) + "\n");
+    await this.ensureLoggedIn(page, meetingUrl, isHeadless, status);
 
-      // Esperar hasta 90 segundos si el usuario inicia sesión en la ventana abierta
-      for (let i = 0; i < 30; i++) {
-        await new Promise((r) => setTimeout(r, 3000));
-        currentUrl = this.page.url();
-        if (currentUrl.includes("workspace.google.com") || currentUrl.includes("/unsupported")) {
-          // Reintentar volver a la sala
-          await this.page.goto(meetingUrl, { waitUntil: "domcontentloaded" }).catch(() => {});
-        }
-        pageText = await this.page.evaluate(() => document.body.innerText || "");
-        if (!pageText.includes("No puedes unirte a esta videollamada") && !this.page.url().includes("workspace.google.com")) {
-          console.info("[GoogleMeetLiveDriver] ✅ Sesión de Google detectada. Continuando acceso a la sala...");
-          break;
-        }
-      }
-    }
-
-    // Apagar micrófono y cámara antes de entrar
+    // Apagar micrófono y cámara antes de entrar.
     try {
-      await this.page.keyboard.down("Control");
-      await this.page.keyboard.press("KeyD");
-      await this.page.keyboard.press("KeyE");
-      await this.page.keyboard.up("Control");
+      await page.keyboard.down("Control");
+      await page.keyboard.press("KeyD");
+      await page.keyboard.press("KeyE");
+      await page.keyboard.up("Control");
     } catch {}
 
-    // Escribir nombre si hay campo de texto
     try {
-      const nameInput = await this.page.$(
-        'input[type="text"], input[aria-label*="nombre" i], input[placeholder*="nombre" i]'
-      );
+      const nameInput = await page.$('input[type="text"], input[aria-label*="nombre" i], input[placeholder*="nombre" i]');
       if (nameInput) {
         await nameInput.click();
         await nameInput.type(botName, { delay: 30 });
       }
     } catch {}
 
-    // Hacer clic en "Pedir unirse" o "Unirse ahora"
-    let clicked = false;
-    for (let attempt = 0; attempt < 5; attempt++) {
-      clicked = await this.page.evaluate(() => {
-        const buttons = Array.from(document.querySelectorAll("button, div[role='button']"));
-        const btn = buttons.find((b) => {
-          const t = (b.textContent || "").toLowerCase();
-          return (
-            t.includes("pedir unirse") ||
-            t.includes("unirse ahora") ||
-            t.includes("solicitar unirse") ||
-            t.includes("ask to join") ||
-            t.includes("join now")
-          );
-        });
-        if (btn) {
-          (btn as HTMLElement).click();
-          return true;
-        }
-        return false;
-      });
-
-      if (clicked) break;
-      await new Promise((r) => setTimeout(r, 1500));
+    const clicked = await this.clickJoin(page);
+    if (!clicked) {
+      throw new BotJoinError("ROOM_UNAVAILABLE", "No se encontró el botón para unirse a la reunión en la página de Meet.");
     }
 
-    if (clicked) {
-      console.info("\n🔔 [GoogleMeetLiveDriver] ¡SOLICITUD DE ENTRADA ENVIADA A LA SALA!");
-      console.info("👉 Anfitrión: En tu pantalla de Meet verás la notificación para admitir al bot. Haz clic en 'Admitir'.\n");
-    }
+    status("WAITING_ADMISSION", "Solicitud enviada. Pide al anfitrión que admita al bot en la sala.");
+    const roomMarker = new URL(meetingUrl).pathname.split("/").filter(Boolean).pop() ?? "";
+    this.monitor = new LiveRoomMonitor(
+      createPuppeteerProbe(this.browser, page, { admittedSelector: ADMITTED_SELECTOR, countSelector: COUNT_SELECTOR }),
+      roomMarker
+    );
+    await this.monitor.waitForAdmission(config.admissionLimitMs ?? ADMISSION_LIMIT_MS, REJECTED);
 
-    // Guardar captura para verificación de diagnóstico
-    try {
-      const outDir = path.resolve(process.cwd(), "output");
-      if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
-      await this.page.screenshot({ path: path.join(outDir, "meet-estado-actual.png") });
-    } catch {}
-
-    // Activar subtítulos e inyectar observador de diálogo en vivo
-    await this.page.evaluate(() => {
+    // Subtítulos y observador de diálogo.
+    await page.evaluate(() => {
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "c", code: "KeyC", bubbles: true }));
-
       const observer = new MutationObserver(() => {
-        const captionNodes = document.querySelectorAll(
-          'div[jscontroller="D1tHje"], div[class*="zsFvd"], div[class*="T4LgNb"]'
-        );
+        const captionNodes = document.querySelectorAll('div[jscontroller="D1tHje"], div[class*="zsFvd"], div[class*="T4LgNb"]');
         captionNodes.forEach((node) => {
-          const speakerElem =
-            node.querySelector('div[class*="zsFvd"], div[class*="bj4zb"], span[class*="zsFvd"]') || node;
+          const speakerElem = node.querySelector('div[class*="zsFvd"], div[class*="bj4zb"], span[class*="zsFvd"]') || node;
           const textElem = node.querySelector('span[class*="ygThBe"], span');
           if (speakerElem && textElem) {
             const speaker = speakerElem.textContent?.trim() || "Participante";
@@ -213,14 +166,68 @@ export class GoogleMeetLiveDriver {
           }
         });
       });
-
       observer.observe(document.body, { childList: true, subtree: true });
     });
+
+    status("LISTENING", "El bot está en la reunión y captando la conversación.");
+    if (config.onEnded) this.monitor.startEndWatch(config.onEnded);
+  }
+
+  /** Si Meet exige cuenta de Google: en modo visible espera el login; sin ventana falla de inmediato. */
+  private async ensureLoggedIn(
+    page: Page,
+    meetingUrl: string,
+    isHeadless: boolean,
+    status: NonNullable<BrowserLaunchConfig["onStatus"]>
+  ): Promise<void> {
+    const text = () => page.evaluate(() => document.body?.innerText ?? "").catch(() => "");
+    if (!LOGIN_BLOCK.test(await text())) return;
+
+    const help = "Inicia sesión en Ajustes → Cuenta de Google del bot y vuelve a intentarlo.";
+    status("NEEDS_LOGIN", "Google Meet exige iniciar sesión con una cuenta de Google.");
+    if (isHeadless) {
+      throw new BotJoinError("NEEDS_LOGIN", `Google Meet exige iniciar sesión con una cuenta de Google. ${help}`);
+    }
+
+    const deadline = Date.now() + LOGIN_WAIT_MS;
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const current = page.url();
+      if (current.includes("workspace.google.com") || current.includes("/unsupported")) {
+        await page.goto(meetingUrl, { waitUntil: "domcontentloaded" }).catch(() => {});
+      }
+      if (!LOGIN_BLOCK.test(await text())) return;
+    }
+    throw new BotJoinError("NEEDS_LOGIN", `No se detectó el inicio de sesión de Google. ${help}`);
+  }
+
+  private async clickJoin(page: Page): Promise<boolean> {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const clicked = await page.evaluate(() => {
+        const btn = Array.from(document.querySelectorAll("button, div[role='button']")).find((b) => {
+          const t = (b.textContent || "").toLowerCase();
+          return (
+            t.includes("pedir unirse") || t.includes("unirse ahora") || t.includes("solicitar unirse") ||
+            t.includes("ask to join") || t.includes("join now")
+          );
+        });
+        if (btn) {
+          (btn as HTMLElement).click();
+          return true;
+        }
+        return false;
+      });
+      if (clicked) return true;
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+    return false;
   }
 
   public async leave(): Promise<void> {
+    this.aborted = true;
+    this.monitor?.stop();
+    this.monitor = null;
     if (this.browser) {
-      console.info("[GoogleMeetLiveDriver] Cerrando sesión y ventana de Google Meet...");
       await this.browser.close().catch(() => {});
       this.browser = null;
       this.page = null;

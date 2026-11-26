@@ -1,11 +1,35 @@
 import fs from "node:fs";
 import path from "node:path";
 import child_process from "node:child_process";
+import type { LiveStatusCallback } from "../../../domain/models/LiveSession.js";
+import type { EndReason } from "../../../domain/services/MeetingEndDetector.js";
 
 export interface BrowserLaunchConfig {
   headless?: boolean;
   chromePath?: string;
   botDisplayName?: string;
+  /** Carpeta del perfil del navegador (sesión de Google). Por defecto, la de la raíz del repo (CLI). */
+  profileDir?: string;
+  onStatus?: LiveStatusCallback;
+  onEnded?: (reason: EndReason) => void;
+  admissionLimitMs?: number;
+}
+
+/** Construye el script de PowerShell que cierra los navegadores del bot (función pura, testeable). */
+export function buildKillScript(profileDir?: string): string {
+  // Comparación literal (IndexOf, sin comodines de -like) y comillas simples duplicadas para PowerShell.
+  const needle = (profileDir ?? "bot-chrome-session").replace(/'/g, "''");
+  return (
+    "Get-CimInstance Win32_Process -Filter \"Name = 'chrome.exe' or Name = 'brave.exe' or Name = 'msedge.exe'\" | " +
+    "ForEach-Object { if ($_.CommandLine -and $_.CommandLine.IndexOf('" + needle + "', [System.StringComparison]::OrdinalIgnoreCase) -ge 0) { Stop-Process -Id $_.ProcessId -Force } }"
+  );
+}
+
+/** El navegador predeterminado solo sirve si es Chromium (Firefox ignora --user-data-dir y abriría el navegador personal). */
+export function isChromiumExecutable(p: string | null | undefined): boolean {
+  if (!p) return false;
+  const name = p.split(/[\\/]/).pop()?.toLowerCase() ?? "";
+  return /^(chrome|brave|msedge|chromium)(\.exe)?$/.test(name);
 }
 
 export class BrowserLauncher {
@@ -16,17 +40,16 @@ export class BrowserLauncher {
     return path.resolve(rootDir, ".bot-chrome-session");
   }
 
-  public static killOrphanedBotChrome(): void {
+  /**
+   * Cierra los navegadores del bot. Con `profileDir` mata solo los chrome/brave/msedge cuya línea de
+   * comandos use ese perfil (escritorio); sin argumento, los del perfil del CLI (`bot-chrome-session`).
+   */
+  public static killOrphanedBotChrome(profileDir?: string): void {
     if (process.platform === "win32") {
       try {
         child_process.execFileSync(
           "powershell.exe",
-          [
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            "Get-CimInstance Win32_Process -Filter \"Name = 'chrome.exe' or Name = 'brave.exe' or Name = 'msedge.exe'\" | ForEach-Object { if ($_.CommandLine -like '*bot-chrome-session*') { Stop-Process -Id $_.ProcessId -Force } }"
-          ],
+          ["-NoProfile", "-NonInteractive", "-Command", buildKillScript(profileDir)],
           { stdio: "ignore" }
         );
       } catch {}
@@ -86,25 +109,31 @@ export class BrowserLauncher {
       }
     } catch {}
   }
-  public static findSystemBrowserExecutable(): string {
-    // 0. Revisar preferencia guardada en .bot-settings.json
+  private static readSavedPreference(): string | undefined {
     try {
       const rootDir = process.cwd().endsWith("algorithm-manager-bot") ? path.dirname(process.cwd()) : process.cwd();
       const cfgPath = path.resolve(rootDir, ".bot-settings.json");
       if (fs.existsSync(cfgPath)) {
         const cfg = JSON.parse(fs.readFileSync(cfgPath, "utf-8"));
-        if (cfg.botPreferredBrowser === "brave") {
-          const bravePath = "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe";
-          if (fs.existsSync(bravePath)) return bravePath;
-        } else if (cfg.botPreferredBrowser === "chrome") {
-          const chromePath = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
-          if (fs.existsSync(chromePath)) return chromePath;
-        } else if (cfg.botPreferredBrowser === "msedge") {
-          const edgePath = "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
-          if (fs.existsSync(edgePath)) return edgePath;
-        }
+        return cfg.botPreferredBrowser;
       }
     } catch {}
+    return undefined;
+  }
+
+  public static findSystemBrowserExecutable(preferred?: string): string {
+    // 0. Revisar preferencia (inyectada o guardada en .bot-settings.json)
+    const pref = preferred ?? BrowserLauncher.readSavedPreference();
+    if (pref === "brave") {
+      const bravePath = "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe";
+      if (fs.existsSync(bravePath)) return bravePath;
+    } else if (pref === "chrome") {
+      const chromePath = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+      if (fs.existsSync(chromePath)) return chromePath;
+    } else if (pref === "msedge") {
+      const edgePath = "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
+      if (fs.existsSync(edgePath)) return edgePath;
+    }
 
     // 1. Variable de entorno explícita si el usuario la define
     if (process.env.BOT_BROWSER_PATH && fs.existsSync(process.env.BOT_BROWSER_PATH)) {
@@ -113,8 +142,8 @@ export class BrowserLauncher {
 
     // 2. Navegador predeterminado del sistema (Brave, Chrome, Edge, etc.)
     const defaultBrowser = BrowserLauncher.getDefaultWindowsBrowser();
-    if (defaultBrowser) {
-      return defaultBrowser;
+    if (isChromiumExecutable(defaultBrowser)) {
+      return defaultBrowser as string;
     }
 
     const candidatePaths: string[] = [

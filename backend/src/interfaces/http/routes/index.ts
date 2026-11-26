@@ -22,6 +22,8 @@ export interface ApiRoutesDependencies {
   meetingAnalysisController?: MeetingAnalysisController;
   projectFolderController?: ProjectFolderController;
   tokenService: ITokenService;
+  /** En escritorio el bot se controla desde /api/desktop/bot (autenticado); el router web no se monta. */
+  disableLegacyBotRoutes?: boolean;
 }
 
 export function createApiRouter(deps: ApiRoutesDependencies): Router {
@@ -42,7 +44,9 @@ export function createApiRouter(deps: ApiRoutesDependencies): Router {
   }
 
   // Rutas del Bot Autónomo de Reuniones (Meet & Teams)
-  router.use("/bot", createBotRoutes());
+  if (!deps.disableLegacyBotRoutes) {
+    router.use("/bot", createBotRoutes());
+  }
 
   // Perfiles de reglas de negocio disponibles (Parte B del prompt). Lista estática, sin datos del usuario.
   router.get("/project-profiles", (_req, res) => {

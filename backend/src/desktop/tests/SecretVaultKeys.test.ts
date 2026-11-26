@@ -34,7 +34,10 @@ describe("SecretVault y rutas de claves", () => {
       whisperBinaryPath: "/bin/whisper",
       resourcesDir: tempDir,
       importBotMeetings: {} as any,
-      libraryRepository: {} as any
+      libraryRepository: {} as any,
+      botSessions: {} as any,
+      botSettings: {} as any,
+      botLogin: {} as any
     });
 
     app.use("/api/desktop", desktopRoutes);
