@@ -35,7 +35,7 @@ describe("DesktopServer", () => {
       locateBrowser: () => "C:/brave.exe",
       browserDisplayName: () => "Brave",
       probeAccount: async () => ({ url: "https://myaccount.google.com/", text: "" }),
-      killBotBrowser: () => {},
+      closeBotBrowser: async () => "none" as const,
       port: 0
     });
   });

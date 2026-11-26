@@ -49,7 +49,7 @@ import { ImportBotMeetings } from "./library/ImportBotMeetings.js";
 import type { BotSessionDto, BotSessionState } from "@audio-to-text/shared";
 import { resolveBotPaths } from "./bot/BotPaths.js";
 import { BotSettingsStore } from "./bot/BotSettingsStore.js";
-import { BotLoginService, type BotLoginDeps } from "./bot/BotLoginService.js";
+import { BotLoginService, type BotLoginDeps, type BotBrowserCloseResult } from "./bot/BotLoginService.js";
 import { BotSessionService, type BotEngine } from "./bot/BotSessionService.js";
 
 export interface CreateDesktopContainerOptions {
@@ -61,7 +61,7 @@ export interface CreateDesktopContainerOptions {
   locateBrowser: (preferred: string) => string;
   browserDisplayName: (browserPath: string) => string;
   probeAccount: BotLoginDeps["probeAccount"];
-  killBotBrowser: () => void;
+  closeBotBrowser: () => Promise<BotBrowserCloseResult>;
   onBotEvent?: (session: BotSessionDto, previous: BotSessionState) => void;
 }
 
@@ -192,7 +192,7 @@ export function createDesktopContainer(options: CreateDesktopContainerOptions) {
     locateBrowser: options.locateBrowser,
     displayName: options.browserDisplayName,
     probeAccount: options.probeAccount,
-    killBotBrowser: options.killBotBrowser
+    closeBotBrowser: options.closeBotBrowser
   });
   const botSessions = new BotSessionService({
     engine: options.botEngine,

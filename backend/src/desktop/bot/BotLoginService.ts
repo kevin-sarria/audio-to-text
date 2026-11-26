@@ -7,6 +7,9 @@ import type { BotPaths } from "./BotPaths.js";
 const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
 const ACCOUNT_HOST = "myaccount.google.com";
 
+/** Qué pasó al cerrar el navegador del bot: no había ninguno, se cerró bien o hubo que forzarlo. */
+export type BotBrowserCloseResult = "none" | "closed" | "forced";
+
 /**
  * Decide si la página de cuenta de Google corresponde a una sesión iniciada.
  * Solo cuenta como vinculada una página en myaccount.google.com (host exacto) con un correo visible.
@@ -37,12 +40,21 @@ export interface BotLoginDeps {
   /** Abre el perfil sin ventana, entra a myaccount.google.com y devuelve URL final y texto. */
   probeAccount: (input: AccountProbeInput) => Promise<{ url: string; text: string }>;
   spawn?: typeof childProcess.spawn;
-  /** Cierra cualquier navegador que use el perfil del bot (libera el bloqueo del perfil). */
-  killBotBrowser?: () => void;
+  /**
+   * Cierra el navegador que use el perfil del bot (libera el bloqueo del perfil). Debe cerrarlo de forma
+   * ordenada: Chromium guarda las cookies al cerrarse bien, y matarlo de golpe pierde la sesión recién iniciada.
+   */
+  closeBotBrowser?: () => Promise<BotBrowserCloseResult>;
   exists?: (p: string) => boolean;
   /** Borra una entrada del perfil. Inyectable para probar fallos de borrado. */
   rm?: (p: string) => void;
 }
+
+const CLOSE_NOTES: Record<BotBrowserCloseResult, string> = {
+  none: "",
+  closed: "Se cerró la ventana del navegador del bot para comprobar la sesión. ",
+  forced: "El navegador del bot no respondió y hubo que forzar su cierre; si acababas de iniciar sesión, puede que no se haya guardado. "
+};
 
 export class BotLoginService {
   private last: BotLoginCheckDto | null = null;
@@ -64,15 +76,19 @@ export class BotLoginService {
     return { name: this.deps.displayName(p), path: p };
   }
 
+  private async closeBrowser(): Promise<BotBrowserCloseResult> {
+    return (await this.deps.closeBotBrowser?.()) ?? "none";
+  }
+
   /** Abre el navegador visible con el perfil del bot para que el usuario inicie sesión. */
-  public openLoginBrowser(): { success: boolean; message: string } {
+  public async openLoginBrowser(): Promise<{ success: boolean; message: string }> {
     const exists = this.deps.exists ?? fs.existsSync;
     const info = this.browserInfo();
     if (!exists(info.path)) {
       throw new Error(`No se encontró el navegador (${info.name}). Instala Chrome, Edge o Brave, o elige otro en Ajustes.`);
     }
     fs.mkdirSync(this.deps.paths.profileDir, { recursive: true });
-    this.deps.killBotBrowser?.();
+    await this.closeBrowser();
 
     const spawn = this.deps.spawn ?? childProcess.spawn;
     const child = spawn(
@@ -86,7 +102,7 @@ export class BotLoginService {
     this.last = null;
     return {
       success: true,
-      message: `Se abrió ${info.name}. Inicia sesión con la cuenta de Google del bot, ciérralo y pulsa "Verificar sesión".`
+      message: `Se abrió ${info.name} con un perfil aparte para el bot. Inicia sesión con la cuenta de Google, cierra esa ventana y pulsa "Verificar sesión".`
     };
   }
 
@@ -101,27 +117,28 @@ export class BotLoginService {
   }
 
   private async runVerify(): Promise<BotLoginCheckDto> {
+    let note = "";
     try {
-      this.deps.killBotBrowser?.();
+      note = CLOSE_NOTES[await this.closeBrowser()];
       const info = this.browserInfo();
       const page = await this.deps.probeAccount({ profileDir: this.deps.paths.profileDir, browserPath: info.path });
       const { linked, email } = interpretAccountPage(page.url, page.text);
       this.last = linked
-        ? { linked: true, email, message: `Sesión de Google activa${email ? ` (${email})` : ""}.` }
-        : { linked: false, email: null, message: "No hay una sesión de Google iniciada. Inicia sesión con el botón de arriba." };
+        ? { linked: true, email, message: `${note}Sesión de Google activa${email ? ` (${email})` : ""}.` }
+        : { linked: false, email: null, message: `${note}No hay una sesión de Google iniciada. Inicia sesión con el botón de arriba.` };
     } catch (err) {
       this.last = {
         linked: false,
         email: null,
-        message: `No se pudo verificar la sesión: ${err instanceof Error ? err.message : String(err)}`
+        message: `${note}No se pudo verificar la sesión: ${err instanceof Error ? err.message : String(err)}`
       };
     }
     return this.last;
   }
 
   /** Borra el perfil del bot. Solo es éxito si el perfil quedó vacío; si algo está en uso, conserva la verificación previa. */
-  public unlink(): { success: boolean; message: string } {
-    this.deps.killBotBrowser?.();
+  public async unlink(): Promise<{ success: boolean; message: string }> {
+    await this.closeBrowser();
     const dir = this.deps.paths.profileDir;
     const rm = this.deps.rm ?? ((p: string) => fs.rmSync(p, { recursive: true, force: true }));
     fs.mkdirSync(dir, { recursive: true });

@@ -25,6 +25,66 @@ export function buildKillScript(profileDir?: string): string {
   );
 }
 
+/** Qué pasó al cerrar el navegador del bot: no había ninguno, se cerró bien o hubo que forzarlo. */
+export type BotBrowserCloseResult = "none" | "closed" | "forced";
+
+/**
+ * Script de PowerShell que cierra el navegador del bot como si se pulsara la X (función pura, testeable).
+ * Chromium guarda las cookies en disco cada ~30 s o al cerrarse bien: matarlo de golpe pierde una sesión
+ * de Google recién iniciada. Por eso primero pide el cierre normal (taskkill sin /F), espera hasta
+ * `waitMs` y solo entonces fuerza. Los navegadores sin ventana (headless) se cierran directamente.
+ * Escribe 'none', 'closed' o 'forced'.
+ */
+export function buildGracefulCloseScript(profileDir: string | undefined, waitMs: number): string {
+  const needle = (profileDir ?? "bot-chrome-session").replace(/'/g, "''");
+  const waitSeconds = Math.max(1, Math.ceil(waitMs / 1000));
+  return [
+    `$needle = '${needle}'`,
+    "function Find-BotBrowser { @(Get-CimInstance Win32_Process -Filter \"Name = 'chrome.exe' or Name = 'brave.exe' or Name = 'msedge.exe'\" | Where-Object { $_.CommandLine -and $_.CommandLine.IndexOf($needle, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 }) }",
+    "$procs = Find-BotBrowser",
+    "if ($procs.Count -eq 0) { 'none'; exit 0 }",
+    "$procs | Where-Object { $_.CommandLine -match '--headless' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }",
+    "$main = @($procs | Where-Object { $_.CommandLine -notmatch '--type=' -and $_.CommandLine -notmatch '--headless' })",
+    "if ($main.Count -eq 0) { Find-BotBrowser | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }; 'none'; exit 0 }",
+    "foreach ($p in $main) { taskkill.exe /PID $p.ProcessId 2>&1 | Out-Null }",
+    `Wait-Process -Id ($main | ForEach-Object { $_.ProcessId }) -Timeout ${waitSeconds} -ErrorAction SilentlyContinue`,
+    "$mainLeft = @($main | Where-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue })",
+    "Find-BotBrowser | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }",
+    "if ($mainLeft.Count -eq 0) { 'closed' } else { 'forced' }"
+  ].join("\n");
+}
+
+const LOCAL_APP_DATA_PLACEHOLDER = "%LOCALAPPDATA%";
+const PREFERRED_BROWSER_PATHS: Record<string, string[]> = {
+  brave: [
+    "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+    "C:\\Program Files (x86)\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+    `${LOCAL_APP_DATA_PLACEHOLDER}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`
+  ],
+  chrome: [
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+    `${LOCAL_APP_DATA_PLACEHOLDER}\\Google\\Chrome\\Application\\chrome.exe`
+  ],
+  msedge: [
+    "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+    `${LOCAL_APP_DATA_PLACEHOLDER}\\Microsoft\\Edge\\Application\\msedge.exe`
+  ]
+};
+
+/** Rutas donde buscar el navegador elegido en Ajustes (instalación para todos, 32 bits o solo para el usuario). */
+export function preferredBrowserCandidates(
+  preferred: string | undefined,
+  env: { LOCALAPPDATA?: string } = process.env
+): string[] {
+  const list = preferred ? PREFERRED_BROWSER_PATHS[preferred] ?? [] : [];
+  return list.flatMap((p) => {
+    if (!p.startsWith(LOCAL_APP_DATA_PLACEHOLDER)) return [p];
+    return env.LOCALAPPDATA ? [env.LOCALAPPDATA + p.slice(LOCAL_APP_DATA_PLACEHOLDER.length)] : [];
+  });
+}
+
 /** El navegador predeterminado solo sirve si es Chromium (Firefox ignora --user-data-dir y abriría el navegador personal). */
 export function isChromiumExecutable(p: string | null | undefined): boolean {
   if (!p) return false;
@@ -54,6 +114,29 @@ export class BrowserLauncher {
         );
       } catch {}
     }
+  }
+
+  /**
+   * Cierra el navegador del bot sin perder la sesión: pide el cierre normal, espera y solo entonces fuerza.
+   * Úsalo siempre que el navegador visible del bot pueda estar abierto (p. ej. tras iniciar sesión en Google).
+   */
+  public static closeBotBrowser(profileDir?: string, waitMs = 10_000): Promise<BotBrowserCloseResult> {
+    if (process.platform !== "win32") return Promise.resolve("none");
+    return new Promise((resolve) => {
+      child_process.execFile(
+        "powershell.exe",
+        ["-NoProfile", "-NonInteractive", "-Command", buildGracefulCloseScript(profileDir, waitMs)],
+        { encoding: "utf-8", timeout: waitMs + 30_000, windowsHide: true },
+        (err, stdout) => {
+          const out = String(stdout ?? "").trim().split(/\r?\n/).pop()?.trim();
+          if (out === "none" || out === "closed" || out === "forced") return resolve(out);
+          // PowerShell falló o no respondió: no dejar el perfil bloqueado.
+          if (err) console.warn("[BrowserLauncher] cierre ordenado falló, se fuerza:", err.message);
+          BrowserLauncher.killOrphanedBotChrome(profileDir);
+          resolve("forced");
+        }
+      );
+    });
   }
 
   public static getDefaultWindowsBrowser(): string | null {
@@ -124,16 +207,8 @@ export class BrowserLauncher {
   public static findSystemBrowserExecutable(preferred?: string): string {
     // 0. Revisar preferencia (inyectada o guardada en .bot-settings.json)
     const pref = preferred ?? BrowserLauncher.readSavedPreference();
-    if (pref === "brave") {
-      const bravePath = "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe";
-      if (fs.existsSync(bravePath)) return bravePath;
-    } else if (pref === "chrome") {
-      const chromePath = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
-      if (fs.existsSync(chromePath)) return chromePath;
-    } else if (pref === "msedge") {
-      const edgePath = "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
-      if (fs.existsSync(edgePath)) return edgePath;
-    }
+    const preferredPath = preferredBrowserCandidates(pref).find((p) => fs.existsSync(p));
+    if (preferredPath) return preferredPath;
 
     // 1. Variable de entorno explícita si el usuario la define
     if (process.env.BOT_BROWSER_PATH && fs.existsSync(process.env.BOT_BROWSER_PATH)) {

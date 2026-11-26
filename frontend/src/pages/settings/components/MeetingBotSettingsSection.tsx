@@ -78,13 +78,14 @@ export const MeetingBotSettingsSection: React.FC = () => {
   const desktop = isDesktopApp();
   const loginChecked = isLoginChecked(desktop, status?.loginChecked);
 
-  const fetchBotStatus = async () => {
+  /** Con `syncConfig` también reemplaza el formulario por lo guardado; si no, respeta lo que el usuario está editando. */
+  const fetchBotStatus = async (syncConfig = false) => {
     setLoading(true);
     try {
       const res = await api.get<any>(`${botBase()}/status`);
       if (res.success && res.data) {
         setStatus(res.data);
-        if (res.data.config) {
+        if (syncConfig && res.data.config) {
           setConfig(res.data.config);
         }
       }
@@ -96,8 +97,25 @@ export const MeetingBotSettingsSection: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchBotStatus();
+    fetchBotStatus(true);
   }, []);
+
+  /** El navegador se guarda al elegirlo: "Vincular" y "Verificar" usan el guardado, no el del formulario. */
+  const handleBrowserChange = async (browser: MeetingBotConfigDto["botPreferredBrowser"]) => {
+    const previous = config.botPreferredBrowser;
+    setConfig((c) => ({ ...c, botPreferredBrowser: browser }));
+    setFeedback(null);
+    try {
+      const res = await api.put<any>(`${botBase()}/config`, { botPreferredBrowser: browser });
+      if (!res.success) throw new Error(res.error || "no se pudo guardar");
+      await fetchBotStatus();
+    } catch (err: any) {
+      setConfig((c) => ({ ...c, botPreferredBrowser: previous }));
+      setFeedback({ type: "error", msg: `No se pudo cambiar el navegador: ${err.message}` });
+    }
+  };
+
+  const browserName = status?.detectedBrowserName || "el navegador";
 
   const handleSaveConfig = async () => {
     setSaving(true);
@@ -106,7 +124,7 @@ export const MeetingBotSettingsSection: React.FC = () => {
       const res = await api.put<any>(`${botBase()}/config`, config);
       if (res.success) {
         setFeedback({ type: "success", msg: "¡Configuración del bot guardada exitosamente!" });
-        await fetchBotStatus();
+        await fetchBotStatus(true);
       }
     } catch (err: any) {
       setFeedback({ type: "error", msg: `Error al guardar: ${err.message}` });
@@ -126,7 +144,7 @@ export const MeetingBotSettingsSection: React.FC = () => {
           type: "info",
           msg: res.message || "Se ha abierto el navegador para iniciar sesión con tu cuenta de Google."
         });
-        setTimeout(fetchBotStatus, 4000);
+        setTimeout(() => fetchBotStatus(), 4000);
       }
     } catch (err: any) {
       setFeedback({ type: "error", msg: `Error al abrir navegador: ${err.message}` });
@@ -339,7 +357,7 @@ export const MeetingBotSettingsSection: React.FC = () => {
                   onClick={handleLaunchGoogleLogin}
                   disabled={loginLoading || !!status?.isMeetingActive}
                 >
-                  {loginChecked && status?.isGoogleAccountLinked ? "Cambiar Cuenta en Navegador" : "Vincular con Brave / Navegador"}
+                  {loginChecked && status?.isGoogleAccountLinked ? `Cambiar cuenta en ${browserName}` : `Vincular con ${browserName}`}
                 </Button>
                 {desktop && (
                   <Button
@@ -365,6 +383,12 @@ export const MeetingBotSettingsSection: React.FC = () => {
                   </Button>
                 )}
               </Box>
+              {desktop && (
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1.5 }}>
+                  Se abre una ventana aparte, solo para el bot: no usa tu navegador ni tus cuentas guardadas.
+                  Inicia sesión una vez, cierra esa ventana y pulsa «Verificar sesión». La sesión queda guardada.
+                </Typography>
+              )}
             </Box>
           </Grid>
 
@@ -376,12 +400,12 @@ export const MeetingBotSettingsSection: React.FC = () => {
                 labelId="browser-label"
                 label="Navegador para Acceso a Salas"
                 value={config.botPreferredBrowser}
-                onChange={(e) =>
-                  setConfig({ ...config, botPreferredBrowser: e.target.value as any })
-                }
+                onChange={(e) => handleBrowserChange(e.target.value as MeetingBotConfigDto["botPreferredBrowser"])}
+                disabled={!!status?.isMeetingActive}
               >
                 <MenuItem value="auto">
-                  Predeterminado del Sistema ({status?.detectedBrowserName || "Brave"}) [Recomendado]
+                  Predeterminado del sistema
+                  {config.botPreferredBrowser === "auto" && status?.detectedBrowserName ? ` (${status.detectedBrowserName})` : ""} [Recomendado]
                 </MenuItem>
                 <MenuItem value="brave">Brave Browser</MenuItem>
                 <MenuItem value="chrome">Google Chrome</MenuItem>
@@ -391,6 +415,8 @@ export const MeetingBotSettingsSection: React.FC = () => {
 
             <Typography variant="caption" color="text.secondary">
               Ejecutable detectado en Windows: <code>{status?.detectedBrowserPath || "Buscando..."}</code>
+              <br />
+              El navegador se guarda al elegirlo. Si no está instalado, se usa el predeterminado del sistema.
             </Typography>
 
             <TextField

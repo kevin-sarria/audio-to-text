@@ -9,7 +9,7 @@ import { createDesktopRoutes } from "./http/desktop.routes.js";
 import { ISecretVault } from "./infrastructure/settings/ISecretVault.js";
 import type { BotSessionDto, BotSessionState } from "@audio-to-text/shared";
 import type { BotEngine } from "./bot/BotSessionService.js";
-import type { BotLoginDeps } from "./bot/BotLoginService.js";
+import type { BotLoginDeps, BotBrowserCloseResult } from "./bot/BotLoginService.js";
 
 export interface StartDesktopServerOptions {
   userDataDir: string;
@@ -21,7 +21,7 @@ export interface StartDesktopServerOptions {
   locateBrowser: (preferred: string) => string;
   browserDisplayName: (browserPath: string) => string;
   probeAccount: BotLoginDeps["probeAccount"];
-  killBotBrowser: () => void;
+  closeBotBrowser: () => Promise<BotBrowserCloseResult>;
   onBotEvent?: (session: BotSessionDto, previous: BotSessionState) => void;
 }
 
@@ -50,7 +50,7 @@ export async function startDesktopServer(
     locateBrowser: options.locateBrowser,
     browserDisplayName: options.browserDisplayName,
     probeAccount: options.probeAccount,
-    killBotBrowser: options.killBotBrowser,
+    closeBotBrowser: options.closeBotBrowser,
     onBotEvent: options.onBotEvent
   });
 

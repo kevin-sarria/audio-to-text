@@ -30,7 +30,7 @@ describe("cableado del bot en el servidor de escritorio", () => {
       locateBrowser: () => "C:/brave.exe",
       browserDisplayName: () => "Brave",
       probeAccount: async () => ({ url: "https://myaccount.google.com/", text: "" }),
-      killBotBrowser: () => {},
+      closeBotBrowser: async () => "none" as const,
       onBotEvent: (s) => events.push(s.state)
     });
     const base = `http://127.0.0.1:${server.port}/api/desktop/bot`;

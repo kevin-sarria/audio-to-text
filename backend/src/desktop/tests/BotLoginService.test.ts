@@ -48,26 +48,26 @@ describe("BotLoginService", () => {
   function make(over: Record<string, unknown> = {}) {
     const paths = resolveBotPaths(dir);
     const spawn = vi.fn(() => ({ unref: () => {}, on: () => {} }));
-    const killBotBrowser = vi.fn();
+    const closeBotBrowser = vi.fn(async () => "none" as const);
     const deps = {
       paths,
       getPreferredBrowser: () => "auto",
       locateBrowser: () => "C:/Brave/brave.exe",
       displayName: () => "Brave Browser",
       spawn: spawn as any,
-      killBotBrowser,
+      closeBotBrowser,
       exists: () => true,
       probeAccount: async () => ({ url: "https://myaccount.google.com/", text: "ana@gmail.com" }),
       ...over
     };
-    return { svc: new BotLoginService(deps as any), paths, spawn, killBotBrowser };
+    return { svc: new BotLoginService(deps as any), paths, spawn, closeBotBrowser };
   }
 
-  it("openLoginBrowser lanza el navegador visible con el perfil del bot", () => {
-    const { svc, paths, spawn, killBotBrowser } = make();
-    const r = svc.openLoginBrowser();
+  it("openLoginBrowser lanza el navegador visible con el perfil del bot", async () => {
+    const { svc, paths, spawn, closeBotBrowser } = make();
+    const r = await svc.openLoginBrowser();
     expect(r.success).toBe(true);
-    expect(killBotBrowser).toHaveBeenCalled();
+    expect(closeBotBrowser).toHaveBeenCalled();
     const [exe, args] = spawn.mock.calls[0] as any;
     expect(exe).toBe("C:/Brave/brave.exe");
     expect(args).toContain(`--user-data-dir=${paths.profileDir}`);
@@ -75,15 +75,28 @@ describe("BotLoginService", () => {
     expect(fs.existsSync(paths.profileDir)).toBe(true);
   });
 
-  it("openLoginBrowser falla con mensaje claro si no hay navegador", () => {
+  it("openLoginBrowser falla con mensaje claro si no hay navegador", async () => {
     const { svc } = make({ exists: () => false });
-    expect(() => svc.openLoginBrowser()).toThrow(/navegador/i);
+    await expect(svc.openLoginBrowser()).rejects.toThrow(/navegador/i);
   });
 
-  it("openLoginBrowser registra un listener de error del proceso (un fallo async no tumba el backend)", () => {
+  it("openLoginBrowser no abre la ventana nueva hasta que la anterior terminó de cerrarse", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const closeBotBrowser = vi.fn(async () => { await gate; return "closed" as const; });
+    const { svc, spawn } = make({ closeBotBrowser });
+    const p = svc.openLoginBrowser();
+    await Promise.resolve();
+    expect(spawn).not.toHaveBeenCalled();
+    release();
+    await p;
+    expect(spawn).toHaveBeenCalledTimes(1);
+  });
+
+  it("openLoginBrowser registra un listener de error del proceso (un fallo async no tumba el backend)", async () => {
     const on = vi.fn();
     const { svc } = make({ spawn: vi.fn(() => ({ unref: () => {}, on })) as any });
-    svc.openLoginBrowser();
+    await svc.openLoginBrowser();
     expect(on).toHaveBeenCalledWith("error", expect.any(Function));
   });
 
@@ -121,12 +134,51 @@ describe("BotLoginService", () => {
     expect(r.message).toMatch(/no se pudo verificar/i);
   });
 
-  it("verify y unlink llaman a killBotBrowser", async () => {
-    const { svc, killBotBrowser } = make();
+  it("verify y unlink cierran el navegador del bot", async () => {
+    const { svc, closeBotBrowser } = make();
     await svc.verify();
-    expect(killBotBrowser).toHaveBeenCalledTimes(1);
-    svc.unlink();
-    expect(killBotBrowser).toHaveBeenCalledTimes(2);
+    expect(closeBotBrowser).toHaveBeenCalledTimes(1);
+    await svc.unlink();
+    expect(closeBotBrowser).toHaveBeenCalledTimes(2);
+  });
+
+  it("verify no abre el perfil hasta que el navegador visible terminó de cerrarse (si no, se pierden las cookies)", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const closeBotBrowser = vi.fn(async () => { await gate; return "closed" as const; });
+    const probeAccount = vi.fn(async () => ({ url: "https://myaccount.google.com/", text: "ana@gmail.com" }));
+    const { svc } = make({ closeBotBrowser, probeAccount });
+    const p = svc.verify();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(probeAccount).not.toHaveBeenCalled();
+    release();
+    await p;
+    expect(probeAccount).toHaveBeenCalledTimes(1);
+  });
+
+  it("verify avisa cuando tuvo que cerrar la ventana del bot", async () => {
+    const { svc } = make({ closeBotBrowser: async () => "closed" });
+    const r = await svc.verify();
+    expect(r.linked).toBe(true);
+    expect(r.message).toMatch(/se cerró la ventana/i);
+  });
+
+  it("verify avisa cuando el navegador no respondió y hubo que forzarlo", async () => {
+    const { svc } = make({
+      closeBotBrowser: async () => "forced",
+      probeAccount: async () => ({ url: "https://accounts.google.com/signin", text: "" })
+    });
+    const r = await svc.verify();
+    expect(r.linked).toBe(false);
+    expect(r.message).toMatch(/forz/i);
+    expect(r.message).toMatch(/inicia sesi/i);
+  });
+
+  it("verify sin ventana abierta no añade avisos de cierre", async () => {
+    const { svc } = make();
+    const r = await svc.verify();
+    expect(r.message).not.toMatch(/se cerró|forz/i);
   });
 
   it("dos verify concurrentes comparten una sola comprobación del perfil", async () => {
@@ -144,7 +196,7 @@ describe("BotLoginService", () => {
     fs.writeFileSync(path.join(paths.profileDir, "Default", "Cookies"), "x");
     await svc.verify();
     const before = svc.lastCheck();
-    const r = svc.unlink();
+    const r = await svc.unlink();
     expect(r.success).toBe(false);
     expect(r.message).toMatch(/en uso/i);
     expect(svc.lastCheck()).toEqual(before);
@@ -156,7 +208,7 @@ describe("BotLoginService", () => {
     fs.mkdirSync(path.join(paths.profileDir, "Default"), { recursive: true });
     fs.writeFileSync(path.join(paths.profileDir, "Default", "Cookies"), "x");
     await svc.verify();
-    const r = svc.unlink();
+    const r = await svc.unlink();
     expect(r.success).toBe(true);
     expect(fs.readdirSync(paths.profileDir)).toEqual([]);
     expect(svc.lastCheck()).toBeNull();

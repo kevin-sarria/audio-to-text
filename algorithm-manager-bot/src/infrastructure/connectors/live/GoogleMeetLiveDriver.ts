@@ -51,7 +51,8 @@ export class GoogleMeetLiveDriver {
     const executablePath = config.chromePath || BrowserLauncher.findSystemBrowserExecutable();
 
     status("OPENING", `Abriendo ${BrowserLauncher.getBrowserDisplayName(executablePath)}…`);
-    BrowserLauncher.killOrphanedBotChrome(this.profileDir);
+    // Cierre ordenado: si la ventana de inicio de sesión sigue abierta, matarla perdería la sesión de Google.
+    await BrowserLauncher.closeBotBrowser(this.profileDir);
     BrowserLauncher.cleanStaleLocks(this.profileDir);
 
     try {

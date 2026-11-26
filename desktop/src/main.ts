@@ -69,7 +69,7 @@ async function bootstrap() {
     botEngine: createBotEngine(vault),
     locateBrowser: (preferred) => BrowserLauncher.findSystemBrowserExecutable(preferred),
     browserDisplayName: (p) => BrowserLauncher.getBrowserDisplayName(p),
-    killBotBrowser: () => BrowserLauncher.killOrphanedBotChrome(path.join(app.getPath("userData"), "bot", "profile")),
+    closeBotBrowser: () => BrowserLauncher.closeBotBrowser(path.join(app.getPath("userData"), "bot", "profile")),
     probeAccount: async ({ profileDir, browserPath }) => {
       BrowserLauncher.cleanStaleLocks(profileDir);
       const browser = await puppeteer.launch({

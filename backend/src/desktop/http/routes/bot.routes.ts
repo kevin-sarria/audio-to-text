@@ -110,10 +110,10 @@ export function createDesktopBotRoutes(deps: DesktopBotRoutesDeps): Router {
     }
   });
 
-  router.post("/login", (_req, res) => {
+  router.post("/login", async (_req, res) => {
     if (busy(res)) return;
     try {
-      res.json({ success: true, message: login.openLoginBrowser().message });
+      res.json({ success: true, message: (await login.openLoginBrowser()).message });
     } catch (err) {
       res.status(500).json({ success: false, error: err instanceof Error ? err.message : String(err) });
     }
@@ -128,9 +128,14 @@ export function createDesktopBotRoutes(deps: DesktopBotRoutesDeps): Router {
     }
   });
 
-  router.post("/unlink", (_req, res) => {
+  router.post("/unlink", async (_req, res, next) => {
     if (busy(res)) return;
-    const r = login.unlink();
+    let r: Awaited<ReturnType<BotLoginService["unlink"]>>;
+    try {
+      r = await login.unlink();
+    } catch (err) {
+      return next(err);
+    }
     if (!r.success) return void res.status(409).json({ success: false, error: r.message, code: "UNLINK_INCOMPLETE" });
     res.json({ success: true, message: r.message });
   });
